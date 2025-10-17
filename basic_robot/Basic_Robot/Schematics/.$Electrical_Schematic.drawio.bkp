@@ -1,0 +1,43 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.0.4 Chrome/128.0.6613.186 Electron/32.2.5 Safari/537.36" version="26.0.4">
+  <diagram name="Page-1" id="2LinaW2AHTQOWjEhbmdY">
+    <mxGraphModel dx="2270" dy="822" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="aMWkvihcd568fM1Jqf82-2" value="Battery" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="-50" y="150" width="120" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-3" value="Switch" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="210" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-4" value="Raspberry pi 4" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="150" width="230" height="430" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-5" value="Trigger switch" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="500" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-6" value="Motor Driver" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="150" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-7" value="Motor Driver" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="220" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-8" value="Motor" style="whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="155" width="120" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-10" value="Motor" style="whiteSpace=wrap;html=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="850" y="220" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-12" value="LIDAR" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="290" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-13" value="IR sensors" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="360" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="aMWkvihcd568fM1Jqf82-14" value="LEDs" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="430" width="120" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
