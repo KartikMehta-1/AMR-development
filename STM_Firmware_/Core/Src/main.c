@@ -19,9 +19,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,11 +44,23 @@
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+#define ENCODER_PPR         264      // replace with your encoder's PPR (per channel)
+#define COUNTS_PER_REV      (ENCODER_PPR * 4)   // quadrature counting = 4x
 
+/* Sampling period (ms) */
+#define SAMPLE_INTERVAL_MS  100      // 100 ms sample period
+
+volatile int64_t encoder_position_counts = 0;   // cumulative position (signed)
+volatile float motor_rpm = 0.0f;
+
+/* last counter storage for 16-bit and 32-bit cases */
+static uint16_t last_cnt16 = 0;
+static uint32_t last_cnt32 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -53,13 +68,13 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -93,6 +108,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_TIM1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   /* Start PWM once, set initial duty */
   __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 250);   // initial duty
@@ -100,24 +116,92 @@ int main(void)
   {
     Error_Handler();
   }
+
+  /* Start encoder timer */
+  if (HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL) != HAL_OK) {
+    Error_Handler();
+  }
+
+  /* Initialize last count depending on timer's ARR width */
+  if (htim3.Init.Period <= 0xFFFFu) {
+      last_cnt16 = (uint16_t)__HAL_TIM_GET_COUNTER(&htim3);
+  } else {
+      last_cnt32 = __HAL_TIM_GET_COUNTER(&htim3);
+  }
+
+  /* Timestamp for next sample */
+  uint32_t last_sample_tick = HAL_GetTick();
+
+  uint32_t last_motor_toggle = HAL_GetTick();
+  const uint32_t MOTOR_TOGGLE_MS = 3000;
+  uint8_t motor_dir = 0; // 0 = forward, 1 = reverse
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
-	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 300); // set duty (0..htim1.Init.Period)
-	  HAL_GPIO_WritePin(KARTIK_LED_GPIO_Port, KARTIK_LED_Pin, 1);
-	  HAL_Delay(3000);
+	  /* --- non-blocking sample every SAMPLE_INTERVAL_MS --- */
+	  uint32_t now = HAL_GetTick();
+	  if ((now - last_sample_tick) >= SAMPLE_INTERVAL_MS)
+	  {
+	    last_sample_tick += SAMPLE_INTERVAL_MS; // keep periodic (better than = now)
 
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
-	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 300); // set duty (0..htim1.Init.Period)
-	  HAL_GPIO_WritePin(KARTIK_LED_GPIO_Port, KARTIK_LED_Pin, 0);
-	  HAL_Delay(3000);
+	    /* Read current counter value */
+	    uint32_t cur_cnt = __HAL_TIM_GET_COUNTER(&htim3);
+	    int32_t delta_counts = 0; // signed delta for this interval
+
+	    if (htim3.Init.Period <= 0xFFFFu)
+	    {
+	      /* 16-bit timer case: use 16-bit signed delta to handle wrap */
+	      uint16_t cur16 = (uint16_t)cur_cnt;
+	      int16_t d16 = (int16_t)(cur16 - last_cnt16); // signed cast handles wrap-around
+	      delta_counts = (int32_t)d16;
+	      last_cnt16 = cur16;
+	    }
+	    else
+	    {
+	      /* 32-bit timer case */
+	      uint32_t cur32 = cur_cnt;
+	      int32_t d32 = (int32_t)((int32_t)cur32 - (int32_t)last_cnt32); // signed delta
+	      delta_counts = (int32_t)d32;
+	      last_cnt32 = cur32;
+	    }
+
+	    /* Update cumulative position (counts) */
+	    encoder_position_counts += (int64_t)delta_counts;
+
+	    /* Compute RPM:
+	       delta_counts occurred during SAMPLE_INTERVAL_MS milliseconds.
+	       RPM = (delta_counts / counts_per_rev) * (60 / dt_seconds)
+	    */
+	    float dt_sec = (float)SAMPLE_INTERVAL_MS / 1000.0f;
+	    motor_rpm = ((float)delta_counts / (float)COUNTS_PER_REV) * (60.0f / dt_sec);
+
+	    /* Optionally send to UART for debug (ensure huart2 initialized) */
+	    char msg[80];
+	    int len = snprintf(msg, sizeof(msg), "Pos: %lld cnt, d=%ld, RPM=%.2f\r\n", (long long)encoder_position_counts, (long)delta_counts, motor_rpm);
+	    if (len > 0) {
+	      HAL_UART_Transmit(&huart2, (uint8_t*)msg, (uint16_t)len, HAL_MAX_DELAY);
+	    }
+	  }
+
+    /* USER CODE END WHILE */
+	  if ((HAL_GetTick() - last_motor_toggle) >= MOTOR_TOGGLE_MS) {
+	      last_motor_toggle += MOTOR_TOGGLE_MS;
+	      motor_dir ^= 1;
+	      if (motor_dir == 0) {
+	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
+	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
+	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 300);
+	          HAL_GPIO_WritePin(KARTIK_LED_GPIO_Port, KARTIK_LED_Pin, GPIO_PIN_SET);
+	      } else {
+	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
+	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 300);
+	          HAL_GPIO_WritePin(KARTIK_LED_GPIO_Port, KARTIK_LED_Pin, GPIO_PIN_RESET);
+	      }
+	  }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -232,7 +316,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.DeadTime = 0;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_ENABLE;
   if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
   {
     Error_Handler();
@@ -241,6 +325,54 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
