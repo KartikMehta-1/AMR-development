@@ -49,13 +49,13 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-#define ENCODER_PPR         264      // replace with your encoder's PPR (per channel)
-#define COUNTS_PER_REV      (ENCODER_PPR * 4)   // quadrature counting = 4x
+#define ENCODER_PPR         12U      // replace with your encoder's PPR (per channel)
+#define COUNTS_PER_REV      (uint32_t)(ENCODER_PPR * 4U)   // quadrature counting = 4x
 
 /* Sampling period (ms) */
-#define SAMPLE_INTERVAL_MS  100      // 100 ms sample period
+#define SAMPLE_INTERVAL_MS  100U      // 100 ms sample period
 
-volatile int64_t encoder_position_counts = 0;   // cumulative position (signed)
+volatile int32_t encoder_position_counts = 0;   // cumulative position (signed)
 volatile float motor_rpm = 0.0f;
 
 /* last counter storage for 16-bit and 32-bit cases */
@@ -169,21 +169,41 @@ int main(void)
 	    }
 
 	    /* Update cumulative position (counts) */
-	    encoder_position_counts += (int64_t)delta_counts;
+	    encoder_position_counts += (int32_t)delta_counts;
 
 	    /* Compute RPM:
 	       delta_counts occurred during SAMPLE_INTERVAL_MS milliseconds.
 	       RPM = (delta_counts / counts_per_rev) * (60 / dt_seconds)
 	    */
 	    float dt_sec = (float)SAMPLE_INTERVAL_MS / 1000.0f;
-	    motor_rpm = ((float)delta_counts / (float)COUNTS_PER_REV) * (60.0f / dt_sec);
-
-	    /* Optionally send to UART for debug (ensure huart2 initialized) */
-	    char msg[80];
-	    int len = snprintf(msg, sizeof(msg), "Pos: %lld cnt, d=%ld, RPM=%.2f\r\n", (long long)encoder_position_counts, (long)delta_counts, motor_rpm);
-	    if (len > 0) {
-	      HAL_UART_Transmit(&huart2, (uint8_t*)msg, (uint16_t)len, HAL_MAX_DELAY);
+	    float new_rpm = 0.0f;
+	    if (COUNTS_PER_REV > 0 && dt_sec > 0.0f) {
+	        new_rpm = ((float)delta_counts / (float)COUNTS_PER_REV) * (60.0f / dt_sec);
+	    } else {
+	        new_rpm = 0.0f;
 	    }
+	    motor_rpm = new_rpm;
+
+//	    /* debug line showing intermediate values (only prints when delta != 0) */
+//	    if (delta_counts != 0) {
+//	        char dbg[96];
+//	        int dbg_len = snprintf(dbg, sizeof(dbg),
+//	            "DBG: d=%ld, CPR=%lu, dt=%.3f, rpm_calc=%.2f\r\n",
+//	            (long)delta_counts, (unsigned long)COUNTS_PER_REV, dt_sec, motor_rpm);
+//	        if (dbg_len > 0) HAL_UART_Transmit(&huart2, (uint8_t*)dbg, (uint16_t)dbg_len, HAL_MAX_DELAY);
+//	    }
+
+	    /* main telemetry print (use correct format specifiers) */
+	    char msg[96];
+	    int len = snprintf(msg, sizeof(msg),
+	                       "Pos: %ld cnt, d=%ld, RPM=%.2f\r\n",
+	                       (long)encoder_position_counts,
+	                       (long)delta_counts,
+	                       motor_rpm);
+	    if (len > 0) {
+	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, (uint16_t)len, HAL_MAX_DELAY);
+	    }
+
 	  }
 
     /* USER CODE END WHILE */
