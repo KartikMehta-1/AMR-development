@@ -25,6 +25,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include "encoder.h"
+#include "motor.h"
+#include "pid.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +49,6 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
-
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -55,12 +58,13 @@ UART_HandleTypeDef huart2;
 /* Sampling period (ms) */
 #define SAMPLE_INTERVAL_MS  100U      // 100 ms sample period
 
-volatile int32_t encoder_position_counts = 0;   // cumulative position (signed)
-volatile float motor_rpm = 0.0f;
+Encoder_t enc1;
+Motor_t motor1;
+PID_t pid_speed;
 
-/* last counter storage for 16-bit and 32-bit cases */
-static uint16_t last_cnt16 = 0;
-static uint32_t last_cnt32 = 0;
+float target_rpm = 1000.0f;  // desired RPM
+char uart_buf[96];          // UART buffer for prints
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,118 +114,72 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  /* Start PWM once, set initial duty */
-  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 250);   // initial duty
-  if (HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+  // === Initialize motor ===
+  motor1.htim = &htim1;
+  motor1.channel = TIM_CHANNEL_1;
+  motor1.dir_port_a = GPIOB;
+  motor1.dir_pin_a = GPIO_PIN_4;
+  motor1.dir_port_b = GPIOB;
+  motor1.dir_pin_b = GPIO_PIN_5;
+  Motor_Init(&motor1);
+
+  // === Initialize encoder ===
+  Encoder_Init(&enc1, &htim3, COUNTS_PER_REV, SAMPLE_INTERVAL_MS);
+
+  // === Initialize PID ===
+  PID_Init(&pid_speed, 0.8f, 0.2f, 0.01f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
+
 
   /* Start encoder timer */
   if (HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL) != HAL_OK) {
     Error_Handler();
   }
 
-  /* Initialize last count depending on timer's ARR width */
-  if (htim3.Init.Period <= 0xFFFFu) {
-      last_cnt16 = (uint16_t)__HAL_TIM_GET_COUNTER(&htim3);
-  } else {
-      last_cnt32 = __HAL_TIM_GET_COUNTER(&htim3);
-  }
-
   /* Timestamp for next sample */
   uint32_t last_sample_tick = HAL_GetTick();
-
-  uint32_t last_motor_toggle = HAL_GetTick();
-  const uint32_t MOTOR_TOGGLE_MS = 3000;
-  uint8_t motor_dir = 0; // 0 = forward, 1 = reverse
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  /* --- non-blocking sample every SAMPLE_INTERVAL_MS --- */
+	  /* Run control loop every SAMPLE_INTERVAL_MS */
 	  uint32_t now = HAL_GetTick();
 	  if ((now - last_sample_tick) >= SAMPLE_INTERVAL_MS)
 	  {
-	    last_sample_tick += SAMPLE_INTERVAL_MS; // keep periodic (better than = now)
+		last_sample_tick += SAMPLE_INTERVAL_MS;
 
-	    /* Read current counter value */
-	    uint32_t cur_cnt = __HAL_TIM_GET_COUNTER(&htim3);
-	    int32_t delta_counts = 0; // signed delta for this interval
+		/* update encoder (reads TIM3 counter and computes rpm/position) */
+		Encoder_Update(&enc1);
 
-	    if (htim3.Init.Period <= 0xFFFFu)
-	    {
-	      /* 16-bit timer case: use 16-bit signed delta to handle wrap */
-	      uint16_t cur16 = (uint16_t)cur_cnt;
-	      int16_t d16 = (int16_t)(cur16 - last_cnt16); // signed cast handles wrap-around
-	      delta_counts = (int32_t)d16;
-	      last_cnt16 = cur16;
-	    }
-	    else
-	    {
-	      /* 32-bit timer case */
-	      uint32_t cur32 = cur_cnt;
-	      int32_t d32 = (int32_t)((int32_t)cur32 - (int32_t)last_cnt32); // signed delta
-	      delta_counts = (int32_t)d32;
-	      last_cnt32 = cur32;
-	    }
+		/* read current measurement */
+		float measured_rpm = Encoder_GetRPM(&enc1);
+		int32_t pos_counts = Encoder_GetPosition(&enc1);
 
-	    /* Update cumulative position (counts) */
-	    encoder_position_counts += (int32_t)delta_counts;
+		 /* PID update (dt in seconds) */
+		float dt = (float)SAMPLE_INTERVAL_MS / 1000.0f;
+		float pwm_out = PID_Update(&pid_speed, target_rpm, measured_rpm, dt);
 
-	    /* Compute RPM:
-	       delta_counts occurred during SAMPLE_INTERVAL_MS milliseconds.
-	       RPM = (delta_counts / counts_per_rev) * (60 / dt_seconds)
-	    */
-	    float dt_sec = (float)SAMPLE_INTERVAL_MS / 1000.0f;
-	    float new_rpm = 0.0f;
-	    if (COUNTS_PER_REV > 0 && dt_sec > 0.0f) {
-	        new_rpm = ((float)delta_counts / (float)COUNTS_PER_REV) * (60.0f / dt_sec);
-	    } else {
-	        new_rpm = 0.0f;
-	    }
-	    motor_rpm = new_rpm;
+		/* convert pwm_out to integer PWM value and apply to motor */
+		/* pid configured to output between 0..htim1 period or -period..+period depending on usage */
+		int32_t pwm_int = (int32_t) (pwm_out);
 
-//	    /* debug line showing intermediate values (only prints when delta != 0) */
-//	    if (delta_counts != 0) {
-//	        char dbg[96];
-//	        int dbg_len = snprintf(dbg, sizeof(dbg),
-//	            "DBG: d=%ld, CPR=%lu, dt=%.3f, rpm_calc=%.2f\r\n",
-//	            (long)delta_counts, (unsigned long)COUNTS_PER_REV, dt_sec, motor_rpm);
-//	        if (dbg_len > 0) HAL_UART_Transmit(&huart2, (uint8_t*)dbg, (uint16_t)dbg_len, HAL_MAX_DELAY);
-//	    }
+		Motor_SetPWM(&motor1, pwm_int);
 
-	    /* main telemetry print (use correct format specifiers) */
-	    char msg[96];
-	    int len = snprintf(msg, sizeof(msg),
-	                       "Pos: %ld cnt, d=%ld, RPM=%.2f\r\n",
-	                       (long)encoder_position_counts,
-	                       (long)delta_counts,
-	                       motor_rpm);
-	    if (len > 0) {
-	        HAL_UART_Transmit(&huart2, (uint8_t*)msg, (uint16_t)len, HAL_MAX_DELAY);
-	    }
+		/* Send telemetry over UART */
+		int len = snprintf(uart_buf, sizeof(uart_buf),
+						 "Pos: %ld cnt, RPM=%.2f, pwm=%ld\r\n",
+						 (long)pos_counts, measured_rpm, (long)pwm_int);
+		if (len > 0) {
+		HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)len, HAL_MAX_DELAY);
+		}
+	}
 
-	  }
+		/* other non-time-critical background tasks can go here */
+
 
     /* USER CODE END WHILE */
-	  if ((HAL_GetTick() - last_motor_toggle) >= MOTOR_TOGGLE_MS) {
-	      last_motor_toggle += MOTOR_TOGGLE_MS;
-	      motor_dir ^= 1;
-	      if (motor_dir == 0) {
-	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_SET);
-	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
-	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 300);
-	          HAL_GPIO_WritePin(KARTIK_LED_GPIO_Port, KARTIK_LED_Pin, GPIO_PIN_SET);
-	      } else {
-	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, GPIO_PIN_RESET);
-	          HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
-	          __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 300);
-	          HAL_GPIO_WritePin(KARTIK_LED_GPIO_Port, KARTIK_LED_Pin, GPIO_PIN_RESET);
-	      }
-	  }
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */

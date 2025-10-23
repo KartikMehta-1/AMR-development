@@ -1,0 +1,4 @@
+../Core/Src/encoder.c:3:6:Encoder_Init	1
+../Core/Src/encoder.c:13:6:Encoder_Update	2
+../Core/Src/encoder.c:32:9:Encoder_GetPosition	1
+../Core/Src/encoder.c:33:7:Encoder_GetRPM	1
