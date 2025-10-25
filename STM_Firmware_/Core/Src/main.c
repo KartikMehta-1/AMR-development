@@ -28,6 +28,7 @@
 #include "encoder.h"
 #include "motor.h"
 #include "pid.h"
+#include "ramp.h"
 
 /* USER CODE END Includes */
 
@@ -61,9 +62,11 @@ UART_HandleTypeDef huart2;
 Encoder_t enc1;
 Motor_t motor1;
 PID_t pid_speed;
+Ramp_t speed_ramp;
 
 float target_rpm = 1000.0f;  // desired RPM
 char uart_buf[96];          // UART buffer for prints
+static uint32_t last_header_time = 0;
 
 /* USER CODE END PV */
 
@@ -129,6 +132,10 @@ int main(void)
   // === Initialize PID ===
   PID_Init(&pid_speed, 0.8f, 0.2f, 0.01f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
 
+  // === Initialize Ramp ===
+  Ramp_Init(&speed_ramp, 0.0f, 50.0f); // allow 200 RPM per second slew
+
+
 
   /* Start encoder timer */
   if (HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_ALL) != HAL_OK) {
@@ -158,7 +165,8 @@ int main(void)
 
 		 /* PID update (dt in seconds) */
 		float dt = (float)SAMPLE_INTERVAL_MS / 1000.0f;
-		float pwm_out = PID_Update(&pid_speed, target_rpm, measured_rpm, dt);
+		float cmd_rpm = Ramp_Update(&speed_ramp, target_rpm, dt);
+		float pwm_out = PID_Update(&pid_speed, cmd_rpm, measured_rpm, dt);
 
 		/* convert pwm_out to integer PWM value and apply to motor */
 		/* pid configured to output between 0..htim1 period or -period..+period depending on usage */
@@ -167,11 +175,26 @@ int main(void)
 		Motor_SetPWM(&motor1, pwm_int);
 
 		/* Send telemetry over UART */
+		if (HAL_GetTick() - last_header_time > 10000) {
+		    const char *header = "#HEADER: t,pos,cmd,meas,err,p,i,d,pwm\r\n";
+		    HAL_UART_Transmit(&huart2, (uint8_t*)header, strlen(header), HAL_MAX_DELAY);
+		    last_header_time = HAL_GetTick();
+		}
+
 		int len = snprintf(uart_buf, sizeof(uart_buf),
-						 "Pos: %ld cnt, RPM=%.2f, pwm=%ld\r\n",
-						 (long)pos_counts, measured_rpm, (long)pwm_int);
+		                   "%.2f,%ld,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%ld\r\n",
+		                   (float)(HAL_GetTick() / 1000.0f),
+		                   (long)pos_counts,
+		                   cmd_rpm,
+		                   measured_rpm,
+		                   pid_speed.last_error,
+		                   pid_speed.Kp * pid_speed.last_error,
+		                   pid_speed.Ki * pid_speed.integral,
+		                   pid_speed.Kd * pid_speed.derivative,
+		                   (long)pwm_int);
+
 		if (len > 0) {
-		HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)len, HAL_MAX_DELAY);
+		    HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)len, HAL_MAX_DELAY);
 		}
 	}
 
@@ -370,7 +393,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 460800;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
