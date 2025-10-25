@@ -1,0 +1,3 @@
+../Core/Src/test.c:6:6:Test_SetActive	3
+../Core/Src/test.c:13:15:Test_GetActive	1
+../Core/Src/test.c:18:6:Test_InitSystem	1

@@ -1,0 +1,2 @@
+../Core/Src/test_sine.c:14:13:sine_init	8	static
+../Core/Src/test_sine.c:20:13:sine_update	32	static

@@ -29,6 +29,11 @@
 #include "motor.h"
 #include "pid.h"
 #include "ramp.h"
+#include "test.h"
+#include "test_step.h"
+#include "test_sine.h"
+#include "test_f_sweep.h"
+
 
 /* USER CODE END Includes */
 
@@ -65,7 +70,7 @@ PID_t pid_speed;
 Ramp_t speed_ramp;
 
 float target_rpm = 1000.0f;  // desired RPM
-char uart_buf[96];          // UART buffer for prints
+char uart_buf[128];          // UART buffer for prints
 static uint32_t last_header_time = 0;
 
 /* USER CODE END PV */
@@ -130,10 +135,26 @@ int main(void)
   Encoder_Init(&enc1, &htim3, COUNTS_PER_REV, SAMPLE_INTERVAL_MS);
 
   // === Initialize PID ===
-  PID_Init(&pid_speed, 0.8f, 0.2f, 0.01f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
+  PID_Init(&pid_speed, 0.5f, 0.2f, 0.01f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
+
+  /* Reset PID state to ensure clean start */
+  pid_speed.integral = 0.0f;
+  pid_speed.prev_error = 0.0f;
+  pid_speed.last_error = 0.0f;
+
+  /* Optionally, if your PID struct stores derivative */
+  pid_speed.derivative = 0.0f;
 
   // === Initialize Ramp ===
   Ramp_Init(&speed_ramp, 0.0f, 50.0f); // allow 200 RPM per second slew
+
+  /* --- Initialize test framework --- */
+  Test_InitSystem();
+
+  /* Choose one test to run. Uncomment the one you want. */
+  Test_SetActive(&Test_Step);    // step input test (default)
+  // Test_SetActive(&Test_Sine); // smooth sine test
+  // Test_SetActive(&Test_F_Sweep); // chirp / frequency sweep test
 
 
 
@@ -163,8 +184,18 @@ int main(void)
 		float measured_rpm = Encoder_GetRPM(&enc1);
 		int32_t pos_counts = Encoder_GetPosition(&enc1);
 
-		 /* PID update (dt in seconds) */
+		/* dt for this cycle (seconds) */
 		float dt = (float)SAMPLE_INTERVAL_MS / 1000.0f;
+
+		/* let the active test update the target setpoint (target_rpm) */
+		{
+			const Test_t *active = Test_GetActive();
+			if (active && active->update) {
+				active->update(dt); /* tests can use dt or HAL_GetTick internally */
+			}
+		}
+
+		/* PID update (dt in seconds) -- use ramped command_rpm */
 		float cmd_rpm = Ramp_Update(&speed_ramp, target_rpm, dt);
 		float pwm_out = PID_Update(&pid_speed, cmd_rpm, measured_rpm, dt);
 
@@ -176,14 +207,16 @@ int main(void)
 
 		/* Send telemetry over UART */
 		if (HAL_GetTick() - last_header_time > 10000) {
-		    const char *header = "#HEADER: t,pos,cmd,meas,err,p,i,d,pwm\r\n";
-		    HAL_UART_Transmit(&huart2, (uint8_t*)header, strlen(header), HAL_MAX_DELAY);
+		    const Test_t *active = Test_GetActive();
+		    const char *tname = active ? active->name : "none";
+		    int hlen = snprintf(uart_buf, sizeof(uart_buf), "#HEADER: test=%s,t,pos,cmd,meas,err,p,i,d,pwm\r\n", tname);
+		    if (hlen > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)hlen, HAL_MAX_DELAY);
 		    last_header_time = HAL_GetTick();
 		}
 
 		int len = snprintf(uart_buf, sizeof(uart_buf),
 		                   "%.2f,%ld,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%ld\r\n",
-		                   (float)(HAL_GetTick() / 1000.0f),
+		                   (float)HAL_GetTick() / 1000.0f,
 		                   (long)pos_counts,
 		                   cmd_rpm,
 		                   measured_rpm,

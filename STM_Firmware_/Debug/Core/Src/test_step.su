@@ -1,0 +1,2 @@
+../Core/Src/test_step.c:13:13:step_init	8	static
+../Core/Src/test_step.c:19:13:step_update	24	static

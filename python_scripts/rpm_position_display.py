@@ -2,6 +2,7 @@ import serial
 import matplotlib.pyplot as plt
 from collections import deque
 import time
+import math
 
 # =========================
 # USER CONFIG
@@ -22,12 +23,33 @@ print("Waiting for header...")
 # WAIT FOR HEADER LINE
 # =========================
 headers = []
+test_name = None
+
 while True:
     line = ser.readline().decode(errors="ignore").strip()
+    if not line:
+        continue
     if line.startswith("#HEADER:"):
-        headers = [h.strip() for h in line.replace("#HEADER:", "").split(",")]
-        print(f"Received header: {headers}")
+        # remove prefix and split on commas
+        parts = [p.strip() for p in line.replace("#HEADER:", "").split(",")]
+        numeric_headers = []
+        # extract any key=value pairs (e.g., test=Step) and remove them from numeric header list
+        for p in parts:
+            if "=" in p:
+                k, v = p.split("=", 1)
+                k = k.strip()
+                v = v.strip()
+                if k.lower() == "test":
+                    test_name = v
+                # ignore any key=value for numeric headers
+            else:
+                if p: numeric_headers.append(p)
+        headers = numeric_headers
+        print(f"Received header (test={test_name}): {headers}")
         break
+
+if not headers:
+    raise SystemExit("No headers received. Check your STM telemetry '#HEADER:' output.")
 
 # Initialize data buffers
 buffers = {h: deque(maxlen=MAX_POINTS) for h in headers}
@@ -37,7 +59,7 @@ buffers = {h: deque(maxlen=MAX_POINTS) for h in headers}
 # =========================
 plt.ion()
 fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
-fig.suptitle("Live PID Telemetry (460800 baud)", fontsize=14, fontweight="bold")
+fig.suptitle(f"Live PID Telemetry (baud={BAUD})    test={test_name}", fontsize=14, fontweight="bold")
 
 # Flatten axes for easier access
 (ax_rpm, ax_p,
@@ -88,41 +110,88 @@ ax_d.set_xlabel("Time (s)")
 ax_d.legend(loc="upper right")
 ax_d.grid(True)
 
-plt.tight_layout(rect=[0, 0, 1, 0.97])
+plt.tight_layout(rect=[0, 0, 1, 0.95])
 print("Streaming data... Press Ctrl+C to stop.\n")
+
+# Helper: safe float conversion (non-numeric -> nan)
+def safe_float(s):
+    try:
+        return float(s)
+    except Exception:
+        # handle empty or non-numeric fields gracefully
+        try:
+            # try to handle integers with stray chars
+            return float(s.strip())
+        except Exception:
+            return float("nan")
+
+# Quick check that required fields exist (not strictly necessary but nice)
+required = {"t", "cmd", "meas", "err", "p", "i", "d", "pwm"}
+missing = required - set(headers)
+if missing:
+    print("Warning: some expected fields are missing from header:", missing)
+    # we will still try to plot what we can
 
 # =========================
 # STREAM + PLOT LOOP
 # =========================
 try:
     while True:
-        line = ser.readline().decode(errors="ignore").strip()
-        if not line or line.startswith("#"):
+        line = ser.readline().decode(errors='ignore').strip()
+        if not line:
             continue
 
-        values = line.split(",")
+        # ignore header echo lines; handle updated headers dynamically if needed
+        if line.startswith("#HEADER:"):
+            # optional: handle header re-send mid-stream - simple approach: ignore or rebuild
+            # For simplicity we ignore repeated headers (you can add logic to rebuild buffers here)
+            continue
+
+        # skip comments
+        if line.startswith("#"):
+            continue
+
+        values = [v.strip() for v in line.split(",")]
         if len(values) != len(headers):
+            # mismatch — ignore this row (could be spurious)
+            # optionally, print for debugging:
+            # print("Skipping line (len mismatch):", line)
             continue
 
-        # Parse values into float dictionary
-        data = dict(zip(headers, map(float, values)))
+        # parse floats into dict
+        parsed = {}
+        for h, v in zip(headers, values):
+            parsed[h] = safe_float(v)
+
+        # append into buffers (only fields present in header)
         for h in headers:
-            buffers[h].append(data[h])
+            buffers[h].append(parsed[h])
 
-        # Extract time axis
-        t = list(buffers["t"])
-        if len(t) < 2:
+        # need at least two samples to plot
+        if "t" not in buffers or len(buffers["t"]) < 2:
             continue
 
-        # Extract key data lists
-        cmd = list(buffers["cmd"])
-        meas = list(buffers["meas"])
-        err = list(buffers["err"])
-        pwm = list(buffers["pwm"])
-        p = list(buffers["p"])
-        i = list(buffers["i"])
-        d = list(buffers["d"])
-        pid_sum = [p[j] + i[j] + d[j] for j in range(len(p))]
+        # Extract time axis and lists (use get with default zeros if missing)
+        t = list(buffers.get("t", []))
+        cmd = list(buffers.get("cmd", [float("nan")] * len(t)))
+        meas = list(buffers.get("meas", [float("nan")] * len(t)))
+        err = list(buffers.get("err", [float("nan")] * len(t)))
+        pwm = list(buffers.get("pwm", [float("nan")] * len(t)))
+        p = list(buffers.get("p", [float("nan")] * len(t)))
+        i = list(buffers.get("i", [float("nan")] * len(t)))
+        d = list(buffers.get("d", [float("nan")] * len(t)))
+
+        # Compute pid sum safely (handle NaNs)
+        pid_sum = []
+        for j in range(len(t)):
+            pj = p[j] if j < len(p) else float("nan")
+            ij = i[j] if j < len(i) else float("nan")
+            dj = d[j] if j < len(d) else float("nan")
+            s = 0.0
+            s += 0.0 if math.isnan(pj) else pj
+            s += 0.0 if math.isnan(ij) else ij
+            s += 0.0 if math.isnan(dj) else dj
+            pid_sum.append(s)
 
         # --- Update plots ---
         line_cmd.set_data(t, cmd)
