@@ -1,0 +1,56 @@
+board: Nucleo-F401RE
+clock: 84MHz
+
+pwm:
+  motor_pwm:
+    timer: TIM1
+    channel: CH1
+    pin: PA8
+    frequency_hz: 20000   # target for Cytron MDD20A; current code ~2 kHz
+
+direction:
+  motor_dir_a:
+    pin: PB4
+  motor_dir_b:
+    pin: PB5   # used for L298N; Cytron uses single DIR (PB4)
+
+encoder:
+  wheel_encoder:
+    timer: TIM3
+    ch1:
+      pin: PA6
+    ch2:
+      pin: PA7
+    counts_per_rev: 2400   # confirmed: encoder mounted post-gearbox (wheel/output shaft)
+    pullup: external_3v3   # open-collector, use 4.7–10k to 3.3 V
+
+uart:
+  telemetry:
+    instance: USART2
+    tx: PA2
+    rx: PA3
+    baud: 460800
+
+gpio:
+  status_led:
+    pin: PA5
+  user_button:
+    pin: PC13
+  estop_sense:
+    pin: TBD
+
+driver:
+  current:
+    type: L298N
+    enable: ENA <- PA8
+    in1: PB4
+    in2: PB5
+  final:
+    type: Cytron MDD20A
+    m1_pwm: PA8
+    m1_dir: PB4
+
+notes:
+  - Keep this file authoritative; update when wiring or firmware changes.
+  - Align TIM1 ARR/PSC to achieve the desired PWM frequency.
+  - Encoder mount is post-gearbox; if remounted pre-gearbox (30:1), set counts_per_rev to 72000.
