@@ -135,7 +135,7 @@ int main(void)
   Encoder_Init(&enc1, &htim3, COUNTS_PER_REV, SAMPLE_INTERVAL_MS);
 
   // === Initialize PID ===
-  PID_Init(&pid_speed, 0.5f, 0.2f, 0.01f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
+  PID_Init(&pid_speed, 0.4f, 0.3f, 0.02f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
 
   /* Reset PID state to ensure clean start */
   pid_speed.integral = 0.0f;

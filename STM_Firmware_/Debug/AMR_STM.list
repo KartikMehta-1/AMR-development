@@ -1498,7 +1498,7 @@ int main(void)
  80010ba:	f7ff ff13 	bl	8000ee4 <Encoder_Init>
 
   // === Initialize PID ===
-  PID_Init(&pid_speed, 0.4f, 0.2f, 0.03f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
+  PID_Init(&pid_speed, 0.4f, 0.3f, 0.02f, -((float)htim1.Init.Period), (float)htim1.Init.Period);
  80010be:	4b97      	ldr	r3, [pc, #604]	@ (800131c <main+0x2b4>)
  80010c0:	68db      	ldr	r3, [r3, #12]
  80010c2:	ee07 3a90 	vmov	s15, r3
@@ -1807,8 +1807,8 @@ int main(void)
  8001320:	40020400 	.word	0x40020400
  8001324:	20000244 	.word	0x20000244
  8001328:	200002d4 	.word	0x200002d4
- 800132c:	3cf5c28f 	.word	0x3cf5c28f
- 8001330:	3e4ccccd 	.word	0x3e4ccccd
+ 800132c:	3ca3d70a 	.word	0x3ca3d70a
+ 8001330:	3e99999a 	.word	0x3e99999a
  8001334:	3ecccccd 	.word	0x3ecccccd
  8001338:	20000304 	.word	0x20000304
  800133c:	42480000 	.word	0x42480000
