@@ -39,7 +39,6 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
  | 16 | Firmware v2: micro-ROS Bring-up | ○ | Integrate micro-ROS on STM32; define msgs; publish wheel_state/obstacles; subscribe wheel_cmd/estop; stable transport to agent. |
  | 17 | Jetson ROS2 + Agent + Docker | ○ | Set up micro-ROS agent and ROS2 workspace on Jetson; dockerize dev/runtime; compose services; basic end-to-end echo tests. |
  | 18 | ROS2 Architecture & Topics | ○ | Define node graph, topics, QoS, message types; draft test plans (unit/integration/sim); document interfaces for motion, safety, sensors. |
-
 | 19 | URDF Modeling | ○ | Base chassis + wheels URDF; inertia estimates; visual/collision meshes; joint limits; TF tree. |
 | 20 | Gazebo Simulation | ○ | Diff-drive plugin tuning; sensor plugins for LiDAR/depth/proximity; sim-worlds; baseline nav in sim. |
 | 21 | ROS2 Node Implementation | ○ | Implement nodes per architecture (odometry, safety_monitor, sensor_fusion, teleop); CI for lint/build/test. |

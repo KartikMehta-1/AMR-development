@@ -94,7 +94,40 @@ Notes
 
 ---
 
-## 7) Optional: Current Sensing (future)
+## 7) Proximity Sensors ↔ STM32 (x8 planned)
+
+Goal: Obstruction detection around the AMR perimeter using 8 proximity sensors mounted near corners/edges.
+
+Interfaces (choose per sensor model; to be finalized):
+- Digital GPIO (thresholded distance or presence):
+  - Each sensor → 1x STM32 GPIO input
+  - Add pull-up/down as recommended; consider RC debounce (~1–5 ms)
+  - Pros: simple; Cons: less range resolution (binary)
+- Analog (voltage proportional to distance):
+  - Each sensor → 1x STM32 ADC channel (0–3.3 V). Use resistor divider if sensor outputs 5 V
+  - Sample via round-robin scheduler; apply low-pass filtering
+  - Pros: simple wiring; Cons: uses many ADC channels
+- I2C (addressable rangefinders):
+  - Shared I2C bus (3.3 V level). If identical addresses, add I2C mux or per-sensor enable
+  - Power decoupling near each sensor; twisted pair for SCL/SDA to reduce noise
+- UART (less common for 8x):
+  - Requires multiplexing or shared UART with addressing; generally avoid if many sensors
+
+Power
+- Provide clean 5 V or 3.3 V rail as required by sensors (TBD current). Decouple locally (0.1 µF + 10 µF)
+- Route sensor returns to logic ground; avoid sharing high-current motor returns
+
+Firmware notes
+- Driver will support 8 channels with sampling, debounce/filtering, timeout faulting, and obstacle event reporting
+- micro-ROS topic plan: `/amr/obstacles` (e.g., sensor_msgs/Range[] or custom)
+
+Schematic placeholders (to be finalized on sensor selection)
+- `S1..S8`: V+, GND, SIGNAL → STM32 (GPIO/ADC/I2C)
+- Pin assignments: TBD in `docs/pin_map.yaml` once sensor model/interface is chosen
+
+---
+
+## 8) Optional: Current Sensing (future)
 
 - Sensor: ACS758 (model TBD) on motor supply line.
 - Output: Analog voltage proportional to current.
@@ -103,7 +136,7 @@ Notes
 
 ---
 
-## 8) Quick Connector Summary
+## 9) Quick Connector Summary
 
 - STM32 (Nucleo‑F401RE pinout references):
   - `PA8` → PWM to driver (L298N ENA or MDD20A PWM)
@@ -115,12 +148,13 @@ Notes
   - L298N: ENA, IN1, IN2, VM, GND, Motor outputs
   - Cytron MDD20A: M1 PWM, M1 DIR, VM, GND, Motor outputs
 - Encoder: A, B, V+, GND (open‑collector outputs with 3.3 V pull‑ups)
+- Proximity Sensors (x8): V+, GND, SIGNAL to STM32 (GPIO/ADC/I2C) — exact interface TBD
 - Jetson Nano: 5 V, GND, USB ports, J41 UART if used
 - LiDAR/Depth/Proximity: USB/UART/I2C as per model (TBD)
 
 ---
 
-## 9) Layout and EMI Tips
+## 10) Layout and EMI Tips
 
 - Keep motor and driver wiring away from encoder and logic wiring; cross at 90° when needed.
 - Twist encoder A/B with ground return; shield if available.

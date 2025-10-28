@@ -1,52 +1,143 @@
-board: Nucleo-F401RE
-clock: 84MHz
+schema_version: 0.2.0
+profile: final-single-mdd20a   # active wiring profile
 
-pwm:
-  motor_pwm:
-    timer: TIM1
-    channel: CH1
-    pin: PA8
-    frequency_hz: 20000   # target for Cytron MDD20A; current code ~2 kHz
+board:
+  name: Nucleo-F401RE
+  clock_hz: 84000000
 
-direction:
-  motor_dir_a:
-    pin: PB4
-  motor_dir_b:
-    pin: PB5   # used for L298N; Cytron uses single DIR (PB4)
+motors:
+  left:
+    driver: cytron_mdd20a
+    pwm:
+      timer: TIM1
+      channel: CH1
+      pin: PA8
+      frequency_hz: 20000   # target for Cytron MDD20A; current code ~2 kHz
+    direction:
+      pin: PB4
+  right:
+    driver: cytron_mdd20a
+    pwm:
+      timer: TBD            # e.g., TIM1
+      channel: TBD          # e.g., CH2
+      pin: TBD              # e.g., PA9
+      frequency_hz: 20000
+    direction:
+      pin: TBD
 
 encoder:
-  wheel_encoder:
+  wheel:
     timer: TIM3
     ch1:
       pin: PA6
     ch2:
       pin: PA7
-    counts_per_rev: 2400   # confirmed: encoder mounted post-gearbox (wheel/output shaft)
-    pullup: external_3v3   # open-collector, use 4.7–10k to 3.3 V
+    counts_per_rev: 2400        # post-gearbox: 600 PPR × 4
+    input_type: open_collector
+    pullup: external_3v3        # use 4.7–10k to 3.3 V
+    max_signal_freq_hz: 30000
 
 uart:
   telemetry:
     instance: USART2
     tx: PA2
     rx: PA3
-    baud: 460800
+    baud_bps: 460800
 
 gpio:
   status_led:
     pin: PA5
   user_button:
     pin: PC13
-  estop_sense:
-    pin: TBD
 
-driver:
-  current:
-    type: L298N
-    enable: ENA <- PA8
-    in1: PB4
-    in2: PB5
-  final:
-    type: Cytron MDD20A
+safety:
+  estop:
+    sense:
+      pin: TBD
+      active_state: low        # low or high
+      pull: pullup_3v3         # pullup_3v3 or pulldown
+      debounce_ms: 10
+    hw_cut:
+      type: series_switch      # series_switch / relay / contactor / high_side
+      notes: Cut motor VM supply to driver (preferred primary action)
+
+ sensors:
+   proximity:
+     quantity: 8
+     power_rail: TBD           # 3v3 or 5v
+     interface: TBD            # gpio / adc / i2c / uart
+     units: distance           # semantic units (e.g., mm) defined per model
+     channels:
+       - id: S1
+         gpio_pin: TBD         # if interface=gpio
+         adc_pin:  TBD         # if interface=adc
+         i2c_bus: TBD          # if interface=i2c
+         i2c_addr: TBD
+         uart_port: TBD        # if interface=uart
+       - id: S2
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+       - id: S3
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+       - id: S4
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+       - id: S5
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+       - id: S6
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+       - id: S7
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+       - id: S8
+         gpio_pin: TBD
+         adc_pin:  TBD
+         i2c_bus: TBD
+         i2c_addr: TBD
+         uart_port: TBD
+
+ buses:
+   i2c1:
+     scl: TBD
+     sda: TBD
+     pullups: external_3v3
+   i2c2:
+     scl: TBD
+     sda: TBD
+     pullups: external_3v3
+
+ adc:
+   vref_volts: 3.3
+   resolution_bits: 12
+   channels: []                 # populate if proximity uses ADC
+
+drivers:
+  l298n:
+    enable_pin: PA8    # ENA
+    in1_pin: PB4
+    in2_pin: PB5
+  cytron_mdd20a:
     m1_pwm: PA8
     m1_dir: PB4
 

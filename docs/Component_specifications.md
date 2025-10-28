@@ -53,10 +53,6 @@ Mounting and effective resolution
 
 ---
 
-*(Add future sections for Jetson Nano, LiDAR, depth camera, proximity sensors, etc.)*
-
----
-
 ## 4. Jetson Nano (Host Computer)
 **Model:** TBD
 
@@ -94,11 +90,14 @@ Mounting and effective resolution
 ---
 
 ## 7. Proximity Sensors
-**Model(s):** TBD
+**Model(s):** TBD (x8 units planned)
 
 | Parameter | Value |
 |------------|--------|
-| Power | TBD |
-| Interface | TBD (GPIO/I2C/UART) |
+| Quantity | 8 |
+| Power | TBD (3.3 V or 5 V) |
+| Interface | TBD (GPIO digital / ADC analog / I2C / UART) |
 | Range | TBD |
-| Notes | TBD |
+| Update Rate | TBD |
+| Mounting | Corners/edges of chassis for obstruction detection |
+| Notes | Final model and interface will determine wiring and firmware driver; debounce/filtering required |
