@@ -11,7 +11,8 @@
 - Progress: 6/18 weeks complete (~33%)
 - Current Focus (Week 7): PID tuning & step testing — target ≤5% steady-state error
 - Next Focus (Week 8): E-stop input + safety interlock
-- Timeline: Flexible (18 weeks is indicative). Prioritize firmware + ROS; Custom PCB is low priority/optional.
+- Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; Custom PCB is low priority/optional.
+ - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
 Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (■)
 
@@ -26,18 +27,25 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 | 4 | Encoder Hookup & Counting | ✓ | Encoder integrated; direction & count validated; stable RPM reading. |
 | 5 | RPM Calculation & Telemetry | ✓ | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | ✓ | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
-| 7 | PID Tuning & Step Testing | ◐ | Tune Kp/Ki/Kd via step tests; record telemetry; target ≤5% SSE. |
-| 8 | E-stop Feature & Safety Interlock | ○ | Map E-stop input; debounce; define fault states; immediate PWM cutoff; latching fault with manual clear; telemetry flag. |
-| 9 | Integrated Controller Enclosure | ○ | 3D-print for STM32, Jetson, drivers, current sensor, fuses; airflow & serviceability. |
-| 10 | Final Drivetrain Migration (Single Channel) | ○ | Integrate final motors, motor driver, and encoders per provided specs; verify PWM freq/polarity, direction logic, encoder CPR/scaling, and initial current limits. |
-| 11 | Dual Motor Bring-Up | ○ | Dual driver integration; independent PID; verify linear/turn control. |
-| 12 | Code Architecture & Modularization | ○ | Refactor modules: `motor.c`, `encoder.c`, `pid.c`, `telemetry.c`, `safety.c`; prep for FreeRTOS. |
-| 13 | FreeRTOS Integration | ○ | Tasks: motor control, safety, telemetry, Jetson comms; validate scheduler timing. |
-| 14 | BMS Integration & Power Supervision | ○ | BMS alerts to STM32; pre-charge; fault-based cutoff logic. |
-| 15 | Custom PCB (optional, low priority) | ○ | Optional: consolidate MCU, drivers, current sensing, BMS interface, Jetson header. Focus remains on firmware + ROS. |
-| 16 | System Validation (RTOS + Safety) | ○ | Validate loop stability, E-stop latency, current-limit behavior. |
-| 17 | ROS2 + Gazebo Simulation | ○ | URDF + Gazebo model; wheel plugin; TF validation. |
-| 18 | Jetson–STM32 Bridge, SLAM & Navigation | ○ | ROS2 bridge; SLAM + nav demo on Jetson; endurance test. |
+| 7 | Firmware v2: Scaffold + Pin Map | ◐ | Create new project `STM_Firmware_AMR_v2`; apply `profile: final-single-mdd20a`; TIM1 @ 20 kHz, TIM3 encoder filters; UART banner. |
+| 8 | Firmware v2: Single Motor Drive | ○ | Wire MDD20A M1 PWM/DIR; verify duty sweep and direction; implement immediate PWM cut on E-stop assert. |
+| 9 | Firmware v2: Encoder Integration | ○ | Post-gearbox encoder (A/B on PA6/PA7); set `counts_per_rev=2400`; RPM @ 100 Hz with input filtering. |
+| 10 | Firmware v2: PID + Ramp + Safety | ○ | Closed-loop speed with anti-windup and ramp; E-stop latch + manual clear; initial current limits (if available). |
+| 11 | Firmware v2: Telemetry v2 | ○ | CSV adds setpoint, meas, error, u(t), fault_flags; periodic headers; optional 100 Hz stream. |
+| 12 | Firmware v2: Dual-Motor Bring-Up | ○ | Add second PWM/DIR + encoder; independent PIDs; synchronized 100 Hz control. |
+| 13 | Firmware v2: Differential Drive | ○ | Map (v, ω) ↔ (left, right); saturation and ramp coordination; basic tests. |
+ | 14 | Firmware v2: Proximity Sensors (HW) | ○ | Select 8x proximity sensors (TBD interface: GPIO/ADC/I2C); wiring, pull-ups, protection; update pin map; bench power budget. |
+ | 15 | Firmware v2: Proximity Drivers | ○ | Implement drivers and sampling scheduler for 8 sensors; debouncing/filtering; fault detection; add to telemetry. |
+ | 16 | Firmware v2: micro-ROS Bring-up | ○ | Integrate micro-ROS on STM32; define msgs; publish wheel_state/obstacles; subscribe wheel_cmd/estop; stable transport to agent. |
+ | 17 | Jetson ROS2 + Agent + Docker | ○ | Set up micro-ROS agent and ROS2 workspace on Jetson; dockerize dev/runtime; compose services; basic end-to-end echo tests. |
+ | 18 | ROS2 Architecture & Topics | ○ | Define node graph, topics, QoS, message types; draft test plans (unit/integration/sim); document interfaces for motion, safety, sensors. |
+
+| 19 | URDF Modeling | ○ | Base chassis + wheels URDF; inertia estimates; visual/collision meshes; joint limits; TF tree. |
+| 20 | Gazebo Simulation | ○ | Diff-drive plugin tuning; sensor plugins for LiDAR/depth/proximity; sim-worlds; baseline nav in sim. |
+| 21 | ROS2 Node Implementation | ○ | Implement nodes per architecture (odometry, safety_monitor, sensor_fusion, teleop); CI for lint/build/test. |
+| 22 | System Tests & CI | ○ | Sim integration tests; logging/bagging; performance dashboards; dockerized CI pipeline. |
+| 23 | Field Bring-up | ○ | On-robot tests: drive, stop, obstacle detection; telemetry review; safety validation. |
+| 24 | Polish & Docs | ○ | User/developer docs; scripts; troubleshooting; backlog triage. |
 
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
@@ -45,35 +53,23 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 
 ## Task Board (granular, checklists)
 
-### Now — Week 7: PID Tuning & Step Testing
-- [ ] Design step test protocol
-  - Acceptance: Protocol doc includes amplitudes, step intervals, dwell times, and safety thresholds.
-- [ ] Implement telemetry packet v2
-  - Acceptance: Adds `setpoint`, `measured_rpm`, `error`, `u(t)`, and `fault_flags`; ≤5% packet loss at 100 Hz.
-- [ ] Baseline response capture
-  - Acceptance: 5 runs each at three setpoints (low/mid/high); saved CSV with timestamps; reproducible within ≤5%.
-- [ ] Fit 1st/2nd order model from data
-  - Acceptance: Identified parameters with residuals < 10% RMSE.
-- [ ] Tune Kp/Ki/Kd (Ziegler–Nichols + fine tune)
-  - Acceptance: SSE ≤ 5%; overshoot ≤ 10%; 10–90% rise time within spec.
-- [ ] Validate ramp limiter + anti-windup
-  - Acceptance: No windup in saturation; no E-stop triggers during standard tests.
-- [ ] Document tuned gains & rationale
-  - Acceptance: `docs/pid.md` updated with plots and chosen gains; commit linked.
+### Now — Firmware v2: Scaffold + Single Motor Drive
+- [ ] New project scaffold `STM_Firmware_AMR_v2` with pins/timers
+  - Acceptance: Builds, LED blinks, UART prints profile `final-single-mdd20a`
+- [ ] TIM1 PWM @ 20 kHz; MDD20A M1 PWM/DIR wired
+  - Acceptance: 0→100% duty sweep; forward/reverse verified
+- [ ] E-stop immediate cut path (software + acknowledge)
+  - Acceptance: PWM forced to 0 on E-stop; telemetry flag set
 
-### Next — Week 8: E-stop Feature & Safety Interlock
-- [ ] Hardware input mapping
-  - Acceptance: E-stop input pin selected; schematic/wiring updated; pull-up/down strategy documented.
-- [ ] Debounce/filtering
-  - Acceptance: Debounce implemented (HW or SW) with timing documented; no false triggers in bench tests.
-- [ ] Immediate PWM cutoff path
-  - Acceptance: On E-stop assert, PWM duty = 0 within specified latency; motors coast/brake as designed.
-- [ ] Latching fault + manual clear
-  - Acceptance: Fault latches until explicit clear via button/UART; safe re-enable sequence documented.
-- [ ] Telemetry + fault flags
-  - Acceptance: `fault_flags` includes E-stop bit; events logged in CSV.
-- [ ] Safety test report
-  - Acceptance: Pass/fail table and logs attached in `docs/safety.md`.
+### Next — Firmware v2: Encoder Integration
+- [ ] Post-gearbox encoder on PA6/PA7 with 3.3 V pull-ups
+  - Acceptance: Position monotonic; RPM stable at constant duty; CPR=2400 configured
+
+### Then — Firmware v2: PID + Safety
+- [ ] PID with anti-windup + ramp limiter
+  - Acceptance: Step tests meet initial SSE/overshoot targets; no windup
+- [ ] E-stop latch + manual clear; telemetry `fault_flags`
+  - Acceptance: Latches until explicit clear; events logged in CSV
 
 ### Prep — Drivetrain Migration (specs + planning)
 - [ ] Collect final component specs
@@ -88,17 +84,100 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 
 ### Upcoming Highlights (Weeks 9–13)
 - [ ] Enclosure CAD (Week 9): board mounts, airflow, cable strain relief; print & test-fit.
-- [ ] Final drivetrain migration (Week 10): integrate final motors, motor driver, and encoders; verify PWM freq/polarity, direction, encoder CPR and scaling.
-- [ ] Dual-motor bring-up (Week 11): independent PID; linear/turn kinematics sanity.
-- [ ] Modular refactor (Week 12): extract drivers/modules; unit tests; CI build.
-- [ ] FreeRTOS tasks (Week 13): task periods, priorities, watchdog, timing validation.
+- [ ] Firmware v2 Telemetry v2 (Week 11): packet fields and 100 Hz option
+- [ ] Dual-motor bring-up (Week 12): independent PID; linear/turn kinematics sanity.
+- [ ] Differential drive mapping (Week 13): (v, ω) ↔ (L/R) targets
 
-### Final Stretch (Weeks 14–18)
-- [ ] BMS + power supervision (Week 14): pre-charge, fault matrix, brownout behavior.
-- [ ] Custom PCB (Week 15): schematic, layout, DRC/ERC, fab order, bring-up checklist.
-- [ ] System validation (Week 16): latency & stability tests; regression pack.
-- [ ] ROS2 + Gazebo sim (Week 17): URDF, wheel plugin, TF tree; sim–real parity notes.
-- [ ] Jetson–STM32 bridge + SLAM demo (Week 18): nav stack, maps, endurance run report.
+### Firmware v2: Proximity Sensors (Weeks 14–15)
+- [ ] Sensor selection + interface
+  - Acceptance: Model chosen (GPIO/ADC/I2C); pin map updated; wiring and protection documented
+- [ ] Driver + sampling scheduler
+  - Acceptance: 8 sensors read at defined rate; filtering/debounce reduces false positives; fault detection for timeouts
+- [ ] Obstacle event API
+  - Acceptance: Firmware produces per-sensor range/events; UART/micro-ROS telemetry updated
+
+### Firmware v2: micro-ROS Bring-up (Week 16)
+- [ ] Build micro-ROS for STM32 (rmw_microxrcedds)
+  - Acceptance: App links and runs; agent connectivity proven on serial/UDP transport
+- [ ] Topics + messages
+  - Acceptance: Publish `/amr/wheel_state` (sensor_msgs/JointState), `/amr/obstacles` (sensor_msgs/Range[] or custom); subscribe `/amr/wheel_cmd` (geometry_msgs/Twist or custom) and `/amr/estop` (std_msgs/Bool)
+- [ ] Reliability
+  - Acceptance: QoS set; reconnect behavior validated; watchdog stable under nominal load
+
+### Jetson: ROS2 + Agent + Docker (Week 17)
+- [ ] micro-ROS agent service
+  - Acceptance: systemd or docker-compose managed agent; logs persisted
+- [ ] ROS2 workspace (Humble/Iron)
+  - Acceptance: Baseline packages build; colcon test passes; udev rules for serial
+- [ ] Docker dev env
+  - Acceptance: Dockerfiles for desktop/Jetson; compose for agent + ros-core; documented workflow
+
+### ROS2 Architecture & Topics (Week 18)
+- [ ] Node graph & topics
+  - Acceptance: Documented nodes: `mc_interface`, `odometry`, `safety_monitor`, `sensor_fusion`, `teleop`, `sim_bridge` with topics/QoS and message types
+- [ ] Test plans
+  - Acceptance: Unit/integration/sim test plans with pass criteria; bagging procedure defined
+
+### URDF + Gazebo (Weeks 19–20)
+- [ ] URDF base + xacro
+  - Acceptance: Chassis, wheels, sensors; inertials approximated; TF verified
+- [ ] Gazebo simulation
+  - Acceptance: Diff-drive plugin; sensor plugins (LiDAR/depth/proximity); simple world; teleop in sim
+
+### ROS2 Nodes + CI (Weeks 21–22)
+- [ ] Implement nodes
+  - Acceptance: Nodes run with expected topics; tests green in CI
+- [ ] CI/CD
+  - Acceptance: Dockerized CI for build/test/lint; artifacts published; compose for local runs
+
+---
+
+## Firmware v2 Build Sequence (Final Drivetrain)
+
+Rationale: Keep the current bench firmware intact. Create a separate STM32CubeIDE project for the final drivetrain with Cytron MDD20A and post‑gearbox encoder. Reuse modules (`motor.c`, `encoder.c`, `pid.c`, `safety.c`, `telemetry.c`) and parameterize via `docs/pin_map.yaml`.
+
+1) Project scaffold + pin mapping
+- [ ] Create new project: `STM_Firmware_AMR_v2` (board: Nucleo‑F401RE)
+- [ ] Apply pin map profile: `profile: final-single-mdd20a`
+- [ ] TIM1 PWM @ 20 kHz (ARR/PSC set), TIM3 encoder inputs with filters
+- DoD: Builds and blinks; UART telemetry banner prints profile name
+
+2) Single motor drive (no encoder)
+- [ ] Wire MDD20A M1 PWM/DIR; verify 0→100% duty sweep
+- [ ] Implement coast/brake policy and E‑stop immediate PWM cut
+- DoD: Motor spins both directions; PWM response linear; E‑stop cuts within spec
+
+3) Encoder integration (post‑gearbox)
+- [ ] HN3806 A/B → PA6/PA7 with 3.3 V pull‑ups; set `counts_per_rev: 2400`
+- [ ] RPM computation at 100 Hz; add basic low‑pass
+- DoD: Position counts monotonic; RPM stable at constant duty
+
+4) PID + ramp + safety
+- [ ] PID loop with anti‑windup; setpoint ramp; soft output clamp
+- [ ] E‑stop latch + manual clear; telemetry `fault_flags`
+- DoD: Step tests meet initial SSE/overshoot targets; no windup or unsafe behavior
+
+5) Telemetry v2
+- [ ] CSV includes `t,pos,setpoint,meas,err,p,i,d,pwm,fault_flags`
+- [ ] Optional 100 Hz stream with periodic headers
+- DoD: Logs parse cleanly; <5% packet loss at 100 Hz
+
+6) Dual‑motor bring‑up
+- [ ] Add right motor PWM/DIR (TIM1 CH2 or other), second encoder/timer if needed
+- [ ] Independent PID loops; synchronized 100 Hz control
+- DoD: Straight‑line test with low drift; in‑place turn within angle spec
+
+7) Differential drive mapping
+- [ ] (v, ω) → (left, right) wheel targets; saturation and ramp coordination
+- DoD: Velocity command tracking behaves as expected in bench tests
+
+8) Odometry (optional at this stage)
+- [ ] Integrate wheel odometry; publish over UART for ROS bridge
+- DoD: Reasonable pose estimate over short runs without excessive drift
+
+Notes
+- Keep v2 project independent of the bench project to de‑risk migration.
+- When stable, consider back‑porting improvements or archiving the bench project as reference.
 
 ---
 
@@ -132,6 +211,35 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
   motor.c, encoder.c, pid.c, telemetry.c, safety.c, ...
 /scripts
   log_decode.py, plot_step.py
+
+---
+
+## ROS2 Architecture (Draft)
+- Nodes
+  - `mc_interface` (micro-ROS on STM32): subscribes `/amr/wheel_cmd`, `/amr/estop`; publishes `/amr/wheel_state`, `/amr/obstacles`
+  - `odometry`: subscribes `/amr/wheel_state`; publishes `/odom`, `/tf`
+  - `safety_monitor`: subscribes `/amr/obstacles`, `/amr/estop`; publishes `/amr/safety_state`
+  - `sensor_fusion`: fuses proximity/LiDAR/depth; publishes `/amr/obstacles`
+  - `teleop` or higher-level commander: publishes `/cmd_vel` or `/amr/wheel_cmd`
+  - `sim_bridge`: interfaces Gazebo topics with AMR topics
+- Topics (proposed)
+  - `/amr/wheel_cmd` (geometry_msgs/Twist or custom wheel velocities)
+  - `/amr/wheel_state` (sensor_msgs/JointState)
+  - `/amr/obstacles` (sensor_msgs/Range[] or custom)
+  - `/amr/estop` (std_msgs/Bool), `/amr/safety_state` (std_msgs/UInt32)
+  - `/odom` (nav_msgs/Odometry), `/tf`, `/tf_static`
+
+---
+
+## Docker Development Environment (Draft)
+- Images/containers
+  - Firmware build: arm-none-eabi toolchain, micro-ROS build tools
+  - Jetson runtime: ROS2 base, micro-ROS agent, AMR nodes
+  - Desktop dev: ROS2, Gazebo, build/test tools
+- Compose
+  - `agent`, `ros-core`, `sim`, `tools` services; volumes for logs and bags
+- CI integration
+  - Build, lint, test stages; multi-arch where needed
 ```
 
 ---
