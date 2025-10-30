@@ -44,9 +44,8 @@ Two common configurations are shown. Choose one based on your current stage.
 - Direction: `PB4` → `IN1`, `PB5` → `IN2`
 - Motor power: Battery → L298N Vmotor (through fuse and E‑stop). GND common with STM32.
 
-### B) Final driver (Cytron MDD20A)
-- PWM: `PA8 (TIM1_CH1)` → `M1 PWM`
-- Direction: `PB4` → `M1 DIR`
+- PWM: `PA8 (TIM1_CH1)` → `M1 PWM` (Left), `PA9 (TIM1_CH2)` → `M2 PWM` (Right)
+- Direction: `PB4` → `M1 DIR` (Left), `PB5` → `M2 DIR` (Right)
 - (Optional) Brake/Coast: tie as per driver manual or implement in software via PWM/DIR logic
 - Motor power: Battery → MDD20A `VM` (through fuse and E‑stop). GND common with STM32.
 - Logic supply: MDD20A uses the same ground; logic inputs accept 3.3 V/5 V TTL (verify VIH in datasheet).
@@ -56,15 +55,16 @@ PWM frequency target
 
 ---
 
-## 4) Encoder ↔ STM32 (HN3806‑AB‑600N, open‑collector)
+## 4) Encoders ↔ STM32 (HN3806‑AB‑600N, open‑collector)
 
 - Signals: `A`, `B` (quadrature). Index `Z` if used (optional, not required for speed control).
 - Voltage: 5–24 V supply supported by encoder; outputs are NPN open‑collector.
 - Interface to MCU:
   - Provide external pull‑ups to 3.3 V on `A` and `B` (e.g., 4.7–10 kΩ).
-  - Connect `A` → `PA6 (TIM3_CH1)`, `B` → `PA7 (TIM3_CH2)`.
-  - Common ground between encoder and STM32.
-- Filtering: Enable a small digital filter on TIM3 inputs to reject noise.
+  - Left wheel: `A` → `PA6 (TIM3_CH1)`, `B` → `PA7 (TIM3_CH2)` (TIM3 encoder mode).
+  - Right wheel: `A` → `PA0 (TIM2_CH1/ETR)`, `B` → `PA1 (TIM2_CH2)` (TIM2 encoder mode).
+  - Common ground between encoders and STM32.
+- Filtering: Enable digital filters on TIM2/TIM3 inputs (CubeMX IC filter ≈ 10) to reject noise.
 - Mounting: Post‑gearbox (wheel/output shaft) — confirmed.
 - COUNTS_PER_REV: 600 PPR × 4 = 2400 counts per wheel revolution.
   - If remounted pre‑gearbox (motor shaft) with 30:1 ratio: 2400 × 30 = 72,000 counts per wheel rev (update firmware accordingly).
@@ -137,7 +137,8 @@ Hardware
 - Output conditioning to STM32 ADC:
   - Resistor divider: 10 kΩ (top) + 15 kΩ (bottom) → scales 0–5 V to ~0–3.0 V (see `docs/pin_map.yaml`).
   - RC filter: 1 kΩ series + 100 nF to ground after divider (fc ≈ 1.6 kHz) to reduce PWM ripple/EMI.
-  - ADC pins: `PA0` (Left current), `PA1` (Right current) — proposed assignments.
+  - ADC pins: `PB0 / ADC1_IN8` (Left current), `PC1 / ADC1_IN11` (Right current).
+  - Sampling: ADC1 with DMA in circular mode for periodic current reads.
 - Decoupling: 0.1 µF ceramic close to ACS758 Vcc; follow datasheet layout guidance.
 - Grounding: Star‑point ground; keep sensor Vout return clean and away from high di/dt loops.
 
@@ -158,12 +159,15 @@ Safety and layout
 ## 9) Quick Connector Summary
 
 - STM32 (Nucleo‑F401RE pinout references):
-  - `PA8` → PWM to driver (L298N ENA or MDD20A PWM)
-  - `PB4` → DIR (and `PB5` for L298N IN2 if used)
-  - `PA6/PA7` → Encoder A/B (TIM3)
+  - `PA8 / TIM1_CH1` → PWM Left (M1)
+  - `PA9 / TIM1_CH2` → PWM Right (M2)
+  - `PB4` → DIR Left (M1), `PB5` → DIR Right (M2)
+  - `PA6/PA7 / TIM3` → Left encoder A/B
+  - `PA0/PA1 / TIM2` → Right encoder A/B
+  - `PB0 / ADC1_IN8` → Left motor current (ACS758)
+  - `PC1 / ADC1_IN11` → Right motor current (ACS758)
   - `PA2/PA3` → UART2 TX/RX to Jetson (optional)
   - `PA5` → Status LED
-  - `PA0/PA1` → Motor current (Left/Right) via ACS758 dividers
 - Motor Driver (choose one):
   - L298N: ENA, IN1, IN2, VM, GND, Motor outputs
   - Cytron MDD20A: M1 PWM, M1 DIR, VM, GND, Motor outputs

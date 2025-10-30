@@ -18,15 +18,15 @@ motors:
   right:
     driver: cytron_mdd20a
     pwm:
-      timer: TBD            # e.g., TIM1
-      channel: TBD          # e.g., CH2
-      pin: TBD              # e.g., PA9
+      timer: TIM1
+      channel: CH2
+      pin: PA9
       frequency_hz: 20000
     direction:
-      pin: TBD
+      pin: PB5
 
-encoder:
-  wheel:
+encoders:
+  left:
     timer: TIM3
     ch1:
       pin: PA6
@@ -36,6 +36,18 @@ encoder:
     input_type: open_collector
     pullup: external_3v3        # use 4.7–10k to 3.3 V
     max_signal_freq_hz: 30000
+    filter_level: 10            # CubeMX ICxFilter value
+  right:
+    timer: TIM2
+    ch1:
+      pin: PA0
+    ch2:
+      pin: PA1
+    counts_per_rev: 2400
+    input_type: open_collector
+    pullup: external_3v3
+    max_signal_freq_hz: 30000
+    filter_level: 10
 
 uart:
   telemetry:
@@ -130,10 +142,11 @@ safety:
 adc:
   vref_volts: 3.3
   resolution_bits: 12
+  dma: enabled                 # ADC1 configured with DMA circular mode
   channels:
     # Motor current sensing (ACS758 → resistor divider → STM32 ADC)
     - id: motor_left_current
-      pin: PA0                 # ADC1_IN0 (proposed)
+      pin: PB0                 # ADC1_IN8 (configured)
       name: I_MOTOR_LEFT
       source: acs758_vout
       divider:                 # scale 0–5 V to ~0–3.3 V (r ≈ 0.6)
@@ -144,8 +157,9 @@ adc:
       filter:                  # simple post-divider RC for anti-aliasing/noise
         r_series_ohms: 1000
         c_shunt_nf: 100        # fc ≈ 1.6 kHz; adjust per sampling rate
+      status: active           # present in ADC regular sequence
     - id: motor_right_current
-      pin: PA1                 # ADC1_IN1 (proposed)
+      pin: PC1                 # ADC1_IN11 (mapped, may be added to sequence)
       name: I_MOTOR_RIGHT
       source: acs758_vout
       divider:
@@ -156,6 +170,7 @@ adc:
       filter:
         r_series_ohms: 1000
         c_shunt_nf: 100
+      status: pending          # pin mapped; enable in ADC sequence next
 
 current_sensors:
   model: ACS758                # Allegro Hall-effect current sensor
@@ -179,6 +194,8 @@ drivers:
   cytron_mdd20a:
     m1_pwm: PA8
     m1_dir: PB4
+    m2_pwm: PA9
+    m2_dir: PB5
 
 notes:
   - Keep this file authoritative; update when wiring or firmware changes.

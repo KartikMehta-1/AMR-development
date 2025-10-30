@@ -27,7 +27,7 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 | 4 | Encoder Hookup & Counting | ✓ | Encoder integrated; direction & count validated; stable RPM reading. |
 | 5 | RPM Calculation & Telemetry | ✓ | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | ✓ | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
-| 7 | Firmware v2: Scaffold + Pin Map + Current | ◐ | New project `STM_Firmware_AMR_v2`; apply `profile: final-single-mdd20a`; TIM1 @ 20 kHz, TIM3 encoder; ADC1 `PA0/PA1` for ACS758; UART banner. |
+| 7 | Firmware v2: Scaffold + Pin Map + Current | ◐ | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
 | 8 | Firmware v2: Single Motor + Current Telemetry | ○ | Wire MDD20A M1 PWM/DIR; verify duty sweep and direction; bring-up ACS758 readings on UART; implement immediate PWM cut on E-stop assert. |
 | 9 | Firmware v2: Encoder Integration | ○ | Post-gearbox encoder (A/B on PA6/PA7); set `counts_per_rev=2400`; RPM @ 100 Hz with input filtering. |
 | 10 | Firmware v2: PID + Ramp + Safety | ○ | Closed-loop speed with anti-windup and ramp; E-stop latch + manual clear; current limits using ACS758 feedback. |
@@ -55,9 +55,9 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 ### Now — Firmware v2: Scaffold + Single Motor + Current
 - [ ] New project scaffold `STM_Firmware_AMR_v2` with pins/timers/ADC
   - Acceptance: Builds, LED blinks, UART prints profile `final-single-mdd20a`
-- [ ] TIM1 PWM @ 20 kHz; MDD20A M1 PWM/DIR wired
-  - Acceptance: 0→100% duty sweep; forward/reverse verified
-- [ ] ADC1 channels for ACS758 (PA0 Left, PA1 Right); divider + RC filter
+- [ ] TIM1 PWM @ 20 kHz; Left: PA8/CH1 + PB4 DIR; Right: PA9/CH2 + PB5 DIR
+  - Acceptance: 0→100% duty sweep; forward/reverse verified on left (right optional now)
+- [ ] ADC1 channels for ACS758 (PB0=IN8 Left, PC1=IN11 Right); divider + RC filter; DMA circular
   - Acceptance: Zero-current near mid-scale; readings change with load in expected direction
 - [ ] E-stop immediate cut path (software + acknowledge)
   - Acceptance: PWM forced to 0 on E-stop; telemetry flag set
@@ -140,9 +140,10 @@ Rationale: Keep the current bench firmware intact. Create a separate STM32CubeID
 1) Project scaffold + pin mapping
 - [ ] Create new project: `STM_Firmware_AMR_v2` (board: Nucleo‑F401RE)
 - [ ] Apply pin map profile: `profile: final-single-mdd20a`
-- [ ] TIM1 PWM @ 20 kHz (ARR/PSC set), TIM3 encoder inputs with filters
-- [ ] ADC1 enable + channels for ACS758 on `PA0` (left) and `PA1` (right)
-- DoD: Builds and blinks; UART telemetry banner prints profile name; ADC zeros close to mid-scale at 0 A
+- [ ] TIM1 PWM @ 20 kHz (ARR/PSC set): CH1=PA8 (left), CH2=PA9 (right)
+- [ ] Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right) with input filters ≈10
+- [ ] ADC1 enable + DMA + channels for ACS758 on `PB0/IN8` (left) and `PC1/IN11` (right)
+  - DoD: Builds and blinks; UART telemetry banner prints profile name; ADC zeros close to mid-scale at 0 A
 
 2) Single motor drive (no encoder)
 - [ ] Wire MDD20A M1 PWM/DIR; verify 0→100% duty sweep
