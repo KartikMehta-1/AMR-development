@@ -127,12 +127,31 @@ Schematic placeholders (to be finalized on sensor selection)
 
 ---
 
-## 8) Optional: Current Sensing (future)
+## 8) Current Sensing (ACS758, both motors)
 
-- Sensor: ACS758 (model TBD) on motor supply line.
-- Output: Analog voltage proportional to current.
-- Interface: To STM32 ADC input (requires 0–3.3 V range; scale/offset as needed).
-- Since ADC is currently skipped, plan the PCB/wiring now; enable in firmware later.
+Goal: Measure per‑motor current for protection, logging, and control.
+
+Hardware
+- Sensor: ACS758 (variant TBD per current range) installed in series with each motor power line (left/right).
+- Supply: 5.0 V recommended; output is ratiometric (≈ Vcc/2 at 0 A).
+- Output conditioning to STM32 ADC:
+  - Resistor divider: 10 kΩ (top) + 15 kΩ (bottom) → scales 0–5 V to ~0–3.0 V (see `docs/pin_map.yaml`).
+  - RC filter: 1 kΩ series + 100 nF to ground after divider (fc ≈ 1.6 kHz) to reduce PWM ripple/EMI.
+  - ADC pins: `PA0` (Left current), `PA1` (Right current) — proposed assignments.
+- Decoupling: 0.1 µF ceramic close to ACS758 Vcc; follow datasheet layout guidance.
+- Grounding: Star‑point ground; keep sensor Vout return clean and away from high di/dt loops.
+
+Calibration and math
+- Zero offset (at 0 A): ≈ Vcc/2 at sensor output; after divider ≈ 0.6 × (Vcc/2).
+- Sensitivity (mV/A): depends on variant (e.g., ~40 mV/A for ±50 A). Confirm actual part.
+- Formula (at sensor output): I[A] = (Vout − Vcc/2) / Sensitivity.
+- With divider (ratio ≈ 0.6): I[A] = ((Vadc/0.6) − Vcc/2) / Sensitivity.
+- Firmware should estimate Vcc (5 V) or measure the ADC reference to compensate ratiometric behavior.
+
+Safety and layout
+- Size conductors for expected peak current; ensure secure mechanical mounting and insulation.
+- Route high‑current paths short and tight; keep analog lines separated from PWM motor traces.
+- Verify polarity/orientation per ACS758 datasheet so that positive current matches expected sign.
 
 ---
 
@@ -144,6 +163,7 @@ Schematic placeholders (to be finalized on sensor selection)
   - `PA6/PA7` → Encoder A/B (TIM3)
   - `PA2/PA3` → UART2 TX/RX to Jetson (optional)
   - `PA5` → Status LED
+  - `PA0/PA1` → Motor current (Left/Right) via ACS758 dividers
 - Motor Driver (choose one):
   - L298N: ENA, IN1, IN2, VM, GND, Motor outputs
   - Cytron MDD20A: M1 PWM, M1 DIR, VM, GND, Motor outputs

@@ -127,10 +127,49 @@ safety:
      sda: TBD
      pullups: external_3v3
 
- adc:
-   vref_volts: 3.3
-   resolution_bits: 12
-   channels: []                 # populate if proximity uses ADC
+adc:
+  vref_volts: 3.3
+  resolution_bits: 12
+  channels:
+    # Motor current sensing (ACS758 → resistor divider → STM32 ADC)
+    - id: motor_left_current
+      pin: PA0                 # ADC1_IN0 (proposed)
+      name: I_MOTOR_LEFT
+      source: acs758_vout
+      divider:                 # scale 0–5 V to ~0–3.3 V (r ≈ 0.6)
+        r_top_ohms: 10000      # 10k (Vout from ACS758 to divider top)
+        r_bottom_ohms: 15000   # 15k to GND → Vadc = 0.6 × Vsense
+        v_in_max_volts: 5.0
+        v_out_max_volts: 3.0
+      filter:                  # simple post-divider RC for anti-aliasing/noise
+        r_series_ohms: 1000
+        c_shunt_nf: 100        # fc ≈ 1.6 kHz; adjust per sampling rate
+    - id: motor_right_current
+      pin: PA1                 # ADC1_IN1 (proposed)
+      name: I_MOTOR_RIGHT
+      source: acs758_vout
+      divider:
+        r_top_ohms: 10000
+        r_bottom_ohms: 15000
+        v_in_max_volts: 5.0
+        v_out_max_volts: 3.0
+      filter:
+        r_series_ohms: 1000
+        c_shunt_nf: 100
+
+current_sensors:
+  model: ACS758                # Allegro Hall-effect current sensor
+  quantity: 2                  # Left/Right motor lines
+  supply_volts: 5.0            # Ratiometric output; 2.5 V at 0 A (typ.)
+  placement: series_with_each_motor_supply
+  output_interface: analog_single_ended
+  variant: TBD                 # e.g., -050B (±50 A) or -100B (±100 A)
+  sensitivity_mV_per_A: TBD    # depends on variant (example: ~40 mV/A @ 50A)
+  zero_current_offset_volts: ratiometric_to_vcc_over_2
+  wiring_notes:
+    - Keep high-current paths short; use appropriate gauge and creepage/clearance.
+    - Route sensor Vout to STM32 ADC through the divider; add local 0.1 µF decoupling at sensor Vcc.
+    - Tie grounds at a star point; avoid running Vout alongside PWM motor leads.
 
 drivers:
   l298n:

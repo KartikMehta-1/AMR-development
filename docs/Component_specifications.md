@@ -101,3 +101,25 @@ Mounting and effective resolution
 | Update Rate | TBD |
 | Mounting | Corners/edges of chassis for obstruction detection |
 | Notes | Final model and interface will determine wiring and firmware driver; debounce/filtering required |
+
+---
+
+## 8. Current Sensors
+**Model:** Allegro ACS758 (variant TBD; e.g., ACS758xB-050, ACS758xB-100)
+
+| Parameter | Value |
+|------------|--------|
+| Supply Voltage | 5.0 V recommended (ratiometric) |
+| Output Type | Analog, ratiometric to Vcc (≈ Vcc/2 at 0 A) |
+| Measurement Range | Depends on variant (e.g., ±50 A, ±100 A) |
+| Sensitivity | Variant dependent (e.g., ~40 mV/A for ±50 A; confirm datasheet) |
+| Bandwidth | Typ. up to hundreds of kHz (datasheet dependent) |
+| Isolation | Hall‑effect, galvanically isolated conductor |
+| Interface to MCU | STM32 ADC via resistor divider (see pin map) |
+| Quantity | 2 (Left and Right motor lines) |
+
+Notes
+- Choose the variant so nominal operating current is within 20–70% of full scale for good resolution.
+- Sensor output is centered at Vcc/2; firmware must subtract offset and apply sensitivity.
+- With a 10k/15k divider, the ADC sees ~0–3.0 V for a 0–5 V sensor range; ensures 3.3 V ADC compliance.
+- Add RC filtering post-divider to reduce PWM ripple; see wiring doc for recommended values.

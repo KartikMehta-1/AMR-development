@@ -2,15 +2,15 @@
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
 **Last Updated:** 2025-10-28  
-**Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing, FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
+**Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
 
 ---
 
 ## Status Summary
 - Overall: On track with tuning in progress
 - Progress: 6/18 weeks complete (~33%)
-- Current Focus (Week 7): PID tuning & step testing — target ≤5% steady-state error
-- Next Focus (Week 8): E-stop input + safety interlock
+- Current Focus (Week 7): Firmware v2 scaffold, PWM @20 kHz, encoder TIM3, ADC current sensing (ACS758) bring-up
+- Next Focus (Week 8): E-stop input + safety interlock; current telemetry + basic current limit
 - Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; Custom PCB is low priority/optional.
  - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
@@ -27,10 +27,10 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 | 4 | Encoder Hookup & Counting | ✓ | Encoder integrated; direction & count validated; stable RPM reading. |
 | 5 | RPM Calculation & Telemetry | ✓ | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | ✓ | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
-| 7 | Firmware v2: Scaffold + Pin Map | ◐ | Create new project `STM_Firmware_AMR_v2`; apply `profile: final-single-mdd20a`; TIM1 @ 20 kHz, TIM3 encoder filters; UART banner. |
-| 8 | Firmware v2: Single Motor Drive | ○ | Wire MDD20A M1 PWM/DIR; verify duty sweep and direction; implement immediate PWM cut on E-stop assert. |
+| 7 | Firmware v2: Scaffold + Pin Map + Current | ◐ | New project `STM_Firmware_AMR_v2`; apply `profile: final-single-mdd20a`; TIM1 @ 20 kHz, TIM3 encoder; ADC1 `PA0/PA1` for ACS758; UART banner. |
+| 8 | Firmware v2: Single Motor + Current Telemetry | ○ | Wire MDD20A M1 PWM/DIR; verify duty sweep and direction; bring-up ACS758 readings on UART; implement immediate PWM cut on E-stop assert. |
 | 9 | Firmware v2: Encoder Integration | ○ | Post-gearbox encoder (A/B on PA6/PA7); set `counts_per_rev=2400`; RPM @ 100 Hz with input filtering. |
-| 10 | Firmware v2: PID + Ramp + Safety | ○ | Closed-loop speed with anti-windup and ramp; E-stop latch + manual clear; initial current limits (if available). |
+| 10 | Firmware v2: PID + Ramp + Safety | ○ | Closed-loop speed with anti-windup and ramp; E-stop latch + manual clear; current limits using ACS758 feedback. |
 | 11 | Firmware v2: Telemetry v2 | ○ | CSV adds setpoint, meas, error, u(t), fault_flags; periodic headers; optional 100 Hz stream. |
 | 12 | Firmware v2: Dual-Motor Bring-Up | ○ | Add second PWM/DIR + encoder; independent PIDs; synchronized 100 Hz control. |
 | 13 | Firmware v2: Differential Drive | ○ | Map (v, ω) ↔ (left, right); saturation and ramp coordination; basic tests. |
@@ -52,11 +52,13 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 
 ## Task Board (granular, checklists)
 
-### Now — Firmware v2: Scaffold + Single Motor Drive
-- [ ] New project scaffold `STM_Firmware_AMR_v2` with pins/timers
+### Now — Firmware v2: Scaffold + Single Motor + Current
+- [ ] New project scaffold `STM_Firmware_AMR_v2` with pins/timers/ADC
   - Acceptance: Builds, LED blinks, UART prints profile `final-single-mdd20a`
 - [ ] TIM1 PWM @ 20 kHz; MDD20A M1 PWM/DIR wired
   - Acceptance: 0→100% duty sweep; forward/reverse verified
+- [ ] ADC1 channels for ACS758 (PA0 Left, PA1 Right); divider + RC filter
+  - Acceptance: Zero-current near mid-scale; readings change with load in expected direction
 - [ ] E-stop immediate cut path (software + acknowledge)
   - Acceptance: PWM forced to 0 on E-stop; telemetry flag set
 
@@ -139,12 +141,14 @@ Rationale: Keep the current bench firmware intact. Create a separate STM32CubeID
 - [ ] Create new project: `STM_Firmware_AMR_v2` (board: Nucleo‑F401RE)
 - [ ] Apply pin map profile: `profile: final-single-mdd20a`
 - [ ] TIM1 PWM @ 20 kHz (ARR/PSC set), TIM3 encoder inputs with filters
-- DoD: Builds and blinks; UART telemetry banner prints profile name
+- [ ] ADC1 enable + channels for ACS758 on `PA0` (left) and `PA1` (right)
+- DoD: Builds and blinks; UART telemetry banner prints profile name; ADC zeros close to mid-scale at 0 A
 
 2) Single motor drive (no encoder)
 - [ ] Wire MDD20A M1 PWM/DIR; verify 0→100% duty sweep
 - [ ] Implement coast/brake policy and E‑stop immediate PWM cut
-- DoD: Motor spins both directions; PWM response linear; E‑stop cuts within spec
+- [ ] Stream current telemetry for left channel; verify response to load
+- DoD: Motor spins both directions; PWM response linear; current signal monotonic with load; E‑stop cuts within spec
 
 3) Encoder integration (post‑gearbox)
 - [ ] HN3806 A/B → PA6/PA7 with 3.3 V pull‑ups; set `counts_per_rev: 2400`
@@ -154,7 +158,8 @@ Rationale: Keep the current bench firmware intact. Create a separate STM32CubeID
 4) PID + ramp + safety
 - [ ] PID loop with anti‑windup; setpoint ramp; soft output clamp
 - [ ] E‑stop latch + manual clear; telemetry `fault_flags`
-- DoD: Step tests meet initial SSE/overshoot targets; no windup or unsafe behavior
+- [ ] Current limit: soft foldback when current exceeds threshold; log overcurrent events
+- DoD: Step tests meet initial SSE/overshoot targets; no windup or unsafe behavior; current limiting behaves predictably
 
 5) Telemetry v2
 - [ ] CSV includes `t,pos,setpoint,meas,err,p,i,d,pwm,fault_flags`
@@ -177,6 +182,10 @@ Rationale: Keep the current bench firmware intact. Create a separate STM32CubeID
 Notes
 - Keep v2 project independent of the bench project to de‑risk migration.
 - When stable, consider back‑porting improvements or archiving the bench project as reference.
+
+Current Sensing (integration notes)
+- See `docs/pin_map.yaml` ADC channels and `docs/wiring_schematic.md` for divider/filter values.
+- Confirm ACS758 variant and sensitivity; update firmware constants and documentation once known.
 
 ---
 
