@@ -170,7 +170,7 @@ adc:
       filter:
         r_series_ohms: 1000
         c_shunt_nf: 100
-      status: pending          # pin mapped; enable in ADC sequence next
+      status: active           # now included in ADC regular sequence (Rank 2)
 
 current_sensors:
   model: ACS758                # Allegro Hall-effect current sensor
