@@ -123,3 +123,62 @@ Notes
 - Sensor output is centered at Vcc/2; firmware must subtract offset and apply sensitivity.
 - With a 10k/15k divider, the ADC sees ~0–3.0 V for a 0–5 V sensor range; ensures 3.3 V ADC compliance.
 - Add RC filtering post-divider to reduce PWM ripple; see wiring doc for recommended values.
+
+---
+
+## 9. Battery Pack
+**Model/Chemistry:** TBD (e.g., Li-ion 3S/6S, LiFePO4)
+
+| Parameter | Value |
+|------------|--------|
+| Nominal Voltage | TBD (e.g., 12 V 3S or 24 V 6S) |
+| Voltage Range | TBD (depends on chemistry and series count) |
+| Capacity | TBD (Ah) |
+| Max Continuous Discharge | TBD (A) |
+| Peak Discharge (10 s) | TBD (A) |
+| Connector | TBD |
+| Notes | Sized for motor peaks and compute rails with margin |
+
+---
+
+## 10. Battery Management System (BMS)
+**Model:** TBD
+
+| Parameter | Value |
+|------------|--------|
+| Series Cells Supported | TBD (e.g., 3S / 6S) |
+| Continuous Current | TBD (A) |
+| Peak Current | TBD (A, duration) |
+| Protections | OVP/UVP/OCP/SCP/OTP (confirm) |
+| Balance Method | TBD (passive/active) |
+| Notes | Provides pack protection; outputs pack voltage at P+/P- |
+
+---
+
+## 11. DC-DC Converters
+Three supplies recommended; exact models TBD.
+
+### 11.1 Jetson 5 V Supply
+| Parameter | Value |
+|------------|--------|
+| Input | Battery pack (pre- or post-E-Stop per design) |
+| Output | 5.0 V |
+| Max Current | TBD (>= 6 A recommended) |
+| Ripple/Noise | TBD (low ripple preferred) |
+| Notes | Powers Jetson Nano and powered USB hub |
+
+### 11.2 Logic 5 V Supply
+| Parameter | Value |
+|------------|--------|
+| Input | Battery pack |
+| Output | 5.0 V |
+| Max Current | TBD (1-2 A typical) |
+| Notes | Powers STM32 board and light sensors |
+
+### 11.3 Sensors 12 V Supply (Optional)
+| Parameter | Value |
+|------------|--------|
+| Input | Battery pack |
+| Output | 12.0 V |
+| Max Current | TBD |
+| Notes | Only needed if any sensor requires 12 V |

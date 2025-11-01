@@ -19,6 +19,18 @@ Notes
 - Size DC‑DC modules with margin (Jetson Nano can draw 3–4 A peak on 5 V; depth cameras and LiDAR add significant load).
 - Keep motor currents off the logic 5 V/3.3 V rails; separate power domains that meet at ground.
 
+### 1a) Power Distribution Details (TBD parts)
+- Battery Pack + BMS: pack voltage and capacity TBD; BMS provides pack protection and outputs the raw pack voltage (no 5 V/12 V regulation).
+- DC-DC 5 V Jetson: dedicated 5 V supply for Jetson Nano and powered USB hub (≥ 5–6 A recommended).
+- DC-DC 5 V Logic: 5 V supply for STM32 board and proximity sensors (1–2 A typical).
+- DC-DC 12 V Sensors (optional): only if any sensor requires 12 V; otherwise omit.
+
+Wiring intent
+- Battery/BMS → Main Fuse → E-Stop → Motor Power Bus → Motor driver VM.
+- Battery/BMS → DC-DC 5 V Jetson → Jetson Nano, USB hub.
+- Battery/BMS → DC-DC 5 V Logic → STM32, proximity sensors.
+- Battery/BMS → DC-DC 12 V Sensors → 12 V sensors (if used).
+
 ---
 
 ## 2) Emergency Stop (E‑stop)
@@ -86,7 +98,7 @@ Power (Jetson)
 
 - LiDAR: USB or UART depending on model (TBD). Power from 5 V rail (TBD current).
 - Depth Camera: USB 3.0 to Jetson; power from 5 V rail (TBD current).
-- Proximity Sensors: Choose interface (GPIO/I2C/UART). Initial plan: connect to Jetson for ROS integration; alternatively, to STM32 if real‑time is needed.
+- Proximity Sensors: Choose interface (GPIO/I2C/UART). Initial plan: connect to STM32 for real-time safety and integration; can later move to Jetson for ROS-level processing if needed.
 
 Notes
 - Use powered USB hub if multiple high‑draw USB devices are attached.
@@ -184,3 +196,5 @@ Safety and layout
 - Twist encoder A/B with ground return; shield if available.
 - Use proper ferrules and strain relief; avoid loose connectors near moving parts.
 - Verify polarity before powering; bring‑up with current‑limited supply when possible.
+
+
