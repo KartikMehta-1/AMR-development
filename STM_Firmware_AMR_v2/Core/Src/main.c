@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "motor.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -107,7 +108,12 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
+  // Initialize and run left motor at 10% duty (Cytron MDD20A)
+  MotorChannel m_left;
+  Motor_Init(&m_left, &htim1, TIM_CHANNEL_1, DIR_LEFT_GPIO_Port, DIR_LEFT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
+  Motor_SetDirection(&m_left, 1);   // forward (adjust if wiring requires inversion)
+  Motor_SetDuty(&m_left, 0.10f);    // 10% duty
+  Motor_Start(&m_left);
   /* USER CODE END 2 */
 
   /* Infinite loop */
