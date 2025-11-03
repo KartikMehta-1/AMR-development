@@ -14,6 +14,13 @@ Legend: Done, In Progress, Planned, Not Started
   - Done — Left motor constant duty (10%) using MDD20A; PB4 DIR
   - Done — Direction GPIO configured (PB4/PB5)
 
+## Phase 0.5 — Dual-motor PWM/DIR (duty only)
+- Status: In Progress
+- Tasks
+  - In Progress — Wire right motor to M2 PWM (PA9) and DIR (PB5)
+  - Planned — Verify duty sweep 0–20% on both channels with correct directions
+  - Planned — Confirm common ground and motor power path via E-stop/fuse
+
 ## Phase 1 — Encoders online
 - Status: Planned
 - Tasks
@@ -22,7 +29,7 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Add basic input digital filtering (confirm IC filter values)
 
 ## Phase 2 — Current sensing online
-- Status: In Progress
+- Status: Planned
 - Tasks
   - Planned — Start ADC1 scanning channels 8 (PB0) and 11 (PC1)
   - Planned — Implement scaling (divider ratio) and zero-offset removal

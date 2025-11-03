@@ -1,7 +1,7 @@
 # Kartik’s AMR Project Tracker (18 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2025-11-03  
+**Last Updated:** 2025-10-28  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
 
 ---
@@ -9,9 +9,8 @@
 ## Status Summary
 - Overall: On track with tuning in progress
 - Progress: 6/18 weeks complete (~33%)
-- Recent: Single‑motor bring‑up on Cytron at ~10% duty verified (PA8 PWM, PB4 DIR)
-- Current Focus (Week 8): Dual‑motor PWM/DIR bring‑up (duty only); verify directions and safe power path
-- Next Focus (Week 9–12): Encoders (both wheels) → Current telemetry + calibration → Control (single‑loop PID) → Cascaded control + comparison
+- Current Focus (Week 7): Firmware v2 scaffold, PWM @20 kHz, encoder TIM3, ADC current sensing (ACS758) bring-up
+- Next Focus (Week 8): E-stop input + safety interlock; current telemetry + basic current limit
 - Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; Custom PCB is low priority/optional.
  - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
@@ -29,11 +28,11 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 | 5 | RPM Calculation & Telemetry | ✓ | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | ✓ | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
 | 7 | Firmware v2: Scaffold + Pin Map + Current | ◐ | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
-| 8 | Firmware v2: Dual‑Motor Duty Bring‑Up | ◐ | Wire M2 PWM/DIR (PA9/PB5); verify duty sweep 0–20% both channels; confirm E‑stop cut and common ground. |
-| 9 | Firmware v2: Encoder Integration | ○ | Bring both encoders online: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); RPM @ 100 Hz with input filtering. |
-| 10 | Firmware v2: Current Telemetry + Calibration | ○ | ADC1 scan IN8 (PB0 left) and IN11 (PC1 right); zero‑offset + scaling; UART current stream at 50–100 Hz. |
-| 11 | Firmware v2: Control (Single‑Loop PID) | ○ | Closed‑loop speed PI/PID on one/both wheels; anti‑windup + ramp; baseline plots and metrics. |
-| 12 | Firmware v2: Cascaded Control + Comparison | ○ | Inner current PI + outer speed PID; add i_* and w_* telemetry; compare vs single‑loop with plots/metrics. |
+| 8 | Firmware v2: Single Motor + Current Telemetry | ○ | Wire MDD20A M1 PWM/DIR; verify duty sweep and direction; bring-up ACS758 readings on UART; implement immediate PWM cut on E-stop assert. |
+| 9 | Firmware v2: Encoder Integration | ○ | Post-gearbox encoder (A/B on PA6/PA7); set `counts_per_rev=2400`; RPM @ 100 Hz with input filtering. |
+| 10 | Firmware v2: PID + Ramp + Safety | ○ | Closed-loop speed with anti-windup and ramp; E-stop latch + manual clear; current limits using ACS758 feedback. |
+| 11 | Firmware v2: Telemetry v2 | ○ | CSV adds setpoint, meas, error, u(t), fault_flags; periodic headers; optional 100 Hz stream. |
+| 12 | Firmware v2: Dual-Motor Bring-Up | ○ | Add second PWM/DIR + encoder; independent PIDs; synchronized 100 Hz control. |
 | 13 | Firmware v2: Differential Drive | ○ | Map (v, ω) ↔ (left, right); saturation and ramp coordination; basic tests. |
  | 14 | Firmware v2: Proximity Sensors (HW) | ○ | Select 8x proximity sensors (TBD interface: GPIO/ADC/I2C); wiring, pull-ups, protection; update pin map; bench power budget. |
  | 15 | Firmware v2: Proximity Drivers | ○ | Implement drivers and sampling scheduler for 8 sensors; debouncing/filtering; fault detection; add to telemetry. |
@@ -54,19 +53,17 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 ## Detailed Tasks
 The granular task board has been moved to docs/AMR_firmware_tasks.md to keep this file focused on high-level goals and the weekly schedule.
 
-Status: See the Status Summary above and task-by-task statuses in docs/AMR_firmware_tasks.md.
+Status: See the �Status Summary� above and task-by-task statuses in docs/AMR_firmware_tasks.md.
 
 ---
 
 ## Definitions of Done (per milestone)
-- Dual‑motor duty: Both channels drive 0–20% with correct direction and safe stop via E‑stop
-- Encoders: Stable RPM both wheels; correct direction; noise filtered
-- Current telemetry: Calibrated A/LSB; filtered stream at 50–100 Hz
-- Control (single‑loop): ≤10% overshoot, low SSE on step/ramp; plots archived
-- Cascaded control: Inner current loop stable; outer speed loop SSE ≤ 5%, overshoot ≤ 10%; comparison plots and gains documented
-- FreeRTOS (W13): Tasks meet deadlines under load; CPU < 70%; no missed watchdog
-- Validation (W16): E‑stop latency ≤ 50 ms; current‑limit interaction stable under step loads
-- SLAM demo (W18): Successful nav in mapped area for ≥ 15 min without collision or watchdog resets
+- PID tuning (W7): SSE ≤ 5%, overshoot ≤ 10%, no sustained oscillation, documented plots & gains.
+- E-stop (W8): Latched E-stop with immediate PWM cutoff; manual clear; telemetry flag; test report.
+- Dual-motor (W11): Straight-line < 2 cm drift over 5 m; in-place turn ≤5° error.
+- FreeRTOS (W13): Tasks meet deadlines under load; CPU < 70%; no missed watchdog.
+- Validation (W16): E-stop latency ≤ 50 ms; current-limit interaction stable under step loads.
+- SLAM demo (W18): Successful nav in mapped area for ≥ 15 min without collision or watchdog resets.
 
 ---
 
