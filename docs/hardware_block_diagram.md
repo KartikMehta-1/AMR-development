@@ -40,7 +40,7 @@ graph TD
   %% Control and compute
   subgraph Control
     STM[STM32 Nucleo F401RE]
-    JET[Jetson Nano]
+    JET[Jetson Nano Dev Kit]
     USBHUB[Powered USB Hub]
   end
 
@@ -48,8 +48,8 @@ graph TD
   subgraph Sensors
     ENC_L[Left Encoder]
     ENC_R[Right Encoder]
-    LIDAR[LiDAR]
-    DEPTH[Depth Camera]
+    LIDAR[YDLidar G4]
+    DEPTH[RealSense D455]
     PROX[Proximity x8]
   end
 

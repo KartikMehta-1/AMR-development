@@ -2,7 +2,7 @@
 
 Owner: Kartik Mehta
 Status: In progress — building from single-motor bring-up to dual-motor closed loop with safety and faults.
-Last Updated: TBD
+Last Updated: 2025-11-03
 
 Legend: Done, In Progress, Planned, Not Started
 
@@ -55,6 +55,8 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Add telemetry fields: i_cmd, i_meas, i_err, i_p, i_i, i_out, duty; w_cmd, w_meas, w_err, w_p, w_i, w_d
   - Planned — Run step/ramp/sine/load tests: single-loop vs cascaded; log CSVs
   - Planned — Generate plots and metrics using `python_scripts/plot_step_compare.py`
+  - Planned — Archive logs in `Workspace/logs/` and plots in `docs/figures/`
+  - Planned — Summarize results (rise, overshoot, settling, SSE) in `docs/cascaded_pid.md` under a Results section
 
 ## Phase 7 — Safety manager and e-stop
 - Status: Planned

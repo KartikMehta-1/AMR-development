@@ -54,38 +54,55 @@ Mounting and effective resolution
 ---
 
 ## 4. Jetson Nano (Host Computer)
-**Model:** TBD
+**Model:** NVIDIA Jetson Nano Developer Kit
 
 | Parameter | Value |
 |------------|--------|
-| Power Input | TBD |
-| Typical Current Draw | TBD |
-| Data Interfaces | TBD |
-| Notes | TBD |
+| GPU | NVIDIA Maxwell, 128 CUDA cores |
+| CPU | Quad‑Core ARM Cortex‑A57 |
+| Memory | 4 GB LPDDR4 |
+| Storage | microSD (OS and data) |
+| Networking | 1× Gigabit Ethernet (RJ45) |
+| USB | USB 3.0 + USB 2.0 (via dev kit carrier) |
+| Camera | 2× MIPI CSI‑2 (15‑pin) connectors |
+| Display | HDMI (per dev kit carrier) |
+| GPIO Header | 40‑pin (3.3 V logic: I2C, SPI, UART, GPIO) |
+| Power Input | 5 V DC (barrel jack recommended) |
+| Recommended Supply | ≥ 5 V, 4–6 A (headroom for peripherals) |
+| Typical Current Draw | 2–4 A depending on load/peripherals |
+| Notes | Prefer powered USB hub for high‑draw USB sensors (LiDAR/depth cam). |
 
 ---
 
 ## 5. LiDAR
-**Model:** TBD
+**Model:** YDLidar G4 (2D 360°)
 
 | Parameter | Value |
 |------------|--------|
-| Power | TBD |
-| Interface | TBD (USB/UART/Ethernet) |
-| Range / FOV | TBD |
-| Notes | TBD |
+| Measurement Type | 2D planar, 360° scanning |
+| Range | up to ~16 m (confirm per datasheet) |
+| Scan Rate | ~5–12 Hz (adjustable) |
+| Angular Resolution | ≈ 0.5–1.0° (mode‑dependent) |
+| Interface | USB (USB‑to‑UART) or TTL UART |
+| Power | 5 V DC, nominal ~0.5 A (peaks higher; confirm) |
+| Mounting | Level, unobstructed 360° field of view |
+| Notes | Use powered USB hub; route 5 V from sensor rail. Validate exact range and current from vendor docs. |
 
 ---
 
 ## 6. Depth Camera
-**Model:** TBD
+**Model:** Intel RealSense D455 (Stereo Depth + RGB)
 
 | Parameter | Value |
 |------------|--------|
-| Power | TBD |
-| Interface | TBD (USB 3.0) |
-| Resolution / FPS | TBD |
-| Notes | TBD |
+| Interface | USB 3.x (Type‑C cable), UVC/UAC compliant |
+| Power | 5 V via USB (use powered hub if unstable) |
+| Baseline | ~95 mm (depth sensors; confirm) |
+| FOV | Wide FOV; verify per D455 datasheet for exact degrees |
+| Depth Resolution / FPS | e.g., 848×480 up to high fps; 1280×720 typical (confirm) |
+| RGB | Integrated color sensor |
+| Mounting | Rigid, vibration‑damped; clear view ahead |
+| Notes | Requires USB 3 bandwidth for full‑rate depth. Confirm exact specs from Intel datasheet. |
 
 ---
 

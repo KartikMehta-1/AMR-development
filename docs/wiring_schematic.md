@@ -96,8 +96,8 @@ Power (Jetson)
 
 ## 6) Sensors ↔ Jetson (typical)
 
-- LiDAR: USB or UART depending on model (TBD). Power from 5 V rail (TBD current).
-- Depth Camera: USB 3.0 to Jetson; power from 5 V rail (TBD current).
+- LiDAR (YDLidar G4): USB (USB‑to‑UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
+- Depth Camera (Intel RealSense D455): USB 3.x (Type‑C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
 - Proximity Sensors: Choose interface (GPIO/I2C/UART). Initial plan: connect to STM32 for real-time safety and integration; can later move to Jetson for ROS-level processing if needed.
 
 Notes
@@ -186,7 +186,8 @@ Safety and layout
 - Encoder: A, B, V+, GND (open‑collector outputs with 3.3 V pull‑ups)
 - Proximity Sensors (x8): V+, GND, SIGNAL to STM32 (GPIO/ADC/I2C) — exact interface TBD
 - Jetson Nano: 5 V, GND, USB ports, J41 UART if used
-- LiDAR/Depth/Proximity: USB/UART/I2C as per model (TBD)
+- YDLidar G4 / RealSense D455: USB to Jetson via powered hub; 5 V from sensor/USB rail
+- Proximity: USB/UART/I2C/GPIO as per model
 
 ---
 
