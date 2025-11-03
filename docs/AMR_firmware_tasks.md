@@ -28,34 +28,42 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Implement scaling (divider ratio) and zero-offset removal
   - Planned — Stream raw/filtered current via UART for validation
 
-## Phase 3 — Control tick and scheduling
+## Phase 3 — Control ticks and scheduling (cascaded)
 - Status: Planned
 - Tasks
-  - Planned — Add 1 kHz control tick (SysTick or TIM base)
-  - Planned — Main-loop scheduler: sample ADC, read encoders, compute velocity
-  - Planned — Decimate telemetry to ~50 Hz
+  - Planned — Add inner tick (1–5 kHz) tied to PWM/ADC for current control
+  - Planned — Add outer tick (100–200 Hz) for speed control and telemetry decimation
+  - Planned — Main scheduler: inner (ADC sample/filter → current PI → duty), outer (encoders → speed → speed PI/PID → i_ref)
 
-## Phase 4 — Speed control (left)
+## Phase 4 — Inner current loop (left)
 - Status: Planned
 - Tasks
-  - Planned — PI speed controller for left wheel (anti-windup, clamps)
-  - Planned — Direction from setpoint sign; duty from magnitude
-  - Planned — Acceptance: tracks step/ramp without oscillation
+  - Planned — Implement PI current controller (anti-windup, clamps)
+  - Planned — Calibrate ACS758 offset and scaling; apply moving average/LPF
+  - Planned — Acceptance: stable current steps with limited overshoot and bounded duty
 
-## Phase 5 — Speed control (right) + sync
+## Phase 5 — Cascaded speed control (outer) + right wheel
 - Status: Planned
 - Tasks
-  - Planned — Duplicate PI for right wheel; synchronize updates
-  - Planned — Verify straight-line and in-place turn basics
+  - Planned — Outer PI/PID speed loop generates i_ref (±Imax), feeds inner loop
+  - Planned — Duplicate for right wheel; synchronize updates
+  - Planned — Acceptance: ≤10% overshoot, low SSE on step and ramp
 
-## Phase 6 — Safety manager and e-stop
+## Phase 6 — Comparison & Telemetry v2
+- Status: Planned
+- Tasks
+  - Planned — Add telemetry fields: i_cmd, i_meas, i_err, i_p, i_i, i_out, duty; w_cmd, w_meas, w_err, w_p, w_i, w_d
+  - Planned — Run step/ramp/sine/load tests: single-loop vs cascaded; log CSVs
+  - Planned — Generate plots and metrics using `python_scripts/plot_step_compare.py`
+
+## Phase 7 — Safety manager and e-stop
 - Status: Planned
 - Tasks
   - Planned — Add e-stop GPIO input and debounce
   - Planned — Safety gate: force PWM=0 unless safe and enabled
   - Planned — Latching FAULT with manual clear flow
 
-## Phase 7 — Faults (per firmware_motor_control.md)
+## Phase 8 — Faults (per firmware_motor_control.md)
 - Status: Planned
 - Tasks
   - Planned — Overcurrent L/R with time filter and hysteresis
@@ -63,12 +71,6 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — ADC range/stuck detection
   - Planned — Supply under/over-voltage (when available)
   - Planned — Fault mask and telemetry bits
-
-## Phase 8 — Telemetry v2
-- Status: Planned
-- Tasks
-  - Planned — CSV fields: t, setpoint, meas, error, u, duty, currents, fault_mask, state
-  - Planned — Optional 100 Hz stream with periodic headers
 
 ## Phase 9 — Differential drive and tuning
 - Status: Planned

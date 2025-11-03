@@ -1,6 +1,6 @@
 # STM32 Firmware — Motor Control Diagrams
 
-This document explains the intended motor control model and how it maps to the STM32 firmware setup. It also notes current implementation status in the firmware.
+This document explains the intended motor control model and how it maps to the STM32 firmware setup. It also notes current implementation status in the firmware. Updated to reflect a cascaded control structure: inner current loop and outer speed/position loop.
 
 ```mermaid
 graph TD
@@ -22,8 +22,11 @@ graph TD
   subgraph Control
     MODE[Mode Manager]
     SAFE[Safety Manager]
-    PIDL[Speed Controller Left]
-    PIDR[Speed Controller Right]
+    I_L[Inner Current PI Left]
+    I_R[Inner Current PI Right]
+    W_L[Outer Speed PI/PID Left]
+    W_R[Outer Speed PI/PID Right]
+    POS[Optional Position PID]
   end
 
   subgraph Actuation
@@ -45,17 +48,21 @@ graph TD
 
   ENC_L --> VEL
   ENC_R --> VEL
-  VEL --> PIDL
-  VEL --> PIDR
+  VEL --> W_L
+  VEL --> W_R
 
   ADC_L --> CUR_MON
   ADC_R --> CUR_MON
   CUR_MON --> SAFE
 
-  MODE --> PIDL
-  MODE --> PIDR
-  PIDL --> PWM1
-  PIDR --> PWM2
+  MODE --> W_L
+  MODE --> W_R
+  POS --> W_L
+  POS --> W_R
+  W_L --> I_L
+  W_R --> I_R
+  I_L --> PWM1
+  I_R --> PWM2
   MODE --> DIRL
   MODE --> DIRR
 
@@ -71,31 +78,36 @@ graph TD
 
 - Setpoint enters Mode Manager, which gates control based on Safety Manager.
 - Encoders feed the velocity estimator; current sensors feed the current monitor.
-- Speed controllers produce duty commands to TIM1 PWM; direction is set via GPIO.
+- Outer speed loop generates a current reference; inner current loop produces duty commands to TIM1 PWM; direction is set via GPIO.
 - Telemetry publishes selected signals over USART2.
 
 ```mermaid
 graph LR
-  %% Control tick sequence (target example)
-  TICK[Control Tick 1 kHz]
-  SAMPLE[Sample ADC currents]
-  READ[Read encoder counts]
-  EST[Compute wheel velocity]
-  CTRL[Run speed controllers]
+  %% Control tick sequence (cascaded example)
+  TICK_I[Inner Tick 1–5 kHz]
+  TICK_W[Outer Tick 100–200 Hz]
+  SAMPLE_I[Sample/Filter currents]
+  READ_W[Read encoder counts]
+  EST_W[Compute wheel velocity]
+  CTRL_W[Outer speed PI/PID → i_ref]
+  CTRL_I[Inner current PI → duty]
   APPLY[Update PWM duty]
-  TEL[Telemetry at 50 Hz]
+  TEL[Telemetry at 50–100 Hz]
 
-  TICK --> SAMPLE
-  SAMPLE --> READ
-  READ --> EST
-  EST --> CTRL
-  CTRL --> APPLY
+  TICK_I --> SAMPLE_I
+  SAMPLE_I --> CTRL_I
+  CTRL_I --> APPLY
   APPLY --> TEL
+
+  TICK_W --> READ_W
+  READ_W --> EST_W
+  EST_W --> CTRL_W
+  CTRL_W --> CTRL_I
 ```
 
-- Target loop rate example: 1 kHz control tick for smooth speed control.
-- ADC samples left and right motor currents; encoder deltas compute velocity.
-- Speed controllers update PWM; telemetry decimated to ~50 Hz.
+- Rates: inner current loop 1–5 kHz; outer speed loop 100–200 Hz.
+- ADC samples left/right motor currents for inner loop; encoder deltas compute velocity for outer loop.
+- Inner loop updates PWM; outer loop updates `i_ref`; telemetry decimated to ~50–100 Hz.
 
 ```mermaid
 stateDiagram-v2
@@ -112,16 +124,20 @@ stateDiagram-v2
 - ENABLED: control loop active, PWM driving motors.
 - FAULT: outputs latched off until manual clear and safe.
 
-Implementation mapping (current)
+Implementation mapping (current → target)
 - PWM generation: `STM_Firmware_AMR_v2/Core/Src/main.c:242` initializes TIM1 with CH1 and CH2. `STM_Firmware_AMR_v2/Core/Src/motor.c` applies duty via compare registers.
 - Direction GPIO: `STM_Firmware_AMR_v2/Core/Src/main.c:471` configures PB4 and PB5 as outputs; `STM_Firmware_AMR_v2/Core/Src/motor.c` sets direction pins.
 - Encoders: `STM_Firmware_AMR_v2/Core/Src/main.c:311` TIM2 and `STM_Firmware_AMR_v2/Core/Src/main.c:360` TIM3 configured in encoder mode (filters enabled per `.ioc`).
-- Current sensing: `STM_Firmware_AMR_v2/Core/Src/main.c:181` ADC1 configured with channels 8 and 11 (left and right current).
+- Current sensing: `STM_Firmware_AMR_v2/Core/Src/main.c:181` ADC1 configured with channels 8 and 11 (left and right current). Target: sample at inner loop rate, filter, and feed current PI.
 - Telemetry serial: `STM_Firmware_AMR_v2/Core/Src/main.c:409` USART2 at 460800 bps.
 
+Telemetry v2 (proposed additions)
+- Inner loop fields: `i_cmd`, `i_meas`, `i_err`, `i_p`, `i_i`, `i_out` and final `duty`.
+- Outer loop fields: `w_cmd`, `w_meas`, `w_err`, `w_p`, `w_i`, `w_d`, `i_ref`.
+
 Notes and next steps
-- Current firmware runs a fixed 10 percent duty on left motor for bring up; encoder readout, ADC sampling, and control loop are not yet integrated.
-- Next steps typically include starting encoder timers, adding a periodic control tick (e.g., TIM base or SysTick), sampling ADC each tick, computing velocity, and running PI or PID to command PWM on both channels with safety gating.
+- Current firmware (v2 baseline) integrates PWM, encoders, and a single speed PID example. Cascaded implementation adds inner current PI and telemetry v2.
+- Next steps: start encoder timers, add inner current tick (tied to PWM/ADC), filter currents, implement current PI, implement outer speed PI/PID generating `i_ref`, add telemetry fields and decimation.
 
 ## Faults and Clear Criteria (Tentative)
 
