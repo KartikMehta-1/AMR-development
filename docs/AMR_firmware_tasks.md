@@ -22,7 +22,7 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Add basic input digital filtering (confirm IC filter values)
 
 ## Phase 2 — Current sensing online
-- Status: Planned
+- Status: In Progress
 - Tasks
   - Planned — Start ADC1 scanning channels 8 (PB0) and 11 (PC1)
   - Planned — Implement scaling (divider ratio) and zero-offset removal
