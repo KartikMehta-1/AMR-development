@@ -108,12 +108,21 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  // Initialize and run left motor at 10% duty (Cytron MDD20A)
+  // Initialize and run both motors at 10% duty (Cytron MDD20A)
   MotorChannel m_left;
+  MotorChannel m_right;
+
+  // Left motor (M1): PA8 PWM (TIM1_CH1), PB4 DIR
   Motor_Init(&m_left, &htim1, TIM_CHANNEL_1, DIR_LEFT_GPIO_Port, DIR_LEFT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
   Motor_SetDirection(&m_left, 1);   // forward (adjust if wiring requires inversion)
   Motor_SetDuty(&m_left, 0.10f);    // 10% duty
   Motor_Start(&m_left);
+
+  // Right motor (M2): PA9 PWM (TIM1_CH2), PB5 DIR
+  Motor_Init(&m_right, &htim1, TIM_CHANNEL_2, DIR_RIGHT_GPIO_Port, DIR_RIGHT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
+  Motor_SetDirection(&m_right, 1);  // forward (adjust if wiring requires inversion)
+  Motor_SetDuty(&m_right, 0.10f);   // 10% duty
+  Motor_Start(&m_right);
   /* USER CODE END 2 */
 
   /* Infinite loop */
