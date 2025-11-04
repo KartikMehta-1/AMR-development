@@ -1,17 +1,17 @@
 # Kartik’s AMR Project Tracker (18 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2025-11-03  
+**Last Updated:** 2025-11-04  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
 
 ---
 
 ## Status Summary
 - Overall: On track with tuning in progress
-- Progress: 6/18 weeks complete (~33%)
+- Progress: 7/18 weeks complete (~39%)
 - Recent: Single‑motor bring‑up on Cytron at ~10% duty verified (PA8 PWM, PB4 DIR)
-- Current Focus (Week 8): Dual‑motor PWM/DIR bring‑up (duty only); verify directions and safe power path
-- Next Focus (Week 9–12): Encoders (both wheels) → Current telemetry + calibration → Control (single‑loop PID) → Cascaded control + comparison
+- Current Focus (Week 9): Encoder integration — left encoder telemetry validated; right pending wiring/pull‑ups
+- Next Focus (Week 10–12): Current telemetry + calibration → Control (single‑loop PID) → Cascaded control + comparison
 - Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; Custom PCB is low priority/optional.
  - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
@@ -29,8 +29,8 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 | 5 | RPM Calculation & Telemetry | ✓ | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | ✓ | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
 | 7 | Firmware v2: Scaffold + Pin Map + Current | ◐ | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
-| 8 | Firmware v2: Dual‑Motor Duty Bring‑Up | ◐ | Wire M2 PWM/DIR (PA9/PB5); verify duty sweep 0–20% both channels; confirm E‑stop cut and common ground. |
-| 9 | Firmware v2: Encoder Integration | ○ | Bring both encoders online: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); RPM @ 100 Hz with input filtering. |
+| 8 | Firmware v2: Dual‑Motor Duty Bring‑Up | ✓ | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E‑stop cut and GND common confirmed. |
+| 9 | Firmware v2: Encoder Integration | ◐ | Left encoder online (TIM3 PA6/PA7) with UART RPM; add pull‑ups; verify right encoder (TIM2 PA0/PA1). |
 | 10 | Firmware v2: Current Telemetry + Calibration | ○ | ADC1 scan IN8 (PB0 left) and IN11 (PC1 right); zero‑offset + scaling; UART current stream at 50–100 Hz. |
 | 11 | Firmware v2: Control (Single‑Loop PID) | ○ | Closed‑loop speed PI/PID on one/both wheels; anti‑windup + ramp; baseline plots and metrics. |
 | 12 | Firmware v2: Cascaded Control + Comparison | ○ | Inner current PI + outer speed PID; add i_* and w_* telemetry; compare vs single‑loop with plots/metrics. |
@@ -131,6 +131,7 @@ Status: See the Status Summary above and task-by-task statuses in docs/AMR_firmw
 ```text
 [P1] Plot script: generate step response graphs from CSV (rise time, overshoot, SSE)
 [P1] Telemetry v2: add fault flags + setpoint
+[P1] Mechanical CAD: full AMR layout (chassis, mounts, sensor brackets, harness routing); deliver STEP/DXF + assembly guide
 [P2] CLI: live Bode-like sweep tool using chirp
 ```
 

@@ -2,7 +2,7 @@
 
 Owner: Kartik Mehta
 Status: In progress — building from single-motor bring-up to dual-motor closed loop with safety and faults.
-Last Updated: 2025-11-03
+Last Updated: 2025-11-04
 
 Legend: Done, In Progress, Planned, Not Started
 
@@ -22,11 +22,12 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Confirm common ground and motor power path via E-stop/fuse
 
 ## Phase 1 — Encoders online
-- Status: Planned
+- Status: In Progress
 - Tasks
-  - Planned — Start TIM3 (left) and TIM2 (right) encoder interfaces
-  - Planned — Read counts and verify direction; add simple RPM calc
-  - Planned — Add basic input digital filtering (confirm IC filter values)
+  - In Progress — Start TIM3 (left) and TIM2 (right) encoder interfaces
+  - In Progress — Read counts and RPM on UART (left validated); verify direction sign
+  - Planned — Add external 3.3 V pull-ups (4.7–10 kΩ) on A/B; optionally enable GPIO pull-ups
+  - Planned — Add software invert flag if wiring phase cannot be changed
 
 ## Phase 2 — Current sensing online
 - Status: Planned
@@ -90,3 +91,4 @@ Legend: Done, In Progress, Planned, Not Started
 Notes
 - See `docs/firmware_motor_control.md` for control architecture, timing, and state machine.
 - Thresholds and clear criteria for faults are listed in the same document.
+ - For mechanical layout and assembly planning, see `docs/mechanical_cad_tasks.md` and the `CAD/` folder structure.
