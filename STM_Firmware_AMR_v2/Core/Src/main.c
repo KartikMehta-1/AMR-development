@@ -19,10 +19,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "motor.h"
+#include "encoder.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <stdint.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,7 +53,15 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+// Encoder/rate reporting configuration
+#define ENCODER_COUNTS_PER_REV  2400U   // 600 PPR × 4 quadrature
+#define SAMPLE_INTERVAL_MS      100U    // 100 ms sample period for UART reporting
 
+static uint32_t last_sample_tick = 0;
+static uint32_t last_header_tick = 0;
+static char uart_buf[160];
+static EncoderChannel enc_left;
+static EncoderChannel enc_right;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -123,6 +133,13 @@ int main(void)
   Motor_SetDirection(&m_right, 1);  // forward (adjust if wiring requires inversion)
   Motor_SetDuty(&m_right, 0.10f);   // 10% duty
   Motor_Start(&m_right);
+
+  // Initialize and start encoders (Left: TIM3 16-bit, Right: TIM2 32-bit)
+  Encoder_Init(&enc_left,  &htim3, ENCODER_COUNTS_PER_REV, 0xFFFFU);
+  Encoder_Init(&enc_right, &htim2, ENCODER_COUNTS_PER_REV, 0xFFFFFFFFU);
+  Encoder_Start(&enc_left);
+  Encoder_Start(&enc_right);
+  last_sample_tick = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -132,6 +149,37 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // Periodic encoder sampling and UART printout
+    uint32_t now = HAL_GetTick();
+    if ((now - last_sample_tick) >= SAMPLE_INTERVAL_MS) {
+      float dt_s = (now - last_sample_tick) / 1000.0f;
+      last_sample_tick = now;
+
+      // Update encoders and compute RPMs
+      Encoder_Update(&enc_left, dt_s);
+      Encoder_Update(&enc_right, dt_s);
+
+      uint32_t cnt_l_now = Encoder_GetRawCount(&enc_left);
+      uint32_t cnt_r_now = Encoder_GetRawCount(&enc_right);
+
+      // Compute fixed-point RPM (×10) to avoid float printf requirements
+      int32_t rpm_l_x10 = (int32_t)(Encoder_GetRPM(&enc_left) * 10.0f);
+      int32_t rpm_r_x10 = (int32_t)(Encoder_GetRPM(&enc_right) * 10.0f);
+
+      // Periodic header every 10s
+      if ((now - last_header_tick) > 10000U) {
+        int hlen = snprintf(uart_buf, sizeof(uart_buf), "#HEADER: t_ms,l_cnt,r_cnt,l_rpm_x10,r_rpm_x10\r\n");
+        if (hlen > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)hlen, HAL_MAX_DELAY);
+        last_header_tick = now;
+      }
+      int len = snprintf(uart_buf, sizeof(uart_buf), "%lu,%lu,%lu,%ld,%ld\r\n",
+                         (unsigned long)now,
+                         (unsigned long)cnt_l_now,
+                         (unsigned long)cnt_r_now,
+                         (long)rpm_l_x10,
+                         (long)rpm_r_x10);
+      if (len > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)len, HAL_MAX_DELAY);
+    }
   }
   /* USER CODE END 3 */
 }
