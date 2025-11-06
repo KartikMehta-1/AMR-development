@@ -54,6 +54,8 @@ graph TD
   ADC_L --> CUR_MON
   ADC_R --> CUR_MON
   CUR_MON --> SAFE
+  CUR_MON --> I_L
+  CUR_MON --> I_R
 
   MODE --> W_L
   MODE --> W_R
