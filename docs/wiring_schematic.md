@@ -36,6 +36,22 @@ Wiring intent
 
 ---
 
+## 1b) Wire Gauge Guidance (initial sizing)
+
+- Battery → Fuse → E-stop → Motor driver VM/GND: AWG 12–14, keep short and well-crimped.
+- Motor driver → Motors (each channel): AWG 14–16 depending on run length and expected current; shorter runs can use 16.
+- DC-DC 5 V Jetson rail: AWG 16–18 from buck to Jetson/hub to minimize drop; use quality connectors.
+- DC-DC 5 V Logic rail: AWG 20–22 (STM32 and light sensors).
+- Encoder A/B and logic signals: AWG 24–26 twisted pair with ground return; optionally shield if noisy.
+- Sensor USB cables: use powered hub for LiDAR/RealSense; keep USB leads short and rated for current.
+- Grounds: implement star point with the same gauge as the largest branch it serves (typically match the supply feed gauge).
+
+Notes
+- If measured peaks exceed assumptions, upsize the affected runs one gauge thicker.
+- Keep high-current runs separated from encoder and ADC wiring; cross at right angles when needed.
+
+---
+
 ## 2) Emergency Stop (E‑stop)
 
 - Primary action: Hardware cut of Motor Power Bus feeding the motor driver VM input.

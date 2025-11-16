@@ -237,10 +237,6 @@ compute:
     gpio_header_40pin: true
 
 drivers:
-  l298n:
-    enable_pin: PA8    # ENA
-    in1_pin: PB4
-    in2_pin: PB5
   cytron_mdd20a:
     m1_pwm: PA8
     m1_dir: PB4
@@ -250,4 +246,4 @@ drivers:
 notes:
   - Keep this file authoritative; update when wiring or firmware changes.
   - Align TIM1 ARR/PSC to achieve the desired PWM frequency.
-  - Encoder mount is post-gearbox; if remounted pre-gearbox (30:1), set counts_per_rev to 72000.
+  - Encoder mount is post-gearbox.
