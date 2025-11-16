@@ -143,36 +143,63 @@ Notes
 
 ---
 
-## 9. Battery Pack
-**Model/Chemistry:** TBD (e.g., Li-ion 3S/6S, LiFePO4)
+## 9. Microcontroller
+**Model:** STM32F401RE (Nucleo-F401RE board)
 
 | Parameter | Value |
 |------------|--------|
-| Nominal Voltage | TBD (e.g., 12 V 3S or 24 V 6S) |
-| Voltage Range | TBD (depends on chemistry and series count) |
-| Capacity | TBD (Ah) |
-| Max Continuous Discharge | TBD (A) |
-| Peak Discharge (10 s) | TBD (A) |
-| Connector | TBD |
-| Notes | Sized for motor peaks and compute rails with margin |
+| Core | ARM Cortex-M4 @ 84 MHz with single-precision FPU |
+| Flash / RAM | 512 KB Flash, 96 KB SRAM |
+| Timers in use | TIM1 PWM (CH1/CH2), TIM2 encoder (right, 32-bit), TIM3 encoder (left, 16-bit) |
+| ADC | ADC1 12-bit with DMA; channels PB0 (IN8) left current, PC1 (IN11) right current |
+| UART | USART2 at 460800 bps for telemetry |
+| GPIO map | PA8/PA9 PWM, PB4/PB5 DIR, PA6/PA7 TIM3 enc, PA0/PA1 TIM2 enc, PA2/PA3 UART2, PA5 LED, PC13 button |
+| Debug | ST-LINK/V2-1 onboard |
+| Notes | Hosts motor-control firmware and planned micro-ROS client |
 
 ---
 
-## 10. Battery Management System (BMS)
-**Model:** TBD
+## 10. Battery Pack
+**Model/Chemistry:** 12.8 V LiFePO4, 4S, 18 Ah (18,000 mAh)
 
 | Parameter | Value |
 |------------|--------|
-| Series Cells Supported | TBD (e.g., 3S / 6S) |
-| Continuous Current | TBD (A) |
-| Peak Current | TBD (A, duration) |
-| Protections | OVP/UVP/OCP/SCP/OTP (confirm) |
-| Balance Method | TBD (passive/active) |
-| Notes | Provides pack protection; outputs pack voltage at P+/P- |
+| Nominal Voltage | 12.8 V (LiFePO4 4S) |
+| Charge Voltage (full) | ~14.6 V |
+| Discharge Cutoff | ~10.0–10.5 V (depends on BMS) |
+| Capacity | 18 Ah |
+| Max Continuous Discharge | Depends on cell pack; size for ≥ 30–40 A to match drivetrain and headroom |
+| Peak Discharge (short) | Depends on cells/BMS; referenced to pack’s internal BMS capability |
+| Connector | Nylon T plug (male on charger; ensure matching female or adapter on pack) |
+| Notes | LiFePO4 provides flatter discharge curve and better cycle life; pack includes internal BMS with limited telemetry |
 
 ---
 
-## 11. DC-DC Converters
+## 11. Battery Management System (BMS)
+**Model:** Built-in pack BMS (basic protection, limited telemetry)
+
+| Parameter | Value |
+|------------|--------|
+| Series Cells Supported | 4S LiFePO4 (internal) |
+| Continuous/Peak Current | Per pack design; not externally specified |
+| Protections | OVP, UVP, OCP, SCP (basic) |
+| Balance Method | Passive (typical for pack-integrated BMS) |
+| Notes | Pack exposes only P+/P-; no cell-level telemetry. Add pack-voltage sensing if host needs charge status. |
+
+## 12. Charger
+**Model:** Pro Range 4S LiFePO4 14.6 V 7 A with nylon T male
+
+| Parameter | Value |
+|------------|--------|
+| Chemistry | LiFePO4, 4S |
+| Charge Voltage | 14.6 V CC/CV |
+| Charge Current | 7 A |
+| Connector | Nylon T male output (match to pack/BMS pigtail) |
+| Notes | 7 A provides ~3 h charge time for 18 Ah pack; ensure BMS and wiring support ≥7 A charge current |
+
+---
+
+## 13. DC-DC Converters
 Three supplies recommended; exact models TBD.
 
 ### 11.1 Jetson 5 V Supply

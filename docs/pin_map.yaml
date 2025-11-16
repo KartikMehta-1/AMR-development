@@ -7,23 +7,23 @@ board:
 
 power:
   battery:
-    chemistry: TBD           # e.g., Li-ion / LiFePO4
-    nominal_volts: TBD       # e.g., 12 (3S) or 24 (6S)
-    series_cells: TBD        # e.g., 3 or 6
-    capacity_ah: TBD
-    connector: TBD
+    chemistry: LiFePO4
+    nominal_volts: 12.8
+    series_cells: 4
+    capacity_ah: 18
+    connector: nylon_t
   bms:
-    model: TBD
-    continuous_amps: TBD
-    peak_amps: TBD
-    protections: [OVP, UVP, OCP, SCP, OTP]
-    notes: Outputs pack voltage at P+/P-; does not regulate 5 V/12 V
+    model: internal_basic
+    continuous_amps: null
+    peak_amps: null
+    protections: [OVP, UVP, OCP, SCP]    # basic protections; telemetry limited
+    notes: Pack includes built-in BMS; exposes only P+/P- (no cell taps or telemetry). Add pack-voltage sense if needed.
   dc_dc:
     jetson_5v:
       input: battery_pack
       output_volts: 5.0
-      current_max_amps: TBD   # >= 6 A recommended
-      notes: Jetson Nano and powered USB hub
+      current_max_amps: 8.0   # target ≥ 6–8 A for Jetson + USB
+      notes: Jetson Nano and powered USB hub; consider Mean Well RSD-60G-5 or equivalent wide-input buck
     logic_5v:
       input: battery_pack
       output_volts: 5.0

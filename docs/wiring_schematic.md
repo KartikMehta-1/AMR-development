@@ -6,12 +6,12 @@ This document captures the practical wiring plan for the AMR project: power dist
 
 ## 1) Power Distribution
 
-- Battery (TBD V, TBD Ah)
-  - Main Fuse (TBD A) as close to battery as possible
+- Battery: 12.8 V LiFePO4 4S, 18 Ah (pack has basic internal BMS)
+  - Main Fuse: size for expected peak (e.g., 30–40 A slow‑blow for current drivetrain; revisit after measurements)
   - Main Switch / E‑Stop contactor (see E‑stop section)
   - Branches:
     - Motor Power Bus → Motor Driver VM (Cytron MDD20A)
-    - DC‑DC Buck → 5 V Rail (Jetson Nano)
+    - DC‑DC Buck → 5 V Rail (Jetson Nano, USB hub)
     - DC‑DC Buck → 5 V/12 V Rails for sensors (LiDAR, depth cam, proximity)
 
 Notes
@@ -19,11 +19,14 @@ Notes
 - Size DC‑DC modules with margin (Jetson Nano can draw 3–4 A peak on 5 V; depth cameras and LiDAR add significant load).
 - Keep motor currents off the logic 5 V/3.3 V rails; separate power domains that meet at ground.
 
-### 1a) Power Distribution Details (TBD parts)
-- Battery Pack + BMS: pack voltage and capacity TBD; BMS provides pack protection and outputs the raw pack voltage (no 5 V/12 V regulation).
-- DC-DC 5 V Jetson: dedicated 5 V supply for Jetson Nano and powered USB hub (≥ 5–6 A recommended).
-- DC-DC 5 V Logic: 5 V supply for STM32 board and proximity sensors (1–2 A typical).
+### 1a) Power Distribution Details
+- Battery Pack: 12.8 V LiFePO4 4S 18 Ah with internal basic BMS. Outputs raw pack voltage; no regulated 5 V/12 V and limited telemetry.
+- DC-DC 5 V Jetson: dedicated 5 V buck with ≥ 6–8 A continuous (e.g., Mean Well RSD‑60G‑5 wide‑input or equivalent). Powers Jetson Nano and powered USB hub.
+- DC-DC 5 V Logic: 5 V supply for STM32 board and proximity sensors (1–2 A typical). Can share with Jetson rail if capacity and noise allow; otherwise isolate.
 - DC-DC 12 V Sensors (optional): only if any sensor requires 12 V; otherwise omit.
+
+Voltage monitoring (optional)
+- Add a resistive divider from pack P+/P- to an ADC input (on STM32 or a small monitor) to estimate state of charge and low‑voltage cutoff warnings. Choose values to keep ADC input under 3.3 V at 14.6 V full charge.
 
 Wiring intent
 - Battery/BMS → Main Fuse → E-Stop → Motor Power Bus → Motor driver VM.
@@ -47,23 +50,24 @@ Wiring summary
 
 ---
 
-## 3) STM32 ↔ Motor Driver (Single Channel shown)
+## 3) STM32 ↔ Motor Driver (Cytron MDD20A)
 
-Two common configurations are shown. Choose one based on your current stage.
+Cytron MDD20A dual channel driver is the active configuration. Connections are dead simple PWM plus DIR lines per channel. Keep motor supply routed through fuse and E stop before entering the VM pin.
 
-### A) Current bench (L298N)
-- PWM: `PA8 (TIM1_CH1)` → L298N `ENA`
-- Direction: `PB4` → `IN1`, `PB5` → `IN2`
-- Motor power: Battery → L298N Vmotor (through fuse and E‑stop). GND common with STM32.
+### Signal wiring
+- PWM: `PA8 TIM1_CH1` → `M1 PWM` left wheel. `PA9 TIM1_CH2` → `M2 PWM` right wheel.
+- Direction: `PB4` → `M1 DIR` left. `PB5` → `M2 DIR` right.
+- Ground: Tie STM32 ground to driver logic ground close to the driver header.
+- Optional brake or coast pins can stay tied per driver manual until firmware exposes those modes.
 
-- PWM: `PA8 (TIM1_CH1)` → `M1 PWM` (Left), `PA9 (TIM1_CH2)` → `M2 PWM` (Right)
-- Direction: `PB4` → `M1 DIR` (Left), `PB5` → `M2 DIR` (Right)
-- (Optional) Brake/Coast: tie as per driver manual or implement in software via PWM/DIR logic
-- Motor power: Battery → MDD20A `VM` (through fuse and E‑stop). GND common with STM32.
-- Logic supply: MDD20A uses the same ground; logic inputs accept 3.3 V/5 V TTL (verify VIH in datasheet).
+### Power wiring
+- Motor power: Battery or pack output → Fuse → E stop → Cytron MDD20A `VM`.
+- Logic power: Driver logic shares ground with STM32 and is driven by the PWM and DIR inputs (no extra 5 V logic supply pin).
+- Ensure motor returns and logic returns join at a solid point to avoid injecting noise into ADC grounds.
 
-PWM frequency target
-- Set ~20 kHz for quiet operation with MDD20A (TIM1 example prescaler/ARR to be configured accordingly).
+### Timing targets
+- Set TIM1 prescaler plus ARR for roughly 20 kHz PWM. Higher frequencies reduce audible whine but watch driver thermal behavior.
+- Keep duty updates synchronized with the inner current loop so left and right channels stay matched.
 
 ---
 
@@ -90,7 +94,7 @@ Data link options
 - USB: Use ST‑Link USB serial or dedicated USB‑UART adapter to Jetson USB.
 
 Power (Jetson)
-- Provide dedicated 5 V rail with sufficient current (≥ 4 A recommended). Power Jetson via 5 V header or barrel jack per NVIDIA guidance.
+- Provide dedicated 5 V rail with sufficient current (target ≥ 6–8 A to cover Jetson plus USB peripherals). Power Jetson via 5 V header or barrel jack per NVIDIA guidance; keep harness short and low resistance.
 
 ---
 
@@ -180,9 +184,8 @@ Safety and layout
   - `PC1 / ADC1_IN11` → Right motor current (ACS758)
   - `PA2/PA3` → UART2 TX/RX to Jetson (optional)
   - `PA5` → Status LED
-- Motor Driver (choose one):
-  - L298N: ENA, IN1, IN2, VM, GND, Motor outputs
-  - Cytron MDD20A: M1 PWM, M1 DIR, VM, GND, Motor outputs
+- Motor Driver:
+  - Cytron MDD20A terminals: M1 PWM, M1 DIR, M2 PWM, M2 DIR, VM, GND, Motor outputs
 - Encoder: A, B, V+, GND (open‑collector outputs with 3.3 V pull‑ups)
 - Proximity Sensors (x8): V+, GND, SIGNAL to STM32 (GPIO/ADC/I2C) — exact interface TBD
 - Jetson Nano: 5 V, GND, USB ports, J41 UART if used
