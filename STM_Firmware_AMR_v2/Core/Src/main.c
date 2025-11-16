@@ -53,6 +53,10 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+// Direction polarity: set to 1 for forward, 0 to invert that wheel
+#define LEFT_DIR_POLARITY   1
+#define RIGHT_DIR_POLARITY  0
+
 // Encoder/rate reporting configuration
 #define ENCODER_COUNTS_PER_REV  2400U   // 600 PPR × 4 quadrature
 #define SAMPLE_INTERVAL_MS      100U    // 100 ms sample period for UART reporting
@@ -124,13 +128,13 @@ int main(void)
 
   // Left motor (M1): PA8 PWM (TIM1_CH1), PB4 DIR
   Motor_Init(&m_left, &htim1, TIM_CHANNEL_1, DIR_LEFT_GPIO_Port, DIR_LEFT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
-  Motor_SetDirection(&m_left, 1);   // forward (adjust if wiring requires inversion)
+  Motor_SetDirection(&m_left, LEFT_DIR_POLARITY);   // forward (adjust if wiring requires inversion)
   Motor_SetDuty(&m_left, 0.10f);    // 10% duty
   Motor_Start(&m_left);
 
   // Right motor (M2): PA9 PWM (TIM1_CH2), PB5 DIR
   Motor_Init(&m_right, &htim1, TIM_CHANNEL_2, DIR_RIGHT_GPIO_Port, DIR_RIGHT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
-  Motor_SetDirection(&m_right, 1);  // forward (adjust if wiring requires inversion)
+  Motor_SetDirection(&m_right, RIGHT_DIR_POLARITY);  // forward (adjust if wiring requires inversion)
   Motor_SetDuty(&m_right, 0.10f);   // 10% duty
   Motor_Start(&m_right);
 
