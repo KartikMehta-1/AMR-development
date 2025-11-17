@@ -190,11 +190,11 @@ adc:
       pin: PB0                 # ADC1_IN8 (configured)
       name: I_MOTOR_LEFT
       source: acs758_vout
-      divider:                 # scale 0–5 V to ~0–3.3 V (r ≈ 0.6)
+      divider:                 # scale 0–5 V to ~0–3.3 V (r ≈ 0.667)
         r_top_ohms: 10000      # 10k (Vout from ACS758 to divider top)
-        r_bottom_ohms: 15000   # 15k to GND → Vadc = 0.6 × Vsense
+        r_bottom_ohms: 20000   # 20k to GND → Vadc = 0.667 × Vsense
         v_in_max_volts: 5.0
-        v_out_max_volts: 3.0
+        v_out_max_volts: 3.33
       filter:                  # simple post-divider RC for anti-aliasing/noise
         r_series_ohms: 1000
         c_shunt_nf: 100        # fc ≈ 1.6 kHz; adjust per sampling rate
@@ -205,9 +205,9 @@ adc:
       source: acs758_vout
       divider:
         r_top_ohms: 10000
-        r_bottom_ohms: 15000
+        r_bottom_ohms: 20000
         v_in_max_volts: 5.0
-        v_out_max_volts: 3.0
+        v_out_max_volts: 3.33
       filter:
         r_series_ohms: 1000
         c_shunt_nf: 100

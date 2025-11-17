@@ -35,10 +35,10 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-// Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
+// Current sensor scaling (ACS758 50B @5 V; divider 10k top / 15k bottom)
 #define ADC_VREF_VOLTS        3.3f
 #define ADC_MAX_COUNTS        4095.0f
-#define CURR_DIVIDER_RATIO    0.667f   // Vadc = 0.667 * Vsense
+#define CURR_DIVIDER_RATIO    0.667f   // Vadc = 0.600 * Vsense
 #define CURR_ZERO_VOLTS       2.5f     // sensor Vout at 0 A (before divider)
 #define CURR_SENS_VOLTS_PER_A 0.040f   // 40 mV/A @ 5 V supply
 
@@ -317,7 +317,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;  // poll per conversion in the sequence
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     Error_Handler();

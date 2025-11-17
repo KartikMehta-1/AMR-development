@@ -76,8 +76,8 @@ graph TD
   end
 
   subgraph Currents to ADC
-    CS_L_V[ACS758L Vout] -->|10k/15k divider + 1k/100nF| ADC_L[PB0 ADC1_IN8]
-    CS_R_V[ACS758R Vout] -->|10k/15k divider + 1k/100nF| ADC_R[PC1 ADC1_IN11]
+    CS_L_V[ACS758L Vout] -->|10k/20k divider + 1k/100nF| ADC_L[PB0 ADC1_IN8]
+    CS_R_V[ACS758R Vout] -->|10k/20k divider + 1k/100nF| ADC_R[PC1 ADC1_IN11]
   end
 
   VM --> BUCK5V[5 V Buck Jetson >=6–8 A]
@@ -278,5 +278,4 @@ Safety and layout
 - Twist encoder A/B with ground return; shield if available.
 - Use proper ferrules and strain relief; avoid loose connectors near moving parts.
 - Verify polarity before powering; bring‑up with current‑limited supply when possible.
-
 

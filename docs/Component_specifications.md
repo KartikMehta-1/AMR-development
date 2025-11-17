@@ -138,7 +138,7 @@ Mounting and effective resolution
 Notes
 - Choose the variant so nominal operating current is within 20–70% of full scale for good resolution; ±50 A covers motor peaks with margin.
 - Sensor output is centered at Vcc/2; firmware must subtract offset and apply sensitivity.
-- With a 10k/15k divider, the ADC sees ~0–3.0 V for a 0–5 V sensor range; ensures 3.3 V ADC compliance. Sensitivity at ADC is ~24 mV/A after the divider.
+- With a 10k/20k divider, the ADC sees ~0–3.33 V for a 0–5 V sensor range; ensures 3.3 V ADC compliance. Sensitivity at ADC is ~26.7 mV/A after the divider.
 - Add RC filtering post-divider to reduce PWM ripple; see wiring doc for recommended values.
 
 ---
