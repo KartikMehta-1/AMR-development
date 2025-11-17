@@ -35,6 +35,13 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+// Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
+#define ADC_VREF_VOLTS        3.3f
+#define ADC_MAX_COUNTS        4095.0f
+#define CURR_DIVIDER_RATIO    0.667f   // Vadc = 0.667 * Vsense
+#define CURR_ZERO_VOLTS       2.5f     // sensor Vout at 0 A (before divider)
+#define CURR_SENS_VOLTS_PER_A 0.040f   // 40 mV/A @ 5 V supply
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -84,6 +91,36 @@ static void MX_TIM3_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// Convert raw ADC counts to current in amperes for ACS758 with 10k/20k divider
+static float Current_FromRaw(uint16_t adc_counts)
+{
+  float vadc = (adc_counts * ADC_VREF_VOLTS) / ADC_MAX_COUNTS;
+  float vsense = vadc / CURR_DIVIDER_RATIO;
+  return (vsense - CURR_ZERO_VOLTS) / CURR_SENS_VOLTS_PER_A;
+}
+
+// Read both current channels (rank1: PB0 left, rank2: PC1 right); returns 1 on success
+static uint8_t ReadCurrents(uint16_t* left_counts, uint16_t* right_counts)
+{
+  if (HAL_ADC_Start(&hadc1) != HAL_OK) {
+    return 0;
+  }
+
+  if (HAL_ADC_PollForConversion(&hadc1, 5) != HAL_OK) {
+    HAL_ADC_Stop(&hadc1);
+    return 0;
+  }
+  *left_counts = (uint16_t)HAL_ADC_GetValue(&hadc1);
+
+  if (HAL_ADC_PollForConversion(&hadc1, 5) != HAL_OK) {
+    HAL_ADC_Stop(&hadc1);
+    return 0;
+  }
+  *right_counts = (uint16_t)HAL_ADC_GetValue(&hadc1);
+
+  HAL_ADC_Stop(&hadc1);
+  return 1;
+}
 /* USER CODE END 0 */
 
 /**
@@ -159,12 +196,25 @@ int main(void)
       float dt_s = (now - last_sample_tick) / 1000.0f;
       last_sample_tick = now;
 
+      // Read current sensors (ADC1 rank1: PB0 left, rank2: PC1 right)
+      uint16_t adc_left = 0, adc_right = 0;
+      uint8_t adc_ok = ReadCurrents(&adc_left, &adc_right);
+
       // Update encoders and compute RPMs
       Encoder_Update(&enc_left, dt_s);
       Encoder_Update(&enc_right, dt_s);
 
       uint32_t cnt_l_now = Encoder_GetRawCount(&enc_left);
       uint32_t cnt_r_now = Encoder_GetRawCount(&enc_right);
+      // Compute motor currents in mA (integer for lightweight printing)
+      int32_t curr_l_mA = 0;
+      int32_t curr_r_mA = 0;
+      if (adc_ok) {
+        curr_l_mA = (int32_t)(Current_FromRaw(adc_left) * 1000.0f);
+        curr_r_mA = (int32_t)(Current_FromRaw(adc_right) * 1000.0f);
+      }
+
+
 
       // Compute fixed-point RPM (×10) to avoid float printf requirements
       int32_t rpm_l_x10 = (int32_t)(Encoder_GetRPM(&enc_left) * 10.0f);
@@ -172,16 +222,18 @@ int main(void)
 
       // Periodic header every 10s
       if ((now - last_header_tick) > 10000U) {
-        int hlen = snprintf(uart_buf, sizeof(uart_buf), "#HEADER: t_ms,l_cnt,r_cnt,l_rpm_x10,r_rpm_x10\r\n");
+        int hlen = snprintf(uart_buf, sizeof(uart_buf), "#HEADER: t_ms,l_cnt,r_cnt,l_rpm_x10,r_rpm_x10,l_mA,r_mA\r\n");
         if (hlen > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)hlen, HAL_MAX_DELAY);
         last_header_tick = now;
       }
-      int len = snprintf(uart_buf, sizeof(uart_buf), "%lu,%lu,%lu,%ld,%ld\r\n",
+      int len = snprintf(uart_buf, sizeof(uart_buf), "%lu,%lu,%lu,%ld,%ld,%ld,%ld\r\n",
                          (unsigned long)now,
                          (unsigned long)cnt_l_now,
                          (unsigned long)cnt_r_now,
                          (long)rpm_l_x10,
-                         (long)rpm_r_x10);
+                         (long)rpm_r_x10,
+                         (long)curr_l_mA,
+                         (long)curr_r_mA);
       if (len > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)len, HAL_MAX_DELAY);
     }
   }
