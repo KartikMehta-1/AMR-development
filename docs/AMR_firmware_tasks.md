@@ -15,17 +15,17 @@ Legend: Done, In Progress, Planned, Not Started
   - Done — Direction GPIO configured (PB4/PB5)
 
 ## Phase 0.5 — Dual-motor PWM/DIR (duty only)
-- Status: In Progress
+- Status: Done
 - Tasks
   - In Progress — Wire right motor to M2 PWM (PA9) and DIR (PB5)
-  - Planned — Verify duty sweep 0–20% on both channels with correct directions
+  - Done — Verify duty sweep 0–20% on both channels with correct directions
   - Planned — Confirm common ground and motor power path via E-stop/fuse
 
 ## Phase 1 — Encoders online
-- Status: In Progress
+- Status: Done
 - Tasks
-  - In Progress — Start TIM3 (left) and TIM2 (right) encoder interfaces
-  - In Progress — Read counts and RPM on UART (left validated); verify direction sign
+  - Done — Start TIM3 (left) and TIM2 (right) encoder interfaces
+  - Done — Read counts and RPM on UART (both wheels); direction sign validated and corrected
   - Planned — Add external 3.3 V pull-ups (4.7–10 kΩ) on A/B; optionally enable GPIO pull-ups
   - Planned — Add software invert flag if wiring phase cannot be changed
 

@@ -36,7 +36,69 @@ Wiring intent
 
 ---
 
-## 1b) Wire Gauge Guidance (initial sizing)
+## 1b) Current Sensor Wiring (ACS758LCB-050B)
+
+- Placement: One module per motor supply line; wire IP+ and IP- in series with each wheel feed.
+- Power: Vcc = 5 V; GND common with STM32. Add 0.1 µF decoupling at the sensor.
+- Sense output: Vout into a 10 kΩ top resistor and 15 kΩ bottom to GND; tap the midpoint to ADC (PB0 left, PC1 right) to keep ADC under 3.3 V at 5 V Vout.
+- Filter: Add 1 kΩ series plus 100 nF to GND after the divider to reduce PWM ripple.
+- Layout: Keep the IP+/IP- loop short and away from signal wiring; route Vout away from motor leads.
+
+---
+
+## 1c) Wiring Diagram (text/mermaid overview)
+
+```mermaid
+graph TD
+  BATT[12.8 V LiFePO4<br/>B+/B-] --> FUSE[Main Fuse]
+  FUSE --> ESTOP[E-stop / Switch]
+  ESTOP --> VM[Motor Power Bus]
+  VM --> CS_L[ACS758L Left<br/>IP+ → IP-]
+  VM --> CS_R[ACS758R Right<br/>IP+ → IP-]
+  CS_L --> MDD_L[MDD20A M1 VM]
+  CS_R --> MDD_R[MDD20A M2 VM]
+
+  subgraph MDD[Cytron MDD20A]
+    MDD_L -- PWM PA8 --> PWM1[PA8 TIM1_CH1]
+    MDD_R -- PWM PA9 --> PWM2[PA9 TIM1_CH2]
+    DIRL[PB4 DIR] --> MDD_L
+    DIRR[PB5 DIR] --> MDD_R
+    GNDMDD[GND] -.-> PWM1
+    GNDMDD -.-> PWM2
+  end
+
+  subgraph Encoders
+    ENC_LA[PA6] --- ENCL[Enc L A]
+    ENC_LB[PA7] --- ENCLB[Enc L B]
+    ENC_RA[PA0] --- ENCR[Enc R A]
+    ENC_RB[PA1] --- ENCRB[Enc R B]
+    ENC_GND[GND] --- ENCG[Enc GND]
+  end
+
+  subgraph Currents to ADC
+    CS_L_V[ACS758L Vout] -->|10k/15k divider + 1k/100nF| ADC_L[PB0 ADC1_IN8]
+    CS_R_V[ACS758R Vout] -->|10k/15k divider + 1k/100nF| ADC_R[PC1 ADC1_IN11]
+  end
+
+  VM --> BUCK5V[5 V Buck Jetson >=6–8 A]
+  BUCK5V --> JET[Jetson + Powered Hub]
+  VM --> BUCK5V_LOGIC[5 V Buck Logic]
+  BUCK5V_LOGIC --> MCU[STM32F401RE]
+  GNDALL[GND star] -.-> MDD
+  GNDALL -.-> MCU
+  GNDALL -.-> JET
+  GNDALL -.-> Encoders
+  GNDALL -.-> Currents to ADC
+```
+
+Notes
+- Insert one ACS758 per wheel supply. Keep IP+/IP- loops short. Route Vout away from motor leads.
+- Jetson/hub on dedicated high-current 5 V buck. Logic on separate 5 V buck or shared if capacity/noise is acceptable.
+- All grounds meet at a solid star point near the power entry.
+
+---
+
+## 1d) Wire Gauge Guidance (initial sizing)
 
 - Battery → Fuse → E-stop → Motor driver VM/GND: AWG 12–14, keep short and well-crimped.
 - Motor driver → Motors (each channel): AWG 14–16 depending on run length and expected current; shorter runs can use 16.

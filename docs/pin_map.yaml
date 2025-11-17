@@ -214,13 +214,13 @@ adc:
       status: active           # now included in ADC regular sequence (Rank 2)
 
 current_sensors:
-  model: ACS758                # Allegro Hall-effect current sensor
+  model: ACS758LCB-050B        # Allegro Hall-effect current sensor ±50 A
   quantity: 2                  # Left/Right motor lines
   supply_volts: 5.0            # Ratiometric output; 2.5 V at 0 A (typ.)
   placement: series_with_each_motor_supply
   output_interface: analog_single_ended
-  variant: TBD                 # e.g., -050B (±50 A) or -100B (±100 A)
-  sensitivity_mV_per_A: TBD    # depends on variant (example: ~40 mV/A @ 50A)
+  variant: ACS758LCB-050B
+  sensitivity_mV_per_A: 40     # @5 V, modulo datasheet tolerance; ~24 mV/A at ADC after divider
   zero_current_offset_volts: ratiometric_to_vcc_over_2
   wiring_notes:
     - Keep high-current paths short; use appropriate gauge and creepage/clearance.

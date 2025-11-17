@@ -30,7 +30,7 @@ Legend: Done (✓), In Progress (◐), Partial (◒), Planned (○), Blocked (�
 | 6 | PID-Based Motor Control (Implementation) | ✓ | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
 | 7 | Firmware v2: Scaffold + Pin Map + Current | ◐ | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
 | 8 | Firmware v2: Dual‑Motor Duty Bring‑Up | ✓ | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E‑stop cut and GND common confirmed. |
-| 9 | Firmware v2: Encoder Integration | ◐ | Left encoder online (TIM3 PA6/PA7) with UART RPM; add pull‑ups; verify right encoder (TIM2 PA0/PA1). |
+| 9 | Firmware v2: Encoder Integration | ✓ | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; pull‑ups to be added. |
 | 10 | Firmware v2: Current Telemetry + Calibration | ○ | ADC1 scan IN8 (PB0 left) and IN11 (PC1 right); zero‑offset + scaling; UART current stream at 50–100 Hz. |
 | 11 | Firmware v2: Control (Single‑Loop PID) | ○ | Closed‑loop speed PI/PID on one/both wheels; anti‑windup + ramp; baseline plots and metrics. |
 | 12 | Firmware v2: Cascaded Control + Comparison | ○ | Inner current PI + outer speed PID; add i_* and w_* telemetry; compare vs single‑loop with plots/metrics. |
