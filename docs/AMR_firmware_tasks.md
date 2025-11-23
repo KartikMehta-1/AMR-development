@@ -1,12 +1,12 @@
 # AMR Firmware Tasks (Motor Control)
 
-Owner: Kartik Mehta
-Status: In progress — building from single-motor bring-up to dual-motor closed loop with safety and faults.
+Owner: Kartik Mehta  
+Status: In progress — building from single-motor bring-up to dual-motor closed loop with safety and faults.  
 Last Updated: 2025-11-04
 
 Legend: Done, In Progress, Planned, Not Started
 
-## Phase 0 — Bring-up (baseline)
+## Phase 0 – Bring-up (baseline)
 - Status: Done
 - Tasks
   - Done — Create `STM_Firmware_AMR_v2` scaffold; build, flash, UART banner
@@ -14,50 +14,50 @@ Legend: Done, In Progress, Planned, Not Started
   - Done — Left motor constant duty (10%) using MDD20A; PB4 DIR
   - Done — Direction GPIO configured (PB4/PB5)
 
-## Phase 0.5 — Dual-motor PWM/DIR (duty only)
+## Phase 0.5 – Dual-motor PWM/DIR (duty only)
 - Status: Done
 - Tasks
-  - In Progress — Wire right motor to M2 PWM (PA9) and DIR (PB5)
-  - Done — Verify duty sweep 0–20% on both channels with correct directions
-  - Planned — Confirm common ground and motor power path via E-stop/fuse
+  - Done — Wire right motor to M2 PWM (PA9) and DIR (PB5)
+  - Done — Verify duty sweep 0-20% on both channels with correct directions
+  - Done — Confirm common ground and motor power path via E-stop/fuse
 
-## Phase 1 — Encoders online
+## Phase 1 – Encoders online
 - Status: Done
 - Tasks
   - Done — Start TIM3 (left) and TIM2 (right) encoder interfaces
   - Done — Read counts and RPM on UART (both wheels); direction sign validated and corrected
-  - Planned — Add external 3.3 V pull-ups (4.7–10 kΩ) on A/B; optionally enable GPIO pull-ups
+  - Planned — Add external 3.3 V pull-ups (4.7-10 kOhm) on A/B; optionally enable GPIO pull-ups
   - Planned — Add software invert flag if wiring phase cannot be changed
 
-## Phase 2 — Current sensing online
+## Phase 2 – Current sensing online
 - Status: Planned
 - Tasks
   - Planned — Start ADC1 scanning channels 8 (PB0) and 11 (PC1)
   - Planned — Implement scaling (divider ratio) and zero-offset removal
   - Planned — Stream raw/filtered current via UART for validation
 
-## Phase 3 — Control ticks and scheduling (cascaded)
+## Phase 3 – Control ticks and scheduling (cascaded)
 - Status: Planned
 - Tasks
-  - Planned — Add inner tick (1–5 kHz) tied to PWM/ADC for current control
-  - Planned — Add outer tick (100–200 Hz) for speed control and telemetry decimation
-  - Planned — Main scheduler: inner (ADC sample/filter → current PI → duty), outer (encoders → speed → speed PI/PID → i_ref)
+  - Planned — Add inner tick (1-5 kHz) tied to PWM/ADC for current control
+  - Planned — Add outer tick (100-200 Hz) for speed control and telemetry decimation
+  - Planned — Main scheduler: inner (ADC sample/filter + current PI + duty), outer (encoders + speed + speed PI/PID + i_ref)
 
-## Phase 4 — Inner current loop (left)
+## Phase 4 – Inner current loop (left)
 - Status: Planned
 - Tasks
   - Planned — Implement PI current controller (anti-windup, clamps)
   - Planned — Calibrate ACS758 offset and scaling; apply moving average/LPF
   - Planned — Acceptance: stable current steps with limited overshoot and bounded duty
 
-## Phase 5 — Cascaded speed control (outer) + right wheel
+## Phase 5 – Cascaded speed control (outer) + right wheel
 - Status: Planned
 - Tasks
-  - Planned — Outer PI/PID speed loop generates i_ref (±Imax), feeds inner loop
+  - Planned — Outer PI/PID speed loop generates i_ref (A/Imax), feeds inner loop
   - Planned — Duplicate for right wheel; synchronize updates
-  - Planned — Acceptance: ≤10% overshoot, low SSE on step and ramp
+  - Planned — Acceptance: <=10% overshoot, low SSE on step and ramp
 
-## Phase 6 — Comparison & Telemetry v2
+## Phase 6 – Comparison & Telemetry v2
 - Status: Planned
 - Tasks
   - Planned — Add telemetry fields: i_cmd, i_meas, i_err, i_p, i_i, i_out, duty; w_cmd, w_meas, w_err, w_p, w_i, w_d
@@ -66,14 +66,14 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Archive logs in `Workspace/logs/` and plots in `docs/figures/`
   - Planned — Summarize results (rise, overshoot, settling, SSE) in `docs/cascaded_pid.md` under a Results section
 
-## Phase 7 — Safety manager and e-stop
+## Phase 7 – Safety manager and e-stop
 - Status: Planned
 - Tasks
   - Planned — Add e-stop GPIO input and debounce
   - Planned — Safety gate: force PWM=0 unless safe and enabled
   - Planned — Latching FAULT with manual clear flow
 
-## Phase 8 — Faults (per firmware_motor_control.md)
+## Phase 8 – Faults (per firmware_motor_control.md)
 - Status: Planned
 - Tasks
   - Planned — Overcurrent L/R with time filter and hysteresis
@@ -82,7 +82,7 @@ Legend: Done, In Progress, Planned, Not Started
   - Planned — Supply under/over-voltage (when available)
   - Planned — Fault mask and telemetry bits
 
-## Phase 9 — Differential drive and tuning
+## Phase 9 – Differential drive and tuning
 - Status: Planned
 - Tasks
   - Planned — Map (v, omega) to (left, right); saturation and ramp coordination
@@ -91,4 +91,7 @@ Legend: Done, In Progress, Planned, Not Started
 Notes
 - See `docs/firmware_motor_control.md` for control architecture, timing, and state machine.
 - Thresholds and clear criteria for faults are listed in the same document.
- - For mechanical layout and assembly planning, see `docs/mechanical_cad_tasks.md` and the `CAD/` folder structure.
+- For mechanical layout and assembly planning, see `docs/mechanical_cad_tasks.md` and the `CAD/` folder structure.
+- Hardware support (buck + perfboard) to unblock sensing:
+  - Add regulated 5 V buck from 12 V bench/battery for sensors/encoders/ACS758; tie grounds common.
+  - Build a small perfboard/shield for Nucleo: encoder 3.3 V pull-ups, ACS758 dividers + RC filters, decoupling caps, screw terminals/headers for clean wiring.

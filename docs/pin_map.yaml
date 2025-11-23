@@ -1,5 +1,5 @@
 schema_version: 0.2.0
-profile: final-single-mdd20a   # active wiring profile
+profile: final-single-mdd20a   # active wiring profile (authoritative pin map)
 
 board:
   name: Nucleo-F401RE
@@ -22,7 +22,7 @@ power:
     jetson_5v:
       input: battery_pack
       output_volts: 5.0
-      current_max_amps: 8.0   # target ≥ 6–8 A for Jetson + USB
+      current_max_amps: 8.0   # target ~6-8 A for Jetson + USB
       notes: Jetson Nano and powered USB hub; consider Mean Well RSD-60G-5 or equivalent wide-input buck
     logic_5v:
       input: battery_pack
@@ -42,7 +42,7 @@ motors:
       timer: TIM1
       channel: CH1
       pin: PA8
-      frequency_hz: 20000   # target for Cytron MDD20A; current code ~2 kHz
+      frequency_hz: 20000   # active in firmware v2 (TIM1 PSC=0, ARR=4199)
     direction:
       pin: PB4
   right:
@@ -51,7 +51,7 @@ motors:
       timer: TIM1
       channel: CH2
       pin: PA9
-      frequency_hz: 20000
+      frequency_hz: 20000   # match left channel
     direction:
       pin: PB5
 
@@ -62,9 +62,9 @@ encoders:
       pin: PA6
     ch2:
       pin: PA7
-    counts_per_rev: 2400        # post-gearbox: 600 PPR × 4
+    counts_per_rev: 2400        # post-gearbox: 600 PPR * 4
     input_type: open_collector
-    pullup: external_3v3        # use 4.7–10k to 3.3 V
+    pullup: external_3v3        # use 4.7-10k to 3.3 V
     max_signal_freq_hz: 30000
     filter_level: 10            # CubeMX ICxFilter value
   right:
@@ -103,101 +103,101 @@ safety:
       type: series_switch      # series_switch / relay / contactor / high_side
       notes: Cut motor VM supply to driver (preferred primary action)
 
- sensors:
-   lidar:
-     model: ydlidar_g4
-     interface: usb
-     power_rail: 5v
-     nominal_current_amps: 0.5   # confirm from datasheet
-     notes: Connect via powered USB hub to Jetson; ensure stable 5 V
-   depth_camera:
-     model: realsense_d455
-     interface: usb3
-     power_rail: 5v
-     notes: USB 3 bandwidth required; prefer powered hub if multiple devices
-   proximity:
-     quantity: 8
-     power_rail: TBD           # 3v3 or 5v
-     interface: TBD            # gpio / adc / i2c / uart
-     units: distance           # semantic units (e.g., mm) defined per model
-     channels:
-       - id: S1
-         gpio_pin: TBD         # if interface=gpio
-         adc_pin:  TBD         # if interface=adc
-         i2c_bus: TBD          # if interface=i2c
-         i2c_addr: TBD
-         uart_port: TBD        # if interface=uart
-       - id: S2
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
-       - id: S3
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
-       - id: S4
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
-       - id: S5
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
-       - id: S6
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
-       - id: S7
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
-       - id: S8
-         gpio_pin: TBD
-         adc_pin:  TBD
-         i2c_bus: TBD
-         i2c_addr: TBD
-         uart_port: TBD
+sensors:
+  lidar:
+    model: ydlidar_g4
+    interface: usb
+    power_rail: 5v
+    nominal_current_amps: 0.5   # confirm from datasheet
+    notes: Connect via powered USB hub to Jetson; ensure stable 5 V
+  depth_camera:
+    model: realsense_d455
+    interface: usb3
+    power_rail: 5v
+    notes: USB 3 bandwidth required; prefer powered hub if multiple devices
+  proximity:
+    quantity: 8
+    power_rail: TBD           # 3v3 or 5v
+    interface: TBD            # gpio / adc / i2c / uart
+    units: distance           # semantic units (e.g., mm) defined per model
+    channels:
+      - id: S1
+        gpio_pin: TBD         # if interface=gpio
+        adc_pin:  TBD         # if interface=adc
+        i2c_bus: TBD          # if interface=i2c
+        i2c_addr: TBD
+        uart_port: TBD        # if interface=uart
+      - id: S2
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
+      - id: S3
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
+      - id: S4
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
+      - id: S5
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
+      - id: S6
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
+      - id: S7
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
+      - id: S8
+        gpio_pin: TBD
+        adc_pin:  TBD
+        i2c_bus: TBD
+        i2c_addr: TBD
+        uart_port: TBD
 
- buses:
-   i2c1:
-     scl: TBD
-     sda: TBD
-     pullups: external_3v3
-   i2c2:
-     scl: TBD
-     sda: TBD
-     pullups: external_3v3
+buses:
+  i2c1:
+    scl: TBD
+    sda: TBD
+    pullups: external_3v3
+  i2c2:
+    scl: TBD
+    sda: TBD
+    pullups: external_3v3
 
 adc:
   vref_volts: 3.3
   resolution_bits: 12
   dma: enabled                 # ADC1 configured with DMA circular mode
   channels:
-    # Motor current sensing (ACS758 → resistor divider → STM32 ADC)
+    # Motor current sensing (ACS758 + resistor divider + STM32 ADC)
     - id: motor_left_current
       pin: PB0                 # ADC1_IN8 (configured)
       name: I_MOTOR_LEFT
       source: acs758_vout
-      divider:                 # scale 0–5 V to ~0–3.3 V (r ≈ 0.667)
+      divider:                 # scale 0-5 V to ~0-3.3 V (ratio ~0.667)
         r_top_ohms: 10000      # 10k (Vout from ACS758 to divider top)
-        r_bottom_ohms: 20000   # 20k to GND → Vadc = 0.667 × Vsense
+        r_bottom_ohms: 20000   # 20k to GND + Vadc = 0.667 * Vsense
         v_in_max_volts: 5.0
         v_out_max_volts: 3.33
       filter:                  # simple post-divider RC for anti-aliasing/noise
         r_series_ohms: 1000
-        c_shunt_nf: 100        # fc ≈ 1.6 kHz; adjust per sampling rate
+        c_shunt_nf: 100        # fc ~1.6 kHz; adjust per sampling rate
       status: active           # present in ADC regular sequence
     - id: motor_right_current
       pin: PC1                 # ADC1_IN11 (mapped, may be added to sequence)
@@ -211,20 +211,20 @@ adc:
       filter:
         r_series_ohms: 1000
         c_shunt_nf: 100
-      status: active           # now included in ADC regular sequence (Rank 2)
+      status: active           # included in ADC regular sequence (Rank 2)
 
 current_sensors:
-  model: ACS758LCB-050B        # Allegro Hall-effect current sensor ±50 A
+  model: ACS758LCB-050B        # Allegro Hall-effect current sensor +/-50 A
   quantity: 2                  # Left/Right motor lines
   supply_volts: 5.0            # Ratiometric output; 2.5 V at 0 A (typ.)
   placement: series_with_each_motor_supply
   output_interface: analog_single_ended
   variant: ACS758LCB-050B
-  sensitivity_mV_per_A: 40     # @5 V, modulo datasheet tolerance; ~24 mV/A at ADC after divider
+  sensitivity_mV_per_A: 40     # @5 V; ~24 mV/A at ADC after divider
   zero_current_offset_volts: ratiometric_to_vcc_over_2
   wiring_notes:
     - Keep high-current paths short; use appropriate gauge and creepage/clearance.
-    - Route sensor Vout to STM32 ADC through the divider; add local 0.1 µF decoupling at sensor Vcc.
+    - Route sensor Vout to STM32 ADC through the divider; add local 0.1 uF decoupling at sensor Vcc.
     - Tie grounds at a star point; avoid running Vout alongside PWM motor leads.
 
 compute:
@@ -245,5 +245,5 @@ drivers:
 
 notes:
   - Keep this file authoritative; update when wiring or firmware changes.
-  - Align TIM1 ARR/PSC to achieve the desired PWM frequency.
+  - Align TIM1 ARR/PSC to achieve the desired PWM frequency (20 kHz target).
   - Encoder mount is post-gearbox.

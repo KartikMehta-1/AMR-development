@@ -103,15 +103,14 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
     PC1     ------> ADC1_IN11
     PB0     ------> ADC1_IN8
     */
-    GPIO_InitStruct.Pin = CURR_R_SENSE_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(CURR_R_SENSE_GPIO_Port, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = CURR_L_SENSE_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pin = CURR_L_SENSE_Pin;   // PB0 / ADC1_IN8 (left current)
     HAL_GPIO_Init(CURR_L_SENSE_GPIO_Port, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = CURR_R_SENSE_Pin;   // PC1 / ADC1_IN11 (right current)
+    HAL_GPIO_Init(CURR_R_SENSE_GPIO_Port, &GPIO_InitStruct);
 
     /* ADC1 DMA Init */
     /* ADC1 Init */

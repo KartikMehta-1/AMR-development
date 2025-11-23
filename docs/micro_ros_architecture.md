@@ -1,10 +1,10 @@
 # micro-ROS Integration Architecture
 
-Owner: Kartik Mehta
-Status: Draft — aligns with existing motor-control architecture
+Owner: Kartik Mehta  
+Status: Draft — aligns with existing motor-control architecture  
 Last Updated: 2025-11-06
 
-This page shows how micro-ROS sits above the STM32 motor-control firmware. Control loops stay in deterministic ISRs/ticks; micro‑ROS runs in RTOS tasks, exchanging data via mailboxes/queues.
+This page shows how micro-ROS sits above the STM32 motor-control firmware. Control loops stay in deterministic ISRs/ticks; micro-ROS runs in RTOS tasks, exchanging data via mailboxes/queues.
 
 ---
 
@@ -12,20 +12,20 @@ This page shows how micro-ROS sits above the STM32 motor-control firmware. Contr
 
 ```mermaid
 flowchart TD
-  subgraph ISRS[ISRs slash High-Rate Ticks]
-    ADCISR[ADC DMA Half slash Full ISR\nInner Tick 1–5 kHz]
-    TIMWISR[TIM Base ISR\nOuter Tick 100–200 Hz]
+  subgraph ISRS[ISRs / High-Rate Ticks]
+    ADCISR[ADC DMA Half / Full ISR\nInner Tick 1-5 kHz]
+    TIMWISR[TIM Base ISR\nOuter Tick 100-200 Hz]
   end
 
   subgraph CTRL[Control + IO]
-    CURMON[Current Monitor\noffset comma scale comma LPF]
+    CURMON[Current Monitor\noffset, scale, LPF]
     I_L[Inner Current PI Left]
     I_R[Inner Current PI Right]
     W_L[Outer Speed PI/PID Left]
     W_R[Outer Speed PI/PID Right]
     VEL[Velocity Estimator\nenc deltas to RPM]
-    SAFE[Safety Manager\nfault mask comma gating]
-    MODE[Mode Manager\nINIT slash IDLE slash ENABLED slash FAULT]
+    SAFE[Safety Manager\nfault mask, gating]
+    MODE[Mode Manager\nINIT / IDLE / ENABLED / FAULT]
     PWM1[PWM OUT TIM1 CH1]
     PWM2[PWM OUT TIM1 CH2]
     ENC[Encoders TIM2/TIM3]
@@ -34,23 +34,23 @@ flowchart TD
 
   subgraph TASKS[FreeRTOS Tasks]
     REXEC[ros_exec_task\nmicro-ROS executor]
-    RPUB[ros_pub_task\ntelemetry at 50–100 Hz]
+    RPUB[ros_pub_task\ntelemetry at 50-100 Hz]
     SAFET[optional safety_task\ndebounce and dwell timers]
   end
 
-  %% Sensors → Estimation
+  %% Sensors + Estimation
   ADC --> ADCISR
   ADCISR --> CURMON
   ENC --> TIMWISR
   TIMWISR --> VEL
 
-  %% Outer → Inner
+  %% Outer + Inner
   VEL --> W_L
   VEL --> W_R
   W_L --> I_L
   W_R --> I_R
 
-  %% Inner → Actuation
+  %% Inner + Actuation
   I_L --> PWM1
   I_R --> PWM2
 
@@ -76,9 +76,9 @@ flowchart TD
 ```
 
 Notes
-- ISRs own the time‑critical work; tasks never execute control math directly.
+- ISRs own the time-critical work; tasks never execute control math directly.
 - ROS callbacks write desired state into mailboxes; ticks read atomically.
-- Telemetry is decimated to 50–100 Hz in `ros_pub_task`.
+- Telemetry is decimated to 50-100 Hz in `ros_pub_task`.
 
 ---
 
@@ -109,29 +109,29 @@ flowchart LR
 
   %% Publications from MCU
   MNode --> UAgent --> Odometry:::tealPub
-  MNode -- /amr/wheel_state dash JointState or custom --> UAgent --> Odometry
-  MNode -- /amr/safety_state dash state and fault_mask --> UAgent --> SafetyMon
-  MNode -- /amr/power/battery dash optional --> UAgent --> SafetyMon
+  MNode -- /amr/wheel_state (JointState or custom) --> UAgent --> Odometry
+  MNode -- /amr/safety_state (state and fault_mask) --> UAgent --> SafetyMon
+  MNode -- /amr/power/battery (optional) --> UAgent --> SafetyMon
 
   classDef tealPub fill:#e6fffb,stroke:#00a3a3,color:#003333
 ```
 
 Topic and QoS suggestions
-- Sub: `/amr/wheel_cmd` dash left right speed or Twist. QoS dash reliable comma volatile. 50–100 Hz or on change.
-- Sub: `/amr/estop`, `/amr/enable`, `/amr/clear_fault` dash Bool or Empty or services. Reliable.
-- Pub: `/amr/wheel_state` dash JointState or custom best effort comma 50–100 Hz; include `position`, `velocity`, optional `effort` equals current.
-- Pub: `/amr/safety_state` reliable comma 10–50 Hz and on change; include `state` enum and `fault_mask`.
+- Sub: `/amr/wheel_cmd` — left/right speed or Twist. QoS: reliable, volatile. 50-100 Hz or on change.
+- Sub: `/amr/estop`, `/amr/enable`, `/amr/clear_fault` — Bool or Empty or services. Reliable.
+- Pub: `/amr/wheel_state` — JointState or custom. Best effort, 50-100 Hz; include `position`, `velocity`, optional `effort` = current.
+- Pub: `/amr/safety_state` — reliable, 10-50 Hz and on change; include `state` enum and `fault_mask`.
 
 Failure handling
 - Link loss or agent timeout transitions Mode to IDLE/FAULT after dwell; Safety gates PWM to 0.
-- Hardware E‑stop remains primary; topic estop augments it.
+- Hardware E-stop remains primary; topic estop augments it.
 
 ---
 
 ## Key Principles
 
 - Control math stays in deterministic ticks and ISRs. Tasks do not run control steps.
-- ROS I O is an interface layer. It only writes setpoints and reads snapshots.
+- ROS IO is an interface layer. It only writes setpoints and reads snapshots.
 - Safety has final say. Any unsafe state forces duty to zero through gating.
 - Determinism over throughput. Predictable loop timing beats maximum message rate.
 
@@ -145,7 +145,7 @@ Failure handling
 
 - Callbacks write to mailboxes. No locks on ISRs. Use single writer per field.
 - Ticks read a stable copy. Use double buffer or atomic swap on small fields.
-- Time tags are produced at source. Include t ms from MCU for each snapshot.
+- Time tags are produced at source. Include t_ms from MCU for each snapshot.
 
 ## Topic Map Summary
 

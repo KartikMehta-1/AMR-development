@@ -1,4 +1,4 @@
-# STM32 Firmware — Motor Control Diagrams
+# STM32 Firmware - Motor Control Diagrams
 
 This document explains the intended motor control model and how it maps to the STM32 firmware setup. It also notes current implementation status in the firmware. Updated to reflect a cascaded control structure: inner current loop and outer speed/position loop.
 
@@ -86,15 +86,15 @@ graph TD
 ```mermaid
 graph LR
   %% Control tick sequence (cascaded example)
-  TICK_I[Inner Tick 1–5 kHz]
-  TICK_W[Outer Tick 100–200 Hz]
+  TICK_I[Inner Tick 1-5 kHz]
+  TICK_W[Outer Tick 100-200 Hz]
   SAMPLE_I[Sample/Filter currents]
   READ_W[Read encoder counts]
   EST_W[Compute wheel velocity]
-  CTRL_W[Outer speed PI/PID → i_ref]
-  CTRL_I[Inner current PI → duty]
+  CTRL_W[Outer speed PI/PID + i_ref]
+  CTRL_I[Inner current PI + duty]
   APPLY[Update PWM duty]
-  TEL[Telemetry at 50–100 Hz]
+  TEL[Telemetry at 50-100 Hz]
 
   TICK_I --> SAMPLE_I
   SAMPLE_I --> CTRL_I
@@ -107,9 +107,9 @@ graph LR
   CTRL_W --> CTRL_I
 ```
 
-- Rates: inner current loop 1–5 kHz; outer speed loop 100–200 Hz.
+- Rates: inner current loop 1-5 kHz; outer speed loop 100-200 Hz.
 - ADC samples left/right motor currents for inner loop; encoder deltas compute velocity for outer loop.
-- Inner loop updates PWM; outer loop updates `i_ref`; telemetry decimated to ~50–100 Hz.
+- Inner loop updates PWM; outer loop updates `i_ref`; telemetry decimated to ~50-100 Hz.
 
 ```mermaid
 stateDiagram-v2
@@ -126,7 +126,7 @@ stateDiagram-v2
 - ENABLED: control loop active, PWM driving motors.
 - FAULT: outputs latched off until manual clear and safe.
 
-Implementation mapping (current → target)
+Implementation mapping (current + target)
 - PWM generation: `STM_Firmware_AMR_v2/Core/Src/main.c:242` initializes TIM1 with CH1 and CH2. `STM_Firmware_AMR_v2/Core/Src/motor.c` applies duty via compare registers.
 - Direction GPIO: `STM_Firmware_AMR_v2/Core/Src/main.c:471` configures PB4 and PB5 as outputs; `STM_Firmware_AMR_v2/Core/Src/motor.c` sets direction pins.
 - Encoders: `STM_Firmware_AMR_v2/Core/Src/main.c:311` TIM2 and `STM_Firmware_AMR_v2/Core/Src/main.c:360` TIM3 configured in encoder mode (filters enabled per `.ioc`).
@@ -135,7 +135,7 @@ Implementation mapping (current → target)
 
 Telemetry v2 (proposed additions)
 - Inner loop fields: `i_cmd`, `i_meas`, `i_err`, `i_p`, `i_i`, `i_out` and final `duty`.
-- Outer loop fields: `w_cmd`, `w_meas`, `w_err`, `w_p`, `w_i`, `w_d`, `i_ref`.
+- Outer loop fields: `w_cmd`, `w_meas`, `w_err`, `w_p`, `w_i`, `w_d`, `i_ref` (alias of `i_cmd`).
 
 Notes and next steps
 - Current firmware (v2 baseline) integrates PWM, encoders, and a single speed PID example. Cascaded implementation adds inner current PI and telemetry v2.
@@ -151,7 +151,7 @@ Fault table (proposed)
   - Action: Immediate FAULT; force PWM outputs to 0; ignore enable
   - Clear: E-stop released (inactive for >= 50 ms) and manual clear requested
 - OVERCURRENT_LEFT / OVERCURRENT_RIGHT
-  - Condition: Filtered current exceeds Ithresh_L/R for > T_over_ms (e.g., 20–50 ms)
+  - Condition: Filtered current exceeds Ithresh_L/R for > T_over_ms (e.g., 20-50 ms)
   - Action: FAULT; force PWM 0; record which side tripped
   - Clear: Current below Ithresh_clear for >= 200 ms and manual clear requested
 - ENCODER_TIMEOUT_LEFT / ENCODER_TIMEOUT_RIGHT
@@ -173,7 +173,7 @@ Fault table (proposed)
 
 Recommended thresholds (to be tuned)
 - Overcurrent Ithresh: based on motor/driver ratings; start with 1.2x nominal and time filter 25 ms
-- Encoder timeout T_enc_ms: 200–300 ms when |v_cmd| > small threshold
+- Encoder timeout T_enc_ms: 200-300 ms when |v_cmd| > small threshold
 - ADC stuck detection: 64 consecutive identical max/min codes or near-DC with zero variance
 - Under/Over-voltage: per battery chemistry; include hysteresis bands
 
@@ -194,7 +194,7 @@ Suggested fault mask (bit assignment)
 - Bit 6: SUPPLY_UNDERVOLT
 - Bit 7: SUPPLY_OVERVOLT
 - Bit 8: DRIVER_FAULT
-- Bits 9–15: reserved
+- Bits 9-15: reserved
 
 Telemetry
 - Include `state`, `fault_mask`, and debounced inputs in the 50 Hz telemetry frame for observability.
