@@ -1,0 +1,5 @@
+../Core/Src/current_sense.c:6:14:Current_FromRaw	1
+../Core/Src/current_sense.c:15:16:ReadAveragedCounts	6
+../Core/Src/current_sense.c:52:6:CurrentSense_Init	1
+../Core/Src/current_sense.c:62:6:CurrentSense_Calibrate	4
+../Core/Src/current_sense.c:85:9:CurrentSense_ReadFiltered	3
