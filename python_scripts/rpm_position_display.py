@@ -1,16 +1,63 @@
-import serial
-import matplotlib.pyplot as plt
+"""
+Live telemetry plotter for STM UART output.
+
+Assumes firmware prints lines like:
+#HEADER: t_ms,l_cnt,r_cnt,l_rpm_x10,r_rpm_x10,l_mA,r_mA
+<data rows...>
+
+Left/right RPM, duty (if present), and current are plotted in real time.
+"""
+
 from collections import deque
-import time
 import math
+import time
+
+import matplotlib.pyplot as plt
+import serial
 
 # =========================
 # USER CONFIG
 # =========================
-PORT = "COM4"           # <-- change to your STM32's COM port
-BAUD = 460800           # updated baud rate
-MAX_POINTS = 400        # number of samples shown
-REFRESH_INTERVAL = 0.1  # seconds between plot updates
+PORT = "COM4"            # <-- change to your STM32's COM port
+BAUD = 460800            # must match firmware UART2
+MAX_POINTS = 400         # number of samples shown
+REFRESH_INTERVAL = 0.05  # seconds between plot refresh
+
+
+# Helper: safe float conversion (non-numeric -> nan)
+def safe_float(val):
+  try:
+    return float(val)
+  except Exception:
+    try:
+      return float(str(val).strip())
+    except Exception:
+      return float("nan")
+
+
+def normalize_time(buffers):
+  """Return time axis in seconds, zeroed to first sample."""
+  if "t_ms" in buffers and len(buffers["t_ms"]) > 0:
+    t0 = buffers["t_ms"][0]
+    return [(v - t0) / 1000.0 for v in buffers["t_ms"]]
+  if "t" in buffers and len(buffers["t"]) > 0:
+    t0 = buffers["t"][0]
+    return [v - t0 for v in buffers["t"]]
+  n = len(next(iter(buffers.values())))
+  return list(range(n))
+
+
+def duty_from_buffer(buffers, keys):
+  """Extract duty (%) from any of the provided keys; handles 0-1 or 0-100."""
+  for k in keys:
+    if k not in buffers:
+      continue
+    arr = list(buffers[k])
+    if any((not math.isnan(v)) and v > 1.5 for v in arr):
+      return arr  # already in percent
+    return [v * 100.0 for v in arr]  # assume 0.0-1.0 -> percent
+  return []
+
 
 # =========================
 # INITIALIZE SERIAL
@@ -23,197 +70,118 @@ print("Waiting for header...")
 # WAIT FOR HEADER LINE
 # =========================
 headers = []
-test_name = None
+meta = {}
 
 while True:
-    line = ser.readline().decode(errors="ignore").strip()
-    if not line:
-        continue
-    if line.startswith("#HEADER:"):
-        # remove prefix and split on commas
-        parts = [p.strip() for p in line.replace("#HEADER:", "").split(",")]
-        numeric_headers = []
-        # extract any key=value pairs (e.g., test=Step) and remove them from numeric header list
-        for p in parts:
-            if "=" in p:
-                k, v = p.split("=", 1)
-                k = k.strip()
-                v = v.strip()
-                if k.lower() == "test":
-                    test_name = v
-                # ignore any key=value for numeric headers
-            else:
-                if p: numeric_headers.append(p)
-        headers = numeric_headers
-        print(f"Received header (test={test_name}): {headers}")
-        break
+  line = ser.readline().decode(errors="ignore").strip()
+  if not line:
+    continue
+  if line.startswith("#HEADER:"):
+    parts = [p.strip() for p in line.replace("#HEADER:", "").split(",")]
+    numeric_headers = []
+    for p in parts:
+      if "=" in p:
+        k, v = p.split("=", 1)
+        meta[k.strip().lower()] = v.strip()
+      elif p:
+        numeric_headers.append(p)
+    headers = numeric_headers
+    print(f"Received header: {headers} meta={meta}")
+    break
 
 if not headers:
-    raise SystemExit("No headers received. Check your STM telemetry '#HEADER:' output.")
+  ser.close()
+  raise SystemExit("No headers received. Check your STM telemetry '#HEADER:' output.")
 
 # Initialize data buffers
-buffers = {h: deque(maxlen=MAX_POINTS) for h in headers}
+buckets = {h: deque(maxlen=MAX_POINTS) for h in headers}
 
 # =========================
-# SETUP 2-COLUMN PLOTS
+# SETUP PLOTS (RPM, Duty, Current)
 # =========================
 plt.ion()
-fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
-fig.suptitle(f"Live PID Telemetry (baud={BAUD})    test={test_name}", fontsize=14, fontweight="bold")
+fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+fig.suptitle(f"Live Telemetry (baud={BAUD}) test={meta.get('test','')}", fontsize=14, fontweight="bold")
 
-# Flatten axes for easier access
-(ax_rpm, ax_p,
- ax_pwm_pid, ax_i,
- ax_err, ax_d) = axes.flatten()
+ax_rpm, ax_duty, ax_curr = axes
 
-# ---------- LEFT COLUMN ----------
-
-# 1️⃣ Target vs Measured RPM
-line_cmd, = ax_rpm.plot([], [], 'b--', label="Target RPM")
-line_meas, = ax_rpm.plot([], [], 'r-', label="Measured RPM")
+line_rpm_l, = ax_rpm.plot([], [], "r-", label="L RPM")
+line_rpm_r, = ax_rpm.plot([], [], "b-", label="R RPM")
 ax_rpm.set_ylabel("RPM")
 ax_rpm.legend(loc="upper right")
 ax_rpm.grid(True)
 
-# 2️⃣ PWM vs P+I+D
-line_pwm, = ax_pwm_pid.plot([], [], 'g-', label="PWM Output")
-line_pid_sum, = ax_pwm_pid.plot([], [], 'k--', label="P+I+D Sum")
-ax_pwm_pid.set_ylabel("PWM / PID Sum")
-ax_pwm_pid.legend(loc="upper right")
-ax_pwm_pid.grid(True)
+line_duty_l, = ax_duty.plot([], [], "r-", label="L Duty (%)")
+line_duty_r, = ax_duty.plot([], [], "b-", label="R Duty (%)")
+ax_duty.set_ylabel("Duty (%)")
+ax_duty.legend(loc="upper right")
+ax_duty.grid(True)
 
-# 3️⃣ Error
-line_err, = ax_err.plot([], [], 'm-', label="Error (RPM)")
-ax_err.set_ylabel("Error")
-ax_err.set_xlabel("Time (s)")
-ax_err.legend(loc="upper right")
-ax_err.grid(True)
-
-# ---------- RIGHT COLUMN ----------
-
-# 4️⃣ P Term
-line_p, = ax_p.plot([], [], 'c-', label="P Term")
-ax_p.set_ylabel("P")
-ax_p.legend(loc="upper right")
-ax_p.grid(True)
-
-# 5️⃣ I Term
-line_i, = ax_i.plot([], [], 'y-', label="I Term")
-ax_i.set_ylabel("I")
-ax_i.legend(loc="upper right")
-ax_i.grid(True)
-
-# 6️⃣ D Term
-line_d, = ax_d.plot([], [], 'orange', label="D Term")
-ax_d.set_ylabel("D")
-ax_d.set_xlabel("Time (s)")
-ax_d.legend(loc="upper right")
-ax_d.grid(True)
+line_curr_l, = ax_curr.plot([], [], "r-", label="L Current (A)")
+line_curr_r, = ax_curr.plot([], [], "b-", label="R Current (A)")
+ax_curr.set_ylabel("Current (A)")
+ax_curr.set_xlabel("Time (s)")
+ax_curr.legend(loc="upper right")
+ax_curr.grid(True)
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 print("Streaming data... Press Ctrl+C to stop.\n")
-
-# Helper: safe float conversion (non-numeric -> nan)
-def safe_float(s):
-    try:
-        return float(s)
-    except Exception:
-        # handle empty or non-numeric fields gracefully
-        try:
-            # try to handle integers with stray chars
-            return float(s.strip())
-        except Exception:
-            return float("nan")
-
-# Quick check that required fields exist (not strictly necessary but nice)
-required = {"t", "cmd", "meas", "err", "p", "i", "d", "pwm"}
-missing = required - set(headers)
-if missing:
-    print("Warning: some expected fields are missing from header:", missing)
-    # we will still try to plot what we can
 
 # =========================
 # STREAM + PLOT LOOP
 # =========================
 try:
-    while True:
-        line = ser.readline().decode(errors='ignore').strip()
-        if not line:
-            continue
+  while True:
+    line = ser.readline().decode(errors="ignore").strip()
+    if not line:
+      continue
 
-        # ignore header echo lines; handle updated headers dynamically if needed
-        if line.startswith("#HEADER:"):
-            # optional: handle header re-send mid-stream - simple approach: ignore or rebuild
-            # For simplicity we ignore repeated headers (you can add logic to rebuild buffers here)
-            continue
+    if line.startswith("#HEADER:") or line.startswith("#"):
+      continue  # ignore comments/redundant headers
 
-        # skip comments
-        if line.startswith("#"):
-            continue
+    values = [v.strip() for v in line.split(",")]
+    if len(values) != len(headers):
+      continue  # skip malformed lines
 
-        values = [v.strip() for v in line.split(",")]
-        if len(values) != len(headers):
-            # mismatch — ignore this row (could be spurious)
-            # optionally, print for debugging:
-            # print("Skipping line (len mismatch):", line)
-            continue
+    parsed = {h: safe_float(v) for h, v in zip(headers, values)}
+    for h in headers:
+      buckets[h].append(parsed[h])
 
-        # parse floats into dict
-        parsed = {}
-        for h, v in zip(headers, values):
-            parsed[h] = safe_float(v)
+    if len(next(iter(buckets.values()))) < 2:
+      continue
 
-        # append into buffers (only fields present in header)
-        for h in headers:
-            buffers[h].append(parsed[h])
+    t = normalize_time(buckets)
 
-        # need at least two samples to plot
-        if "t" not in buffers or len(buffers["t"]) < 2:
-            continue
+    # RPM (x10 fields -> RPM)
+    l_rpm = [v / 10.0 for v in buckets.get("l_rpm_x10", [])] if "l_rpm_x10" in buckets else []
+    r_rpm = [v / 10.0 for v in buckets.get("r_rpm_x10", [])] if "r_rpm_x10" in buckets else []
 
-        # Extract time axis and lists (use get with default zeros if missing)
-        t = list(buffers.get("t", []))
-        cmd = list(buffers.get("cmd", [float("nan")] * len(t)))
-        meas = list(buffers.get("meas", [float("nan")] * len(t)))
-        err = list(buffers.get("err", [float("nan")] * len(t)))
-        pwm = list(buffers.get("pwm", [float("nan")] * len(t)))
-        p = list(buffers.get("p", [float("nan")] * len(t)))
-        i = list(buffers.get("i", [float("nan")] * len(t)))
-        d = list(buffers.get("d", [float("nan")] * len(t)))
+    # Duty percent (if available)
+    l_duty = duty_from_buffer(buckets, ["l_duty_pct", "l_duty", "pwm_left", "pwm_l"])
+    r_duty = duty_from_buffer(buckets, ["r_duty_pct", "r_duty", "pwm_right", "pwm_r"])
 
-        # Compute pid sum safely (handle NaNs)
-        pid_sum = []
-        for j in range(len(t)):
-            pj = p[j] if j < len(p) else float("nan")
-            ij = i[j] if j < len(i) else float("nan")
-            dj = d[j] if j < len(d) else float("nan")
-            s = 0.0
-            s += 0.0 if math.isnan(pj) else pj
-            s += 0.0 if math.isnan(ij) else ij
-            s += 0.0 if math.isnan(dj) else dj
-            pid_sum.append(s)
+    # Currents (mA -> A)
+    l_cur = [v / 1000.0 for v in buckets.get("l_mA", [])] if "l_mA" in buckets else []
+    r_cur = [v / 1000.0 for v in buckets.get("r_mA", [])] if "r_mA" in buckets else []
 
-        # --- Update plots ---
-        line_cmd.set_data(t, cmd)
-        line_meas.set_data(t, meas)
-        line_pwm.set_data(t, pwm)
-        line_pid_sum.set_data(t, pid_sum)
-        line_err.set_data(t, err)
-        line_p.set_data(t, p)
-        line_i.set_data(t, i)
-        line_d.set_data(t, d)
+    line_rpm_l.set_data(t[:len(l_rpm)], l_rpm)
+    line_rpm_r.set_data(t[:len(r_rpm)], r_rpm)
 
-        # Auto-scale each axis
-        for ax in axes.flatten():
-            ax.relim()
-            ax.autoscale_view()
+    line_duty_l.set_data(t[:len(l_duty)], l_duty)
+    line_duty_r.set_data(t[:len(r_duty)], r_duty)
 
-        plt.pause(REFRESH_INTERVAL)
+    line_curr_l.set_data(t[:len(l_cur)], l_cur)
+    line_curr_r.set_data(t[:len(r_cur)], r_cur)
+
+    for ax in axes:
+      ax.relim()
+      ax.autoscale_view()
+
+    plt.pause(REFRESH_INTERVAL)
 
 except KeyboardInterrupt:
-    print("\nStopped by user.")
-
+  print("\nStopped by user.")
 finally:
-    ser.close()
-    plt.ioff()
-    plt.show()
+  ser.close()
+  plt.ioff()
+  plt.show()

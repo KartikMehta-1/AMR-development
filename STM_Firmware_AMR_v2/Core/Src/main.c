@@ -35,12 +35,18 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-// Current sensor scaling (ACS758 50B @5 V; divider 10k top / 15k bottom)
+// Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
 #define ADC_VREF_VOLTS        3.3f
 #define ADC_MAX_COUNTS        4095.0f
-#define CURR_DIVIDER_RATIO    0.667f   // Vadc = 0.600 * Vsense
+#define ADC_MID_COUNTS        2048U
+#define CURR_DIVIDER_RATIO    0.667f   // Vadc = 0.667 * Vsense (5 V -> ~3.3 V)
 #define CURR_ZERO_VOLTS       2.5f     // sensor Vout at 0 A (before divider)
 #define CURR_SENS_VOLTS_PER_A 0.040f   // 40 mV/A @ 5 V supply
+#define CURR_ZERO_SAMPLES     64U      // samples to average for zero offset
+#define CURR_AVG_SAMPLES      8U       // oversample to reduce noise without analog RC
+#define LEFT_CURR_POLARITY    1        // set -1 to flip left current sign
+#define RIGHT_CURR_POLARITY   -1       // set -1 to flip right current sign
+#define CURR_LPF_ALPHA        0.2f     // low-pass filter alpha (0..1), higher = less smoothing
 
 /* USER CODE END PD */
 
@@ -73,6 +79,11 @@ static uint32_t last_header_tick = 0;
 static char uart_buf[160];
 static EncoderChannel enc_left;
 static EncoderChannel enc_right;
+static uint16_t curr_zero_left = ADC_MID_COUNTS;
+static uint16_t curr_zero_right = ADC_MID_COUNTS;
+static float curr_l_filt_mA = 0.0f;
+static float curr_r_filt_mA = 0.0f;
+static uint8_t curr_filt_init = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,34 +103,74 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN 0 */
 
 // Convert raw ADC counts to current in amperes for ACS758 with 10k/20k divider
-static float Current_FromRaw(uint16_t adc_counts)
+static float Current_FromRaw(uint16_t adc_counts, uint16_t zero_counts)
 {
-  float vadc = (adc_counts * ADC_VREF_VOLTS) / ADC_MAX_COUNTS;
-  float vsense = vadc / CURR_DIVIDER_RATIO;
-  return (vsense - CURR_ZERO_VOLTS) / CURR_SENS_VOLTS_PER_A;
+  float vadc = ((float)adc_counts * ADC_VREF_VOLTS) / ADC_MAX_COUNTS;
+  float vadc_zero = ((float)zero_counts * ADC_VREF_VOLTS) / ADC_MAX_COUNTS;
+  float vsense = (vadc - vadc_zero) / CURR_DIVIDER_RATIO;
+  return vsense / CURR_SENS_VOLTS_PER_A;
 }
 
 // Read both current channels (rank1: PB0 left, rank2: PC1 right); returns 1 on success
 static uint8_t ReadCurrents(uint16_t* left_counts, uint16_t* right_counts)
 {
-  if (HAL_ADC_Start(&hadc1) != HAL_OK) {
-    return 0;
-  }
+  uint32_t acc_l = 0, acc_r = 0, good = 0;
 
-  if (HAL_ADC_PollForConversion(&hadc1, 5) != HAL_OK) {
+  for (uint32_t i = 0; i < CURR_AVG_SAMPLES; ++i) {
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) {
+      HAL_ADC_Stop(&hadc1);
+      continue;
+    }
+
+    if (HAL_ADC_PollForConversion(&hadc1, 5) != HAL_OK) {
+      HAL_ADC_Stop(&hadc1);
+      continue;
+    }
+    uint16_t l = (uint16_t)HAL_ADC_GetValue(&hadc1);
+
+    if (HAL_ADC_PollForConversion(&hadc1, 5) != HAL_OK) {
+      HAL_ADC_Stop(&hadc1);
+      continue;
+    }
+    uint16_t r = (uint16_t)HAL_ADC_GetValue(&hadc1);
+
     HAL_ADC_Stop(&hadc1);
+    acc_l += l;
+    acc_r += r;
+    good++;
+  }
+
+  if (good == 0) {
     return 0;
   }
-  *left_counts = (uint16_t)HAL_ADC_GetValue(&hadc1);
 
-  if (HAL_ADC_PollForConversion(&hadc1, 5) != HAL_OK) {
-    HAL_ADC_Stop(&hadc1);
-    return 0;
-  }
-  *right_counts = (uint16_t)HAL_ADC_GetValue(&hadc1);
-
-  HAL_ADC_Stop(&hadc1);
+  *left_counts = (uint16_t)(acc_l / good);
+  *right_counts = (uint16_t)(acc_r / good);
   return 1;
+}
+
+// Average ADC samples (motors off) to capture zero-current offsets
+static void Current_CalibrateZero(uint16_t* zero_left, uint16_t* zero_right)
+{
+  uint32_t acc_l = 0, acc_r = 0, good = 0;
+  for (uint32_t i = 0; i < CURR_ZERO_SAMPLES; ++i) {
+    uint16_t l = 0, r = 0;
+    if (ReadCurrents(&l, &r)) {
+      acc_l += l;
+      acc_r += r;
+      good++;
+    }
+    HAL_Delay(1);
+  }
+
+  if (good == 0) {
+    *zero_left = ADC_MID_COUNTS;
+    *zero_right = ADC_MID_COUNTS;
+    return;
+  }
+
+  *zero_left = (uint16_t)(acc_l / good);
+  *zero_right = (uint16_t)(acc_r / good);
 }
 /* USER CODE END 0 */
 
@@ -166,12 +217,19 @@ int main(void)
   // Left motor (M1): PA8 PWM (TIM1_CH1), PB4 DIR
   Motor_Init(&m_left, &htim1, TIM_CHANNEL_1, DIR_LEFT_GPIO_Port, DIR_LEFT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
   Motor_SetDirection(&m_left, LEFT_DIR_POLARITY);   // forward (adjust if wiring requires inversion)
-  Motor_SetDuty(&m_left, 0.10f);    // 10% duty
-  Motor_Start(&m_left);
+  Motor_SetDuty(&m_left, 0.0f);     // keep off for zero-cal
 
   // Right motor (M2): PA9 PWM (TIM1_CH2), PB5 DIR
   Motor_Init(&m_right, &htim1, TIM_CHANNEL_2, DIR_RIGHT_GPIO_Port, DIR_RIGHT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
   Motor_SetDirection(&m_right, RIGHT_DIR_POLARITY);  // forward (adjust if wiring requires inversion)
+  Motor_SetDuty(&m_right, 0.0f);    // keep off for zero-cal
+
+  // Measure zero-current ADC offsets with outputs disabled
+  Current_CalibrateZero(&curr_zero_left, &curr_zero_right);
+
+  // Now drive motors
+  Motor_SetDuty(&m_left, 0.10f);    // 10% duty
+  Motor_Start(&m_left);
   Motor_SetDuty(&m_right, 0.10f);   // 10% duty
   Motor_Start(&m_right);
 
@@ -206,34 +264,58 @@ int main(void)
 
       uint32_t cnt_l_now = Encoder_GetRawCount(&enc_left);
       uint32_t cnt_r_now = Encoder_GetRawCount(&enc_right);
+      // Compute commanded duty (percent) from timer compare
+      float duty_l = 0.0f;
+      float duty_r = 0.0f;
+      uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
+      if (arr > 0U) {
+        duty_l = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1) * 100.0f) / (float)(arr + 1U);
+        duty_r = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2) * 100.0f) / (float)(arr + 1U);
+      }
       // Compute motor currents in mA (integer for lightweight printing)
       int32_t curr_l_mA = 0;
       int32_t curr_r_mA = 0;
       if (adc_ok) {
-        curr_l_mA = (int32_t)(Current_FromRaw(adc_left) * 1000.0f);
-        curr_r_mA = (int32_t)(Current_FromRaw(adc_right) * 1000.0f);
+        curr_l_mA = (int32_t)(Current_FromRaw(adc_left, curr_zero_left) * 1000.0f) * LEFT_CURR_POLARITY;
+        curr_r_mA = (int32_t)(Current_FromRaw(adc_right, curr_zero_right) * 1000.0f) * RIGHT_CURR_POLARITY;
       }
+      // Simple low-pass filter to calm noise before printing
+      if (!curr_filt_init) {
+        curr_l_filt_mA = (float)curr_l_mA;
+        curr_r_filt_mA = (float)curr_r_mA;
+        curr_filt_init = 1;
+      } else {
+        curr_l_filt_mA += CURR_LPF_ALPHA * ((float)curr_l_mA - curr_l_filt_mA);
+        curr_r_filt_mA += CURR_LPF_ALPHA * ((float)curr_r_mA - curr_r_filt_mA);
+      }
+      int32_t curr_l_mA_out = (int32_t)curr_l_filt_mA;
+      int32_t curr_r_mA_out = (int32_t)curr_r_filt_mA;
 
 
 
       // Compute fixed-point RPM (×10) to avoid float printf requirements
       int32_t rpm_l_x10 = (int32_t)(Encoder_GetRPM(&enc_left) * 10.0f);
       int32_t rpm_r_x10 = (int32_t)(Encoder_GetRPM(&enc_right) * 10.0f);
+      int32_t duty_l_pct = (int32_t)duty_l;
+      int32_t duty_r_pct = (int32_t)duty_r;
+
 
       // Periodic header every 10s
       if ((now - last_header_tick) > 10000U) {
-        int hlen = snprintf(uart_buf, sizeof(uart_buf), "#HEADER: t_ms,l_cnt,r_cnt,l_rpm_x10,r_rpm_x10,l_mA,r_mA\r\n");
+        int hlen = snprintf(uart_buf, sizeof(uart_buf), "#HEADER: t_ms,l_cnt,r_cnt,l_rpm_x10,r_rpm_x10,l_duty_pct,r_duty_pct,l_mA,r_mA\r\n");
         if (hlen > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)hlen, HAL_MAX_DELAY);
         last_header_tick = now;
       }
-      int len = snprintf(uart_buf, sizeof(uart_buf), "%lu,%lu,%lu,%ld,%ld,%ld,%ld\r\n",
+      int len = snprintf(uart_buf, sizeof(uart_buf), "%lu,%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld\r\n",
                          (unsigned long)now,
                          (unsigned long)cnt_l_now,
                          (unsigned long)cnt_r_now,
                          (long)rpm_l_x10,
                          (long)rpm_r_x10,
-                         (long)curr_l_mA,
-                         (long)curr_r_mA);
+                         (long)duty_l_pct,
+                         (long)duty_r_pct,
+                         (long)curr_l_mA_out,
+                         (long)curr_r_mA_out);
       if (len > 0) HAL_UART_Transmit(&huart2, (uint8_t*)uart_buf, (uint16_t)len, HAL_MAX_DELAY);
     }
   }

@@ -158,3 +158,4 @@ Consequences: Redesign mount; add airflow
 
 ## Change Log
 - 2025-10-28: Marked Week 2 ADC as skipped; set Week 8 next focus to E-stop feature; added Final Drivetrain Migration step; noted flexible timeline and PCB as optional.
+- 2025-11-XX: Started AMR CAD assembly with dual SO101 arm manipulators mounted; initial rough layout committed to repo.

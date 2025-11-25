@@ -1,7 +1,7 @@
 # AMR Mechanical CAD Tasks (Chassis, Mounts, Assembly)
 
 Owner: Kartik Mehta
-Status: Planned
+Status: In progress (initial assembly started)
 Last Updated: 2025-11-04
 
 Objectives
@@ -26,6 +26,8 @@ Tasks
   - YDLidar G4 mount (level, 360° FOV)
   - RealSense D455 front mount (rigid, vibration-damped, unobstructed)
   - Proximity sensor brackets (x8) with consistent field of view
+- Manipulators
+  - Integrate dual SO101 arm manipulators on AMR top plate; verify clearances, wiring paths, and fastener patterns
 - Cable routing and strain relief
   - Define harness paths; add tie-down points; grommets for pass-through
   - Separate power vs signal; add labels/markers
@@ -38,6 +40,7 @@ Tasks
 File organization
 - Use the existing `CAD/` folder:
   - `CAD/assembly/` — full assembly
+  - `CAD/assembly/AMR_with_SO101` — current working assembly with dual manipulators
   - `CAD/components/` — vendor/imported STP (Jetson, LiDAR, D455, etc.)
   - `CAD/plates_brackets/` — custom plates/brackets
   - `CAD/drawings/` — DXF/PDF drawings
@@ -47,4 +50,3 @@ Notes
 - Keep sensor lines of sight clear; include FOV cones in the CAD to validate.
 - Account for thermal management (driver heat sink, Jetson airflow) and serviceability.
 - Align hole patterns to be symmetric and forgiving for tolerances.
-
