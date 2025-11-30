@@ -220,7 +220,7 @@ current_sensors:
   placement: series_with_each_motor_supply
   output_interface: analog_single_ended
   variant: ACS758LCB-050B
-  sensitivity_mV_per_A: 40     # @5 V; ~24 mV/A at ADC after divider
+  sensitivity_mV_per_A: 40     # @5 V; ~26.7 mV/A at ADC after 0.667 divider
   zero_current_offset_volts: ratiometric_to_vcc_over_2
   wiring_notes:
     - Keep high-current paths short; use appropriate gauge and creepage/clearance.

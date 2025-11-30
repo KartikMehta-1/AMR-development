@@ -40,7 +40,7 @@ Wiring intent
 
 - Placement: One module per motor supply line; wire IP+ and IP- in series with each wheel feed.
 - Power: Vcc = 5 V; GND common with STM32. Add 0.1 uF decoupling at the sensor.
-- Sense output: Vout into a 10 kOhm top resistor and 15 kOhm bottom to GND; tap the midpoint to ADC (PB0 left, PC1 right) to keep ADC under 3.3 V at 5 V Vout.
+- Sense output: Vout into a 10 kOhm top resistor and 20 kOhm bottom to GND; tap the midpoint to ADC (PB0 left, PC1 right). Divider ratio is 20k / (10k+20k) ~ 0.667 so 0-5 V from the sensor becomes ~0-3.33 V at the ADC.
 - Filter: Add 1 kOhm series plus 100 nF to GND after the divider to reduce PWM ripple.
 - Layout: Keep the IP+/IP- loop short and away from signal wiring; route Vout away from motor leads.
 
@@ -88,7 +88,7 @@ graph TD
   GNDALL -.-> MCU
   GNDALL -.-> JET
   GNDALL -.-> Encoders
-  GNDALL -.-> Currents to ADC
+  GNDALL -.-> CurrentstoADC
 ```
 
 Notes
@@ -229,7 +229,7 @@ Hardware
 - Sensor: ACS758 (variant TBD per current range) installed in series with each motor power line (left/right).
 - Supply: 5.0 V recommended; output is ratiometric (~Vcc/2 at 0 A).
 - Output conditioning to STM32 ADC:
-  - Resistor divider: 10 kOhm (top) + 15 kOhm (bottom) -> scales 0-5 V to ~0-3.0 V (see `docs/pin_map.yaml`).
+  - Resistor divider: 10 kOhm (top) + 20 kOhm (bottom) -> scales 0-5 V to ~0-3.33 V (see `docs/pin_map.yaml`).
   - RC filter: 1 kOhm series + 100 nF to ground after divider (fc ~1.6 kHz) to reduce PWM ripple/EMI.
   - ADC pins: `PB0 / ADC1_IN8` (Left current), `PC1 / ADC1_IN11` (Right current).
   - Sampling: ADC1 with DMA in circular mode for periodic current reads.
@@ -237,10 +237,10 @@ Hardware
 - Grounding: Star-point ground; keep sensor Vout return clean and away from high di/dt loops.
 
 Calibration and math
-- Zero offset (at 0 A): ~Vcc/2 at sensor output; after divider ~0.6 * (Vcc/2).
-- Sensitivity (mV/A): depends on variant (e.g., ~40 mV/A for +/-50 A). Confirm actual part.
+- Zero offset (at 0 A): ~Vcc/2 at sensor output; after divider ~0.667 * (Vcc/2) ~ Vcc/3 (~1.67 V when Vcc=5 V).
+- Sensitivity (mV/A): depends on variant (e.g., ~40 mV/A for +/-50 A). Confirm actual part; ADC sees ~26.7 mV/A after the 0.667 divider.
 - Formula (at sensor output): I[A] = (Vout - Vcc/2) / Sensitivity.
-- With divider (ratio ~0.6): I[A] = ((Vadc/0.6) - Vcc/2) / Sensitivity.
+- With divider (ratio ~0.667): I[A] = ((Vadc/0.667) - Vcc/2) / Sensitivity.
 - Firmware should estimate Vcc (5 V) or measure the ADC reference to compensate ratiometric behavior.
 
 Safety and layout
