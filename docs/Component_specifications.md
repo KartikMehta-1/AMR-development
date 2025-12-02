@@ -199,6 +199,20 @@ Notes
 
 ---
 
+## 14. Pack Voltage Display
+**Model:** DSN-DVM/DUM-368 (2-wire or 3-wire LED voltmeter)
+
+| Parameter | Value |
+|------------|--------|
+| Supply/Input Range | ~4.5 - 30 V DC (self-powered from measured line) |
+| Display | 0.36 in LED, typically red |
+| Accuracy | ~±1% FS (verify per batch; calibrate if needed) |
+| Wiring | 2-wire: Red = V+, Black = GND (senses its own supply). 3-wire variant: Red = V+, Black = GND, Yellow = sense (tie to Red if single-line). |
+| Mounting | Panel mount with bezel; cutout sized for module |
+| Notes | Connect after main power switch so the display is off when the robot is off; fuse the feed if run separately. |
+
+---
+
 ## 13. DC-DC Converters
 Three supplies recommended; exact models TBD.
 

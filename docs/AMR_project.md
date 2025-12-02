@@ -46,7 +46,11 @@ Legend: Done, In Progress, Partial, Planned, Blocked
 | 22 | System Tests & CI | Planned | Sim integration tests; logging/bagging; performance dashboards; dockerized CI pipeline. |
 | 23 | Field Bring-up | Planned | On-robot tests: drive, stop, obstacle detection; telemetry review; safety validation. |
 | 24 | Polish & Docs | Planned | User/developer docs; scripts; troubleshooting; backlog triage. |
-
+| 25 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
+| 26 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
+| 27 | Custom Motor Driver Integration | Planned | Drop Cytron; design dual H-bridge with gate driver (e.g., DRV87xx) + MOSFETs + shunt/Hall sensing; protection (TVS/fuse/reverse); thermal + EMC checks. |
+| 28 | Bare MCU Integration | Planned | Replace Nucleo with bare STM32F401: crystal, boot config, SWD header, decoupling, ESD/TVS/brownout; firmware port and bring-up (clocks/debug/motor control). |
+| 29 | EMC & Production Prep | Planned | 4-layer stack, split/stitched grounds, Kelvin/star grounds, common-mode chokes + TVS, test points, silks/labels, panelization; pre-scan EMC/ESD; pilot build (5-10 units). |
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
 ---
@@ -68,6 +72,15 @@ Status: See the Status Summary above and task-by-task statuses in docs/AMR_firmw
 - Validation (W16): E-stop latency <= 50 ms; current-limit interaction stable under step loads
 - SLAM demo (W18): Successful nav in mapped area for ~15 min without collision or watchdog resets
 
+---
+
+## PCB Migration Milestones (dev boards -> integrated AMR control PCB)
+- Conceptual architecture (target end-state): Define final board contents (STM32/bare MCU or SOM, dual motor stage, buck rails 12->5->3.3 V, encoder conditioning, current sense, battery protection, all IO connectors, CAN/UART/RS485/I2C). This is the "Cytron + Nucleo + buck + encoder + UART + IO" rolled into one.
+- Phase A - Measure on dev boards: With Nucleo + Cytron + XL4016, capture real currents (continuous/peak), encoder voltage tolerance/noise, UART/CAN bandwidth, EMI/ground noise patterns, ADC resolution needs, harness lengths and connector types. This produces the electrical requirements doc.
+- Phase B - Consolidation carrier PCB: Keep Nucleo + Cytron + external buck, but design a carrier/backplane that handles connectors, power distribution, current sensing, ferrite/filter caps, and ground planes to organize wiring and validate signal/power integrity.
+- Phase C - Integrate motor driver: Drop Cytron; design your own dual H-bridge with gate driver (e.g., DRV87xx) + MOSFETs + shunts/Hall sensors. Validate thermals, switching, protection (TVS/fuse/reverse), and EMC.
+- Phase D - Integrate MCU: Replace Nucleo with bare STM32F401 (LQFP-64): crystal, boot config, SWD header, decoupling, ESD/TVS, brownout protection. Port firmware; bring-up clocks, debug, boot, and motor control.
+- Phase E - Production/EMC-ready: Move to 4-layer, split/stitched grounds, Kelvin sensing, star grounds, TVS + common-mode chokes, reverse/fuse protection, panelization notes, silks/labels, test points. Run pre-scan EMC/ESD and pilot build (5-10 boards) with harnesses and acceptance tests.
 ---
 
 ## Metrics
@@ -159,3 +172,5 @@ Consequences: Redesign mount; add airflow
 ## Change Log
 - 2025-10-28: Marked Week 2 ADC as skipped; set Week 8 next focus to E-stop feature; added Final Drivetrain Migration step; noted flexible timeline and PCB as optional.
 - 2025-11-XX: Started AMR CAD assembly with dual SO101 arm manipulators mounted; initial rough layout committed to repo.
+- 2025-11-XX: Added main power switch at pack output ahead of fuse/E-Stop; updated hardware block diagram accordingly.
+- 2025-11-XX: Added DSN-DVM/DUM-368 battery voltage display (fed after main switch) to specs and wiring docs.

@@ -8,11 +8,12 @@ This document captures the practical wiring plan for the AMR project: power dist
 
 - Battery: 12.8 V LiFePO4 4S, 18 Ah (pack has basic internal BMS)
   - Main Fuse: size for expected peak (e.g., 30-40 A slow-blow for current drivetrain; revisit after measurements)
-  - Main Switch / E-stop contactor (see E-stop section)
+  - Main switch to cut all rails (upstream of fuse/E-stop); E-stop contactor in motor path (see E-stop section)
   - Branches:
     - Motor Power Bus + Motor Driver VM (Cytron MDD20A)
     - DC-DC Buck + 5 V Rail (Jetson Nano, USB hub)
     - DC-DC Buck + 5 V/12 V Rails for sensors (LiDAR, depth cam, proximity)
+  - Battery voltage display (DSN-DVM-368) fed after main switch so it is off when the robot is off
 
 Notes
 - Use star ground: join motor return, STM32 GND, Jetson GND, and sensor grounds at a solid common point.
@@ -27,6 +28,7 @@ Notes
 
 Voltage monitoring (optional)
 - Add a resistive divider from pack P+/P- to an ADC input (on STM32 or a small monitor) to estimate state of charge and low-voltage cutoff warnings. Choose values to keep ADC input under 3.3 V at 14.6 V full charge.
+- Optional panel display: DSN-DVM/DUM-368 wired after the main switch across pack P+/P- for at-a-glance pack voltage; goes dark when the main switch is off (2-wire variant is self-powered; 3-wire adds separate sense lead).
 
 Wiring intent
 - Battery/BMS + Main Fuse + E-stop + Motor Power Bus + Motor driver VM.
@@ -50,9 +52,11 @@ Wiring intent
 
 ```mermaid
 graph TD
-  BATT[12.8 V LiFePO4<br/>B+/B-] --> FUSE[Main Fuse]
+  BATT[12.8 V LiFePO4<br/>B+/B-] --> MSW[Main Switch]
+  MSW --> FUSE[Main Fuse]
   FUSE --> ESTOP[E-stop / Switch]
   ESTOP --> VM[Motor Power Bus]
+  MSW --> DVM[DSN-DVM-368 Volt Display]
   VM --> CS_L[ACS758L Left<br/>IP+ + IP-]
   VM --> CS_R[ACS758R Right<br/>IP+ + IP-]
   CS_L --> MDD_L[MDD20A M1 VM]
