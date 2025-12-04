@@ -13,6 +13,10 @@ typedef struct {
   int32_t rpm_r_x10;
   int32_t duty_l_pct;
   int32_t duty_r_pct;
+  uint16_t adc_l_counts;
+  uint16_t adc_r_counts;
+  uint16_t zero_l_counts;
+  uint16_t zero_r_counts;
   int32_t curr_l_mA;
   int32_t curr_r_mA;
 } TelemetryFrame;

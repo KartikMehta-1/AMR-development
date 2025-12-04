@@ -16,8 +16,8 @@ graph TD
   %% DC-DC supplies and rails
   subgraph Power_Supplies
     MPBUS[Motor Bus 12-14.6V]
-    BUCK_JET[5V Buck Jetson/Hub ~6A XL4016]
-    BUCK_LOGIC[5V Buck Logic/Enc/Prox ~2A]
+    BUCK_JET[5V Buck Jetson/Hub ~6A XH-M401]
+    BUCK_LOGIC[5V Buck Logic/Enc/Prox ~2A LM2596]
     BUCK_12V[12V Buck Spare/Opt Sensors]
     ESTOP --> MPBUS
     MSW --> BUCK_JET
@@ -53,7 +53,7 @@ graph TD
     ENC_R[Right Encoder 600 PPR<br/>5V NPN OC]
     LIDAR[YDLidar G4<br/>USB, 5V from hub]
     DEPTH[RealSense D455<br/>USB 3, 5V from hub]
-    PROX[Proximity x8<br/>5V or 3.3V TBD]
+    PROX[Proximity x4<br/>CS100A ultrasonic 5V trig/echo]
   end
 
   %% Power distribution thick orange
@@ -91,3 +91,4 @@ graph TD
 - Power links are thick/orange; data/sense links are thinner/blue for quick visual separation.
 - Main power switch sits at pack output ahead of fuse and E-Stop for full isolation during service/storage.
 - Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off.
+- Proximity sensors: 4x CS100A ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; stagger triggers to avoid crosstalk.

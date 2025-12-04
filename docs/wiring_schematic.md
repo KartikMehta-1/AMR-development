@@ -11,8 +11,8 @@ This document captures the practical wiring plan for the AMR project: power dist
   - Main switch to cut all rails (upstream of fuse/E-stop); E-stop contactor in motor path (see E-stop section)
   - Branches:
     - Motor Power Bus + Motor Driver VM (Cytron MDD20A)
-    - DC-DC Buck + 5 V Rail (Jetson Nano, USB hub)
-    - DC-DC Buck + 5 V/12 V Rails for sensors (LiDAR, depth cam, proximity)
+    - DC-DC Buck 5 V (Jetson Nano, USB hub) — XH-M401 / XL4016 class
+    - DC-DC Buck 5 V/12 V for sensors (LiDAR, depth cam, CS100A proximity) — LM2596 for 5 V logic rail; 12 V optional if needed
   - Battery voltage display (DSN-DVM-368) fed after main switch so it is off when the robot is off
 
 Notes
@@ -32,8 +32,8 @@ Voltage monitoring (optional)
 
 Wiring intent
 - Battery/BMS + Main Fuse + E-stop + Motor Power Bus + Motor driver VM.
-- Battery/BMS + DC-DC 5 V Jetson + Jetson Nano, USB hub.
-- Battery/BMS + DC-DC 5 V Logic + STM32, proximity sensors.
+- Battery/BMS + DC-DC 5 V Jetson (XH-M401) + Jetson Nano, USB hub.
+- Battery/BMS + DC-DC 5 V Logic (LM2596) + STM32, proximity sensors.
 - Battery/BMS + DC-DC 12 V Sensors + 12 V sensors (if used).
 
 ---
@@ -84,9 +84,9 @@ graph TD
     CS_R_V[ACS758R Vout] -->|10k/20k divider + 1k/100nF| ADC_R[PC1 ADC1_IN11]
   end
 
-  VM --> BUCK5V[5 V Buck Jetson >=6-8 A]
+  VM --> BUCK5V[5 V Buck Jetson XH-M401 >=6-8 A]
   BUCK5V --> JET[Jetson + Powered Hub]
-  VM --> BUCK5V_LOGIC[5 V Buck Logic]
+  VM --> BUCK5V_LOGIC[5 V Buck Logic LM2596]
   BUCK5V_LOGIC --> MCU[STM32F401RE]
   GNDALL[GND star] -.-> MDD
   GNDALL -.-> MCU
@@ -184,7 +184,7 @@ Power (Jetson)
 
 - LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
 - Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
-- Proximity Sensors: Choose interface (GPIO/I2C/UART). Initial plan: connect to STM32 for real-time safety and integration; can later move to Jetson for ROS-level processing if needed.
+- Proximity Sensors: 4x CS100A ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; use 3.3 V-compatible echo or level-shift if echo drives 5 V.
 
 Notes
 - Use powered USB hub if multiple high-draw USB devices are attached.
@@ -192,36 +192,24 @@ Notes
 
 ---
 
-## 7) Proximity Sensors + STM32 (x8 planned)
+## 7) Proximity Sensors + STM32 (4x CS100A Ultrasonic)
 
-Goal: Obstruction detection around the AMR perimeter using 8 proximity sensors mounted near corners/edges.
+Goal: Obstruction detection around the AMR perimeter using 4 CS100A ultrasonic sensors mounted near corners/edges.
 
-Interfaces (choose per sensor model; to be finalized):
-- Digital GPIO (thresholded distance or presence):
-  - Each sensor -> 1x STM32 GPIO input
-  - Add pull-up/down as recommended; consider RC debounce (~1-5 ms)
-  - Pros: simple; Cons: less range resolution (binary)
-- Analog (voltage proportional to distance):
-  - Each sensor -> 1x STM32 ADC channel (0-3.3 V). Use resistor divider if sensor outputs 5 V
-  - Sample via round-robin scheduler; apply low-pass filtering
-  - Pros: simple wiring; Cons: uses many ADC channels
-- I2C (addressable rangefinders):
-  - Shared I2C bus (3.3 V level). If identical addresses, add I2C mux or per-sensor enable
-  - Power decoupling near each sensor; twisted pair for SCL/SDA to reduce noise
-- UART (less common for 8x):
-  - Requires multiplexing or shared UART with addressing; generally avoid if many sensors
+Interface and pin map (STM32 3.3 V GPIO):
+- S1 front_left: TRIG -> PC0, ECHO -> PA10 (level shift/divider on echo if 5 V)
+- S2 front_right: TRIG -> PC2, ECHO -> PA11 (level shift/divider on echo if 5 V)
+- S3 rear_left: TRIG -> PC3, ECHO -> PA12 (level shift/divider on echo if 5 V)
+- S4 rear_right: TRIG -> PB10, ECHO -> PA15 (level shift/divider on echo if 5 V)
+
+Timing
+- Stagger triggers (round-robin) to avoid crosstalk; add minimal dead time between pings.
 
 Power
-- Provide clean 5 V or 3.3 V rail as required by sensors (TBD current). Decouple locally (0.1 uF + 10 uF)
-- Route sensor returns to logic ground; avoid sharing high-current motor returns
+- 5 V supply from logic rail; decouple each module (0.1 uF + 10 uF); tie grounds to logic ground.
 
 Firmware notes
-- Driver will support 8 channels with sampling, debounce/filtering, timeout faulting, and obstacle event reporting
-- micro-ROS topic plan: `/amr/obstacles` (e.g., sensor_msgs/Range[] or custom)
-
-Schematic placeholders (to be finalized on sensor selection)
-- `S1..S8`: V+, GND, SIGNAL + STM32 (GPIO/ADC/I2C)
-- Pin assignments: TBD in `docs/pin_map.yaml` once sensor model/interface is chosen
+- Round-robin firing, timeout for no-echo, median/low-pass filtering; publish via `/amr/obstacles` (e.g., sensor_msgs/Range[]).
 
 ---
 
@@ -269,10 +257,10 @@ Safety and layout
 - Motor Driver:
   - Cytron MDD20A terminals: M1 PWM, M1 DIR, M2 PWM, M2 DIR, VM, GND, Motor outputs
 - Encoder: A, B, V+, GND (open-collector outputs with 3.3 V pull-ups)
-- Proximity Sensors (x8): V+, GND, SIGNAL to STM32 (GPIO/ADC/I2C) — exact interface TBD
+- Proximity Sensors (x4 CS100A): V+, GND, TRIG, ECHO to STM32 GPIOs (echo level-shift to 3.3 V if needed)
 - Jetson Nano: 5 V, GND, USB ports, J41 UART if used
 - YDLidar G4 / RealSense D455: USB to Jetson via powered hub; 5 V from sensor/USB rail
-- Proximity: USB/UART/I2C/GPIO as per model
+ - Proximity: Trigger/Echo GPIO (see mapping above)
 
 ---
 

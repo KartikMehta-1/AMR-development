@@ -18,9 +18,13 @@
 #define CURR_ZERO_VOLTS       2.5f     // sensor Vout at 0 A (before divider)
 #define CURR_SENS_VOLTS_PER_A 0.040f   // 40 mV/A @ 5 V supply
 #define CURR_ZERO_SAMPLES     64U      // samples to average for zero offset
-#define CURR_AVG_SAMPLES      8U       // oversample to reduce noise without analog RC
+#define CURR_AVG_SAMPLES      16U      // oversample to reduce noise without analog RC
+#define CURR_ZERO_VALID_WINDOW_COUNTS 700U  // reject zero-cal values too far from mid-scale
+#define CURR_ZERO_TRACK_ALPHA 0.02f    // very slow IIR to track drift in zero offset
+#define CURR_ZERO_TRACK_MAX_DELTA_COUNTS 20U   // track only when delta is tiny (~<0.6 A)
+#define CURR_ZERO_TRACK_CURRENT_MA 200        // only track when measured current is near zero
 #define LEFT_CURR_POLARITY    1        // set -1 to flip left current sign
-#define RIGHT_CURR_POLARITY   -1       // set -1 to flip right current sign
-#define CURR_LPF_ALPHA        0.2f     // low-pass filter alpha (0..1), higher = less smoothing
+#define RIGHT_CURR_POLARITY   1        // set -1 to flip right current sign
+#define CURR_LPF_ALPHA        0.1f     // low-pass filter alpha (0..1), higher = less smoothing
 
 #endif // APP_CONFIG_H

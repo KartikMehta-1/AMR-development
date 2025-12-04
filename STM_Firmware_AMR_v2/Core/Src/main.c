@@ -122,22 +122,23 @@ int main(void)
   // Left motor (M1): PA8 PWM (TIM1_CH1), PB4 DIR
   Motor_Init(&m_left, &htim1, TIM_CHANNEL_1, DIR_LEFT_GPIO_Port, DIR_LEFT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
   Motor_SetDirection(&m_left, LEFT_DIR_POLARITY);   // forward (adjust if wiring requires inversion)
-  Motor_SetDuty(&m_left, 0.0f);     // keep off for zero-cal
+  Motor_SetDuty(&m_left, 0.0f);     // keep off initially
 
   // Right motor (M2): PA9 PWM (TIM1_CH2), PB5 DIR
   Motor_Init(&m_right, &htim1, TIM_CHANNEL_2, DIR_RIGHT_GPIO_Port, DIR_RIGHT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
   Motor_SetDirection(&m_right, RIGHT_DIR_POLARITY);  // forward (adjust if wiring requires inversion)
-  Motor_SetDuty(&m_right, 0.0f);    // keep off for zero-cal
+  Motor_SetDuty(&m_right, 0.0f);    // keep off initially
 
-  // Measure zero-current ADC offsets with outputs disabled
+  // Start PWM at 0% to bias driver, then calibrate zero
+  Motor_Start(&m_left);
+  Motor_Start(&m_right);
+  HAL_Delay(50);  // allow rails/driver to settle at 0% duty
   CurrentSense_Init(&current_sense, &hadc1);
   CurrentSense_Calibrate(&current_sense);
 
   // Now drive motors
   Motor_SetDuty(&m_left, 0.10f);    // 10% duty
-  Motor_Start(&m_left);
   Motor_SetDuty(&m_right, 0.10f);   // 10% duty
-  Motor_Start(&m_right);
 
   // Initialize and start encoders (Left: TIM3 16-bit, Right: TIM2 32-bit)
   Encoder_Init(&enc_left,  &htim3, ENCODER_COUNTS_PER_REV, 0xFFFFU);
@@ -179,7 +180,12 @@ int main(void)
       // Currents (mA) with filtering/polarity handled inside helper
       int32_t curr_l_mA = 0;
       int32_t curr_r_mA = 0;
-      CurrentSense_ReadFiltered(&current_sense, &curr_l_mA, &curr_r_mA);
+      uint16_t adc_l_counts = 0;
+      uint16_t adc_r_counts = 0;
+      if (!CurrentSense_ReadFiltered(&current_sense, &curr_l_mA, &curr_r_mA,
+                                     &adc_l_counts, &adc_r_counts)) {
+        curr_l_mA = curr_r_mA = 0;
+      }
 
       TelemetryFrame frame = {
         .t_ms = now,
@@ -189,6 +195,10 @@ int main(void)
         .rpm_r_x10 = (int32_t)(Encoder_GetRPM(&enc_right) * 10.0f),
         .duty_l_pct = (int32_t)duty_l,
         .duty_r_pct = (int32_t)duty_r,
+        .adc_l_counts = adc_l_counts,
+        .adc_r_counts = adc_r_counts,
+        .zero_l_counts = current_sense.zero_left,
+        .zero_r_counts = current_sense.zero_right,
         .curr_l_mA = curr_l_mA,
         .curr_r_mA = curr_r_mA
       };
@@ -292,7 +302,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_8;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;  // longer sample to settle RC filter
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();

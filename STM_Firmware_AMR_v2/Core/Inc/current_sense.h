@@ -16,6 +16,8 @@ typedef struct {
 
 void CurrentSense_Init(CurrentSense *cs, ADC_HandleTypeDef *hadc);
 void CurrentSense_Calibrate(CurrentSense *cs);
-uint8_t CurrentSense_ReadFiltered(CurrentSense *cs, int32_t *left_mA, int32_t *right_mA);
+uint8_t CurrentSense_ReadFiltered(CurrentSense *cs,
+                                  int32_t *left_mA, int32_t *right_mA,
+                                  uint16_t *left_counts, uint16_t *right_counts);
 
 #endif // CURRENT_SENSE_H

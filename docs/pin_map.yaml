@@ -116,59 +116,35 @@ sensors:
     power_rail: 5v
     notes: USB 3 bandwidth required; prefer powered hub if multiple devices
   proximity:
-    quantity: 8
-    power_rail: TBD           # 3v3 or 5v
-    interface: TBD            # gpio / adc / i2c / uart
-    units: distance           # semantic units (e.g., mm) defined per model
+    quantity: 4
+    model: cs100a_ultrasonic
+    power_rail: 5v
+    interface: gpio_trig_echo
+    units: distance           # mm in firmware
+    level_shift: echo_divider_to_3v3   # ensure echo is 3.3 V safe
+    firing_strategy: staggered_round_robin
+    notes: Stagger triggers to avoid crosstalk; add 0.1 uF + 10 uF per module; keep leads short
     channels:
       - id: S1
-        gpio_pin: TBD         # if interface=gpio
-        adc_pin:  TBD         # if interface=adc
-        i2c_bus: TBD          # if interface=i2c
-        i2c_addr: TBD
-        uart_port: TBD        # if interface=uart
+        position: front_left
+        trig_pin: PC0
+        echo_pin: PA10
+        notes: add divider or level shifter on echo if module drives 5 V high
       - id: S2
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
+        position: front_right
+        trig_pin: PC2
+        echo_pin: PA11
+        notes: add divider or level shifter on echo if module drives 5 V high
       - id: S3
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
+        position: rear_left
+        trig_pin: PC3
+        echo_pin: PA12
+        notes: add divider or level shifter on echo if module drives 5 V high
       - id: S4
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
-      - id: S5
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
-      - id: S6
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
-      - id: S7
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
-      - id: S8
-        gpio_pin: TBD
-        adc_pin:  TBD
-        i2c_bus: TBD
-        i2c_addr: TBD
-        uart_port: TBD
+        position: rear_right
+        trig_pin: PB10
+        echo_pin: PA15
+        notes: add divider or level shifter on echo if module drives 5 V high
 
 buses:
   i2c1:

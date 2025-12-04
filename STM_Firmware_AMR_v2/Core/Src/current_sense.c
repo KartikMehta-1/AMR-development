@@ -11,6 +11,39 @@ static float Current_FromRaw(uint16_t adc_counts, uint16_t zero_counts)
   return vsense / CURR_SENS_VOLTS_PER_A;
 }
 
+// Clamp zero calibration to a plausible window around mid-scale to avoid bogus offsets
+static uint16_t ClampZero(uint16_t measured)
+{
+  uint16_t mid = ADC_MID_COUNTS;
+  uint16_t w = CURR_ZERO_VALID_WINDOW_COUNTS;
+  if ((measured + w) < mid || measured > (mid + w)) {
+    return mid;
+  }
+  return measured;
+}
+
+// Gently track slow drift in zero only when current is near zero and deltas are tiny
+static void TrackZero(CurrentSense *cs,
+                      uint16_t adc_left, uint16_t adc_right,
+                      int32_t curr_l_mA, int32_t curr_r_mA)
+{
+  const uint16_t max_d = CURR_ZERO_TRACK_MAX_DELTA_COUNTS;
+  const float a = CURR_ZERO_TRACK_ALPHA;
+  const int32_t max_i = CURR_ZERO_TRACK_CURRENT_MA;
+
+  int16_t dl = (int16_t)adc_left - (int16_t)cs->zero_left;
+  if ((dl < (int16_t)max_d) && (dl > -(int16_t)max_d) &&
+      (curr_l_mA < max_i) && (curr_l_mA > -max_i)) {
+    cs->zero_left = (uint16_t)(((1.0f - a) * (float)cs->zero_left) + (a * (float)adc_left));
+  }
+
+  int16_t dr = (int16_t)adc_right - (int16_t)cs->zero_right;
+  if ((dr < (int16_t)max_d) && (dr > -(int16_t)max_d) &&
+      (curr_r_mA < max_i) && (curr_r_mA > -max_i)) {
+    cs->zero_right = (uint16_t)(((1.0f - a) * (float)cs->zero_right) + (a * (float)adc_right));
+  }
+}
+
 // Read both current channels (rank1: PB0 left, rank2: PC1 right); returns 1 on success
 static uint8_t ReadAveragedCounts(CurrentSense *cs, uint16_t* left_counts, uint16_t* right_counts)
 {
@@ -78,19 +111,24 @@ void CurrentSense_Calibrate(CurrentSense *cs)
     return;
   }
 
-  cs->zero_left = (uint16_t)(acc_l / good);
-  cs->zero_right = (uint16_t)(acc_r / good);
+  cs->zero_left = ClampZero((uint16_t)(acc_l / good));
+  cs->zero_right = ClampZero((uint16_t)(acc_r / good));
 }
 
-uint8_t CurrentSense_ReadFiltered(CurrentSense *cs, int32_t *left_mA, int32_t *right_mA)
+uint8_t CurrentSense_ReadFiltered(CurrentSense *cs,
+                                  int32_t *left_mA, int32_t *right_mA,
+                                  uint16_t *left_counts, uint16_t *right_counts)
 {
   uint16_t adc_left = 0, adc_right = 0;
   if (!ReadAveragedCounts(cs, &adc_left, &adc_right)) {
     return 0;
   }
+  if (left_counts) { *left_counts = adc_left; }
+  if (right_counts) { *right_counts = adc_right; }
 
   int32_t curr_l = (int32_t)(Current_FromRaw(adc_left, cs->zero_left) * 1000.0f) * LEFT_CURR_POLARITY;
   int32_t curr_r = (int32_t)(Current_FromRaw(adc_right, cs->zero_right) * 1000.0f) * RIGHT_CURR_POLARITY;
+  TrackZero(cs, adc_left, adc_right, curr_l, curr_r);
 
   if (!cs->filt_init) {
     cs->filt_left_mA = (float)curr_l;

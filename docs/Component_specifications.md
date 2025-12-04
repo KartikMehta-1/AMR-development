@@ -107,17 +107,17 @@ Mounting and effective resolution
 ---
 
 ## 7. Proximity Sensors
-**Model(s):** TBD (x8 units planned)
+**Model:** CS100A Ultrasonic (x4 units)
 
 | Parameter | Value |
 |------------|--------|
-| Quantity | 8 |
-| Power | TBD (3.3 V or 5 V) |
-| Interface | TBD (GPIO digital / ADC analog / I2C / UART) |
-| Range | TBD |
-| Update Rate | TBD |
+| Quantity | 4 |
+| Power | 5 V DC |
+| Interface | Digital trigger/echo (similar to HC-SR04 style) |
+| Range | ~2 cm to ~450 cm (typical); validate per batch |
+| Update Rate | On-demand via trigger; duty-cycle to avoid crosstalk |
 | Mounting | Corners/edges of chassis for obstruction detection |
-| Notes | Final model and interface will determine wiring and firmware driver; debounce/filtering required |
+| Notes | Use per-sensor staggered firing to prevent echo overlap; add small RC on echo if needed to tame ringing; level-shift echo to 3.3 V if module drives 5 V logic high. Decouple 0.1 uF + 10 uF at each module. |
 
 ---
 
@@ -217,7 +217,7 @@ Notes
 Three supplies recommended; exact models TBD.
 
 ### 13.1 Jetson 5 V Supply
-**Model (ordered):** REES52 XL4016E1 buck module (adjustable)
+**Model (planned):** XH-M401 / XL4016-class buck module (adjustable, higher current)
 | Parameter | Value |
 |------------|--------|
 | Input | Battery pack (pre- or post-E-Stop per design) |
@@ -227,12 +227,13 @@ Three supplies recommended; exact models TBD.
 | Notes | Powers Jetson Nano and powered USB hub; set to 5.00 V with a meter before use; fuse input and allow airflow/derating |
 
 ### 13.2 Logic 5 V Supply
+**Model:** LM2596 buck module (adjustable)
 | Parameter | Value |
 |------------|--------|
 | Input | Battery pack |
 | Output | 5.0 V |
-| Max Current | TBD (1-2 A typical) |
-| Notes | Powers STM32 board and light sensors |
+| Max Current | ~2-3 A practical (derate from headline) |
+| Notes | Powers STM32 board and proximity sensors; separate from Jetson rail for noise isolation |
 
 ### 13.3 Sensors 12 V Supply (Optional)
 | Parameter | Value |
