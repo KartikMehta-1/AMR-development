@@ -1,7 +1,7 @@
 ../Core/Src/current_sense.c:6:14:Current_FromRaw	1
 ../Core/Src/current_sense.c:15:17:ClampZero	3
-../Core/Src/current_sense.c:26:13:TrackZero	5
-../Core/Src/current_sense.c:43:16:ReadAveragedCounts	6
-../Core/Src/current_sense.c:80:6:CurrentSense_Init	1
-../Core/Src/current_sense.c:90:6:CurrentSense_Calibrate	4
-../Core/Src/current_sense.c:113:9:CurrentSense_ReadFiltered	5
+../Core/Src/current_sense.c:26:13:TrackZero	9
+../Core/Src/current_sense.c:48:16:ReadAveragedCounts	6
+../Core/Src/current_sense.c:85:6:CurrentSense_Init	1
+../Core/Src/current_sense.c:95:6:CurrentSense_Calibrate	4
+../Core/Src/current_sense.c:118:9:CurrentSense_ReadFiltered	5

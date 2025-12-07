@@ -1,17 +1,17 @@
 # Kartik's AMR Project Tracker (18 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2025-11-04  
+**Last Updated:** 2025-11-05  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
 
 ---
 
 ## Status Summary
 - Overall: On track with tuning in progress
-- Progress: 7/18 weeks complete (~39%)
-- Recent: Single-motor bring-up on Cytron at ~10% duty verified (PA8 PWM, PB4 DIR)
-- Current Focus (Week 9): Encoder integration; both encoders online, add external pull-ups
-- Next Focus (Weeks 10-12): Current telemetry + calibration, single-loop PID, cascaded control + comparison
+- Progress: 8/18 weeks complete (~44%)
+- Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected.
+- Current Focus: Speed PI tuning and fault thresholds (overcurrent/stall) using current sensing; optional feedforward to reduce duty skew.
+- Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; decide on cascaded current loop vs. using current only for protection.
 - Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; custom PCB is low priority/optional.
   - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
@@ -28,12 +28,12 @@ Legend: Done, In Progress, Partial, Planned, Blocked
 | 4 | Encoder Hookup & Counting | Done | Encoder integrated; direction & count validated; stable RPM reading. |
 | 5 | RPM Calculation & Telemetry | Done | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | Done | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
-| 7 | Firmware v2: Scaffold + Pin Map + Current | In Progress | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
+| 7 | Firmware v2: Scaffold + Pin Map + Current | Done | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
 | 8 | Firmware v2: Dual-Motor Duty Bring-Up | Done | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E-stop cut and GND common confirmed. |
 | 9 | Firmware v2: Encoder Integration | Done | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; pull-ups to be added. |
-| 10 | Firmware v2: Current Telemetry + Calibration | Planned | ADC1 scan IN8 (PB0 left) and IN11 (PC1 right); zero-offset + scaling; UART current stream at 50-100 Hz. |
-| 11 | Firmware v2: Control (Single-Loop PID) | Planned | Closed-loop speed PI/PID on one/both wheels; anti-windup + ramp; baseline plots and metrics. |
-| 12 | Firmware v2: Cascaded Control + Comparison | Planned | Inner current PI + outer speed PID; add i_* and w_* telemetry; compare vs single-loop with plots/metrics. |
+| 10 | Firmware v2: Current Telemetry + Calibration | Done | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
+| 11 | Firmware v2: Control (Single-Loop PID) | In Progress | Closed-loop speed PI both wheels; duty ramp; polarity fix; target toggling and plotting; continuing gain/feedforward tuning. |
+| 12 | Firmware v2: Cascaded Control + Comparison | Planned | Inner current PI + outer speed PID; add i_* telemetry; compare vs single-loop with plots/metrics (may defer if current stays protection-only). |
 | 13 | Firmware v2: Differential Drive | Planned | Map (v, I%) + (left, right); saturation and ramp coordination; basic tests. |
 | 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 8x proximity sensors (TBD interface: GPIO/ADC/I2C); wiring, pull-ups, protection; update pin map; bench power budget. |
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 8 sensors; debouncing/filtering; fault detection; add to telemetry. |

@@ -11,6 +11,8 @@ typedef struct {
   uint32_t cnt_r;
   int32_t rpm_l_x10;
   int32_t rpm_r_x10;
+  int32_t rpm_l_tgt_x10;
+  int32_t rpm_r_tgt_x10;
   int32_t duty_l_pct;
   int32_t duty_r_pct;
   uint16_t adc_l_counts;

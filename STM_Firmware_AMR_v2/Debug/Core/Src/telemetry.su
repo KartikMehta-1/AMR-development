@@ -1,2 +1,2 @@
 ../Core/Src/telemetry.c:6:6:Telemetry_SendHeader	24	static
-../Core/Src/telemetry.c:12:6:Telemetry_SendFrame	272	static
+../Core/Src/telemetry.c:12:6:Telemetry_SendFrame	296	static

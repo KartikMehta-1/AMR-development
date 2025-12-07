@@ -107,6 +107,8 @@ ax_rpm, ax_duty, ax_curr = axes
 
 line_rpm_l, = ax_rpm.plot([], [], "r-", label="L RPM")
 line_rpm_r, = ax_rpm.plot([], [], "b-", label="R RPM")
+line_rpm_l_tgt, = ax_rpm.plot([], [], "r--", label="L RPM tgt")
+line_rpm_r_tgt, = ax_rpm.plot([], [], "b--", label="R RPM tgt")
 ax_rpm.set_ylabel("RPM")
 ax_rpm.legend(loc="upper right")
 ax_rpm.grid(True)
@@ -155,6 +157,8 @@ try:
     # RPM (x10 fields -> RPM)
     l_rpm = [v / 10.0 for v in buckets.get("l_rpm_x10", [])] if "l_rpm_x10" in buckets else []
     r_rpm = [v / 10.0 for v in buckets.get("r_rpm_x10", [])] if "r_rpm_x10" in buckets else []
+    l_rpm_tgt = [v / 10.0 for v in buckets.get("l_rpm_tgt_x10", [])] if "l_rpm_tgt_x10" in buckets else []
+    r_rpm_tgt = [v / 10.0 for v in buckets.get("r_rpm_tgt_x10", [])] if "r_rpm_tgt_x10" in buckets else []
 
     # Duty percent (if available)
     l_duty = duty_from_buffer(buckets, ["l_duty_pct", "l_duty", "pwm_left", "pwm_l"])
@@ -166,6 +170,8 @@ try:
 
     line_rpm_l.set_data(t[:len(l_rpm)], l_rpm)
     line_rpm_r.set_data(t[:len(r_rpm)], r_rpm)
+    line_rpm_l_tgt.set_data(t[:len(l_rpm_tgt)], l_rpm_tgt)
+    line_rpm_r_tgt.set_data(t[:len(r_rpm_tgt)], r_rpm_tgt)
 
     line_duty_l.set_data(t[:len(l_duty)], l_duty)
     line_duty_r.set_data(t[:len(r_duty)], r_duty)

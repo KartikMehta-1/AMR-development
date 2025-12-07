@@ -138,8 +138,8 @@ Telemetry v2 (proposed additions)
 - Outer loop fields: `w_cmd`, `w_meas`, `w_err`, `w_p`, `w_i`, `w_d`, `i_ref` (alias of `i_cmd`).
 
 Notes and next steps
-- Current firmware (v2 baseline) integrates PWM, encoders, and a single speed PID example. Cascaded implementation adds inner current PI and telemetry v2.
-- Next steps: start encoder timers, add inner current tick (tied to PWM/ADC), filter currents, implement current PI, implement outer speed PI/PID generating `i_ref`, add telemetry fields and decimation.
+- Current firmware (v2) integrates PWM, encoders, and dual-wheel speed PI with duty ramp and RPM filtering; current sensing is calibrated and used for telemetry/protection (not in the control loop).
+- Next steps: add base timer tick for speed loop, decide on current loop vs. protection-only; if proceeding with cascaded control, add inner current PI tick (tied to PWM/ADC) and extend telemetry with control terms.
 
 ## Faults and Clear Criteria (Tentative)
 

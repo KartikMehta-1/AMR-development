@@ -35,7 +35,7 @@ void Motor_SetDirection(MotorChannel *m, uint8_t forward)
 void Motor_SetDuty(MotorChannel *m, float duty_01)
 {
     if (duty_01 < 0.0f) duty_01 = 0.0f;
-    if (duty_01 > 1.0f) duty_01 = 1.0f;
+    if (duty_01 > 0.30f) duty_01 = 0.30f;  // cap at 30% duty
     uint32_t ccr = (uint32_t)((m->arr + 1) * duty_01);
     if (ccr > m->arr) ccr = m->arr;
     set_compare(m, ccr);
@@ -51,4 +51,3 @@ void Motor_Stop(MotorChannel *m)
     HAL_TIM_PWM_Stop(m->htim, m->channel);
     Motor_SetDuty(m, 0.0f);
 }
-

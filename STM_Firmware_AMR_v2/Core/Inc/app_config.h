@@ -27,4 +27,32 @@
 #define RIGHT_CURR_POLARITY   1        // set -1 to flip right current sign
 #define CURR_LPF_ALPHA        0.1f     // low-pass filter alpha (0..1), higher = less smoothing
 
+// Duty/rpm ramping (units are 0..1 duty fraction per second)
+#define DUTY_RAMP_RATE_PER_SEC 0.2f    // slew limit for motor duty (e.g., 20% per second)
+
+// Encoder polarity (set to -1 to flip RPM sign for that wheel)
+#define LEFT_ENCODER_POLARITY   1
+#define RIGHT_ENCODER_POLARITY -1   // right RPM currently inverted; set to 1 if wiring is corrected
+
+// Speed PID gains (per wheel). Output is duty 0..1 (clamped to 0..0.3)
+#define SPEED_PID_KP_L     0.030f
+#define SPEED_PID_KI_L     0.050f
+#define SPEED_PID_KD_L     0.00f
+#define SPEED_PID_KP_R     0.025f
+#define SPEED_PID_KI_R     0.040f
+#define SPEED_PID_KD_R     0.00f
+#define SPEED_PID_OUT_MIN  0.0f
+#define SPEED_PID_OUT_MAX  0.30f
+#define SPEED_PID_I_MIN    0.0f
+#define SPEED_PID_I_MAX    0.20f
+#define SPEED_PID_DEADBAND_RPM 0.20f   // do not integrate when error magnitude is below this
+
+// Test setpoints (RPM) and toggle interval
+#define SPEED_TEST_RPM_LOW   2.0f
+#define SPEED_TEST_RPM_HIGH  4.0f
+#define SPEED_TEST_TOGGLE_MS 5000U
+
+// RPM filtering before PID (simple exponential filter)
+#define RPM_LPF_ALPHA 0.20f   // higher = less smoothing
+
 #endif // APP_CONFIG_H
