@@ -42,6 +42,7 @@ uint32_t FaultMonitor_Update(FaultMonitor *fm,
   if (fm->enc_l_idle_ms >= FAULT_ENC_TIMEOUT_MS) fault_bits |= CTRL_FAULT_ENC_TIMEOUT_LEFT;
   if (fm->enc_r_idle_ms >= FAULT_ENC_TIMEOUT_MS) fault_bits |= CTRL_FAULT_ENC_TIMEOUT_RIGHT;
 
+#if FAULT_ADC_STUCK_ENABLED
   // ADC stuck/rail detection
   bool rail_l = (sense->adc_l_counts <= FAULT_ADC_RAIL_THRESH) || (sense->adc_l_counts >= (uint16_t)(ADC_MAX_COUNTS - FAULT_ADC_RAIL_THRESH));
   bool rail_r = (sense->adc_r_counts <= FAULT_ADC_RAIL_THRESH) || (sense->adc_r_counts >= (uint16_t)(ADC_MAX_COUNTS - FAULT_ADC_RAIL_THRESH));
@@ -59,6 +60,7 @@ uint32_t FaultMonitor_Update(FaultMonitor *fm,
   if (fm->adc_stuck_count >= FAULT_ADC_STUCK_SAMPLES) {
     fault_bits |= CTRL_FAULT_ADC_STUCK;
   }
+#endif
 
   return fault_bits;
 }

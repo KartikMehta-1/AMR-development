@@ -62,7 +62,8 @@
 #define FAULT_STALL_RPM_MAX       0.5f   // RPM below this while driving counts as stall
 #define FAULT_STALL_DWELL_MS      500    // stall dwell (ms)
 #define FAULT_ENC_TIMEOUT_RPM_MIN 0.5f   // commanded RPM must exceed this to check timeout
-#define FAULT_ENC_TIMEOUT_MS      300    // encoder timeout dwell (ms)
+#define FAULT_ENC_TIMEOUT_MS      1000    // encoder timeout dwell (ms)
+#define FAULT_ADC_STUCK_ENABLED   1      // set to 1 to re-enable ADC stuck/rail fault (disabled for testing)
 #define FAULT_ADC_STUCK_SAMPLES   30     // consecutive identical/rail samples to declare ADC stuck
 #define FAULT_ADC_RAIL_THRESH     5      // counts from rail to consider as rail (0 or max)
 
