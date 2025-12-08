@@ -1,5 +1,6 @@
-Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
- ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
+Core/Src/fault_monitor.o: ../Core/Src/fault_monitor.c \
+ ../Core/Inc/fault_monitor.h ../Core/Inc/sensing.h ../Core/Inc/encoder.h \
+ ../Core/Inc/main.h ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h \
  ../Core/Inc/stm32f4xx_hal_conf.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rcc.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_def.h \
@@ -30,14 +31,11 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/motor.h ../Core/Inc/main.h ../Core/Inc/encoder.h \
- ../Core/Inc/app_config.h ../Core/Inc/current_sense.h \
- ../Core/Inc/app_config.h ../Core/Inc/telemetry.h ../Core/Inc/ramp.h \
- ../Core/Inc/pid.h ../Core/Inc/control_state.h ../Core/Inc/sensing.h \
- ../Core/Inc/encoder.h ../Core/Inc/current_sense.h \
- ../Core/Inc/fault_monitor.h ../Core/Inc/sensing.h \
- ../Core/Inc/control_state.h ../Core/Inc/control_loop.h \
- ../Core/Inc/ramp.h ../Core/Inc/pid.h
+ ../Core/Inc/current_sense.h ../Core/Inc/app_config.h \
+ ../Core/Inc/control_state.h ../Core/Inc/app_config.h
+../Core/Inc/fault_monitor.h:
+../Core/Inc/sensing.h:
+../Core/Inc/encoder.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -70,22 +68,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
-../Core/Inc/motor.h:
-../Core/Inc/main.h:
-../Core/Inc/encoder.h:
-../Core/Inc/app_config.h:
 ../Core/Inc/current_sense.h:
 ../Core/Inc/app_config.h:
-../Core/Inc/telemetry.h:
-../Core/Inc/ramp.h:
-../Core/Inc/pid.h:
 ../Core/Inc/control_state.h:
-../Core/Inc/sensing.h:
-../Core/Inc/encoder.h:
-../Core/Inc/current_sense.h:
-../Core/Inc/fault_monitor.h:
-../Core/Inc/sensing.h:
-../Core/Inc/control_state.h:
-../Core/Inc/control_loop.h:
-../Core/Inc/ramp.h:
-../Core/Inc/pid.h:
+../Core/Inc/app_config.h:

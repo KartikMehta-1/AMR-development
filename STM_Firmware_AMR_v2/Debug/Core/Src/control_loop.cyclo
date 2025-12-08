@@ -1,0 +1,5 @@
+../Core/Inc/ramp.h:14:20:Ramp_Init	1
+../Core/Inc/ramp.h:22:20:Ramp_SetTarget	1
+../Core/Inc/ramp.h:34:21:Ramp_Update	3
+../Core/Src/control_loop.c:4:6:ControlLoop_Init	1
+../Core/Src/control_loop.c:17:6:ControlLoop_Update	5

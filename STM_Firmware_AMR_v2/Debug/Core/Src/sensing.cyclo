@@ -1,0 +1,4 @@
+../Core/Inc/encoder.h:26:23:Encoder_GetRPM	1
+../Core/Inc/encoder.h:27:24:Encoder_GetRawCount	1
+../Core/Src/sensing.c:3:6:Sensing_Init	1
+../Core/Src/sensing.c:14:6:Sensing_Step	4

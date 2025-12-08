@@ -140,14 +140,6 @@ int main(void)
   Motor_SetDirection(&m_right, RIGHT_DIR_POLARITY);  // forward (adjust if wiring requires inversion)
   Motor_SetDuty(&m_right, 0.0f);    // keep off initially
 
-  // Initialize duty ramps (units: 0..1 duty per second)
-  Ramp_Init(&ramp_left, 0.0f, DUTY_RAMP_RATE_PER_SEC);
-  Ramp_Init(&ramp_right, 0.0f, DUTY_RAMP_RATE_PER_SEC);
-  PID_Init(&pid_left, SPEED_PID_KP_L, SPEED_PID_KI_L, SPEED_PID_KD_L, SPEED_PID_DEADBAND_RPM,
-           SPEED_PID_OUT_MIN, SPEED_PID_OUT_MAX, SPEED_PID_I_MIN, SPEED_PID_I_MAX);
-  PID_Init(&pid_right, SPEED_PID_KP_R, SPEED_PID_KI_R, SPEED_PID_KD_R, SPEED_PID_DEADBAND_RPM,
-           SPEED_PID_OUT_MIN, SPEED_PID_OUT_MAX, SPEED_PID_I_MIN, SPEED_PID_I_MAX);
-
   // Start PWM at 0% to bias driver, then calibrate zero
   Motor_Start(&m_left);
   Motor_Start(&m_right);
