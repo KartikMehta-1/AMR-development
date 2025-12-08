@@ -1,6 +1,6 @@
 # STM32 Firmware - Motor Control Diagrams
 
-This document explains the intended motor control model and how it maps to the STM32 firmware setup. It also notes current implementation status in the firmware. Updated to reflect a cascaded control structure: inner current loop and outer speed/position loop.
+This document explains the intended motor control model and how it maps to the STM32 firmware setup. It reflects the **single-loop speed PI** approach (no cascaded current loop). Current sensing is used for telemetry/protection only.
 
 ```mermaid
 graph TD
@@ -22,10 +22,8 @@ graph TD
   subgraph Control
     MODE[Mode Manager]
     SAFE[Safety Manager]
-    I_L[Inner Current PI Left]
-    I_R[Inner Current PI Right]
-    W_L[Outer Speed PI/PID Left]
-    W_R[Outer Speed PI/PID Right]
+    W_L[Speed PI/PID Left]
+    W_R[Speed PI/PID Right]
     POS[Optional Position PID]
   end
 
@@ -54,17 +52,13 @@ graph TD
   ADC_L --> CUR_MON
   ADC_R --> CUR_MON
   CUR_MON --> SAFE
-  CUR_MON --> I_L
-  CUR_MON --> I_R
 
   MODE --> W_L
   MODE --> W_R
   POS --> W_L
   POS --> W_R
-  W_L --> I_L
-  W_R --> I_R
-  I_L --> PWM1
-  I_R --> PWM2
+  W_L --> PWM1
+  W_R --> PWM2
   MODE --> DIRL
   MODE --> DIRR
 
@@ -79,37 +73,30 @@ graph TD
 ```
 
 - Setpoint enters Mode Manager, which gates control based on Safety Manager.
-- Encoders feed the velocity estimator; current sensors feed the current monitor.
-- Outer speed loop generates a current reference; inner current loop produces duty commands to TIM1 PWM; direction is set via GPIO.
+- Encoders feed the velocity estimator; current sensors feed the current monitor (telemetry/protection only).
+- Single speed loop per wheel produces duty commands to TIM1 PWM; direction is set via GPIO.
 - Telemetry publishes selected signals over USART2.
 
 ```mermaid
 graph LR
-  %% Control tick sequence (cascaded example)
-  TICK_I[Inner Tick 1-5 kHz]
+  %% Control tick sequence (single-loop speed)
   TICK_W[Outer Tick 100-200 Hz]
-  SAMPLE_I[Sample/Filter currents]
   READ_W[Read encoder counts]
-  EST_W[Compute wheel velocity]
-  CTRL_W[Outer speed PI/PID + i_ref]
-  CTRL_I[Inner current PI + duty]
-  APPLY[Update PWM duty]
+  EST_W[Compute wheel velocity LPF]
+  CTRL_W[Speed PI/PID -> duty target]
+  APPLY[Update PWM duty with ramp/cap]
   TEL[Telemetry at 50-100 Hz]
-
-  TICK_I --> SAMPLE_I
-  SAMPLE_I --> CTRL_I
-  CTRL_I --> APPLY
-  APPLY --> TEL
 
   TICK_W --> READ_W
   READ_W --> EST_W
   EST_W --> CTRL_W
-  CTRL_W --> CTRL_I
+  CTRL_W --> APPLY
+  APPLY --> TEL
 ```
 
-- Rates: inner current loop 1-5 kHz; outer speed loop 100-200 Hz.
-- ADC samples left/right motor currents for inner loop; encoder deltas compute velocity for outer loop.
-- Inner loop updates PWM; outer loop updates `i_ref`; telemetry decimated to ~50-100 Hz.
+- Rates: outer speed loop target 100-200 Hz (currently slower); telemetry decimated to ~50-100 Hz.
+- ADC samples left/right motor currents for protection/telemetry; encoder deltas compute velocity for speed loop.
+- Speed loop updates duty (with ramp and duty cap at 30%).
 
 ```mermaid
 stateDiagram-v2
@@ -139,7 +126,7 @@ Telemetry v2 (proposed additions)
 
 Notes and next steps
 - Current firmware (v2) integrates PWM, encoders, and dual-wheel speed PI with duty ramp and RPM filtering; current sensing is calibrated and used for telemetry/protection (not in the control loop).
-- Next steps: add base timer tick for speed loop, decide on current loop vs. protection-only; if proceeding with cascaded control, add inner current PI tick (tied to PWM/ADC) and extend telemetry with control terms.
+- Next steps: add base timer tick for speed loop; keep single-loop speed PI; extend telemetry with control terms if needed; add safety/fault handling (overcurrent/stall/estop) and ROS `/cmd_vel` intake with staleness timeout.
 
 ## Faults and Clear Criteria (Tentative)
 

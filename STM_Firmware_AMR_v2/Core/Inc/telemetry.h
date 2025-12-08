@@ -21,6 +21,8 @@ typedef struct {
   uint16_t zero_r_counts;
   int32_t curr_l_mA;
   int32_t curr_r_mA;
+  uint32_t state;
+  uint32_t fault_mask;
 } TelemetryFrame;
 
 void Telemetry_SendHeader(UART_HandleTypeDef *huart);

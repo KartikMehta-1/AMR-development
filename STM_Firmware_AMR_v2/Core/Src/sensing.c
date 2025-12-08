@@ -1,0 +1,51 @@
+#include "sensing.h"
+
+void Sensing_Init(Sensing *s, EncoderChannel *enc_l, EncoderChannel *enc_r, CurrentSense *curr, float rpm_lpf_alpha)
+{
+  s->enc_l = enc_l;
+  s->enc_r = enc_r;
+  s->curr = curr;
+  s->rpm_l_filt = 0.0f;
+  s->rpm_r_filt = 0.0f;
+  s->rpm_lpf_alpha = rpm_lpf_alpha;
+  s->rpm_filt_init = 0;
+}
+
+void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
+{
+  if (dt_s <= 0.0f) {
+    return;
+  }
+
+  Encoder_Update(s->enc_l, dt_s);
+  Encoder_Update(s->enc_r, dt_s);
+
+  out->cnt_l = Encoder_GetRawCount(s->enc_l);
+  out->cnt_r = Encoder_GetRawCount(s->enc_r);
+
+  float rpm_l_raw = Encoder_GetRPM(s->enc_l);
+  float rpm_r_raw = Encoder_GetRPM(s->enc_r);
+
+  if (!s->rpm_filt_init) {
+    s->rpm_l_filt = rpm_l_raw;
+    s->rpm_r_filt = rpm_r_raw;
+    s->rpm_filt_init = 1;
+  } else {
+    s->rpm_l_filt += s->rpm_lpf_alpha * (rpm_l_raw - s->rpm_l_filt);
+    s->rpm_r_filt += s->rpm_lpf_alpha * (rpm_r_raw - s->rpm_r_filt);
+  }
+
+  out->rpm_l = s->rpm_l_filt;
+  out->rpm_r = s->rpm_r_filt;
+
+  out->curr_l_mA = 0;
+  out->curr_r_mA = 0;
+  out->adc_l_counts = 0;
+  out->adc_r_counts = 0;
+  if (!CurrentSense_ReadFiltered(s->curr, &out->curr_l_mA, &out->curr_r_mA,
+                                 &out->adc_l_counts, &out->adc_r_counts)) {
+    out->curr_l_mA = out->curr_r_mA = 0;
+  }
+  out->zero_l_counts = s->curr->zero_left;
+  out->zero_r_counts = s->curr->zero_right;
+}

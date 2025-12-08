@@ -25,6 +25,10 @@
 #include "telemetry.h"
 #include "ramp.h"
 #include "pid.h"
+#include "control_state.h"
+#include "sensing.h"
+#include "fault_monitor.h"
+#include "control_loop.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -58,19 +62,14 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 static uint32_t last_sample_tick = 0;
 static uint32_t last_header_tick = 0;
-static uint32_t last_setpoint_toggle_tick = 0;
 static EncoderChannel enc_left;
 static EncoderChannel enc_right;
 static CurrentSense current_sense;
-static Ramp ramp_left;
-static Ramp ramp_right;
-static uint8_t ramp_high = 0;
-static PID pid_left;
-static PID pid_right;
-static float rpm_target = SPEED_TEST_RPM_LOW;
-static float rpm_l_filt = 0.0f;
-static float rpm_r_filt = 0.0f;
-static uint8_t rpm_filt_init = 0;
+static ControlStateMgr ctrl_state;
+static Sensing sensing;
+static SensingData sense;
+static FaultMonitor fault_mon;
+static ControlLoop control_loop;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -155,11 +154,10 @@ int main(void)
   HAL_Delay(50);  // allow rails/driver to settle at 0% duty
   CurrentSense_Init(&current_sense, &hadc1);
   CurrentSense_Calibrate(&current_sense);
-
-  // Now drive motors (start at low target)
-  Ramp_SetTarget(&ramp_left, 0.0f);
-  Ramp_SetTarget(&ramp_right, 0.0f);
-  last_setpoint_toggle_tick = HAL_GetTick();
+  ControlState_Init(&ctrl_state);
+  Sensing_Init(&sensing, &enc_left, &enc_right, &current_sense, RPM_LPF_ALPHA);
+  FaultMonitor_Init(&fault_mon);
+  ControlLoop_Init(&control_loop);
 
   // Initialize and start encoders (Left: TIM3 16-bit, Right: TIM2 32-bit)
   Encoder_Init(&enc_left,  &htim3, ENCODER_COUNTS_PER_REV, 0xFFFFU);
@@ -182,43 +180,18 @@ int main(void)
       float dt_s = (now - last_sample_tick) / 1000.0f;
       last_sample_tick = now;
 
-      // Toggle RPM setpoint every 5 seconds between low/high
-      if ((now - last_setpoint_toggle_tick) >= SPEED_TEST_TOGGLE_MS) {
-        ramp_high = !ramp_high;
-        rpm_target = ramp_high ? SPEED_TEST_RPM_HIGH : SPEED_TEST_RPM_LOW;
-        last_setpoint_toggle_tick = now;
-      }
+      // Sense encoders/currents
+      sense.rpm_l = sense.rpm_r = 0.0f;
+      Sensing_Step(&sensing, dt_s, &sense);
+      // Apply encoder polarity
+      sense.rpm_l *= LEFT_ENCODER_POLARITY;
+      sense.rpm_r *= RIGHT_ENCODER_POLARITY;
 
-      // Update encoders and compute RPMs
-      Encoder_Update(&enc_left, dt_s);
-      Encoder_Update(&enc_right, dt_s);
-
-      uint32_t cnt_l_now = Encoder_GetRawCount(&enc_left);
-      uint32_t cnt_r_now = Encoder_GetRawCount(&enc_right);
-      float rpm_l_raw = Encoder_GetRPM(&enc_left) * LEFT_ENCODER_POLARITY;
-      float rpm_r_raw = Encoder_GetRPM(&enc_right) * RIGHT_ENCODER_POLARITY;
-
-      // Low-pass filter RPM to reduce measurement noise
-      if (!rpm_filt_init) {
-        rpm_l_filt = rpm_l_raw;
-        rpm_r_filt = rpm_r_raw;
-        rpm_filt_init = 1;
-      } else {
-        rpm_l_filt += RPM_LPF_ALPHA * (rpm_l_raw - rpm_l_filt);
-        rpm_r_filt += RPM_LPF_ALPHA * (rpm_r_raw - rpm_r_filt);
-      }
-      float rpm_l = rpm_l_filt;
-      float rpm_r = rpm_r_filt;
-
-      // PID speed control -> duty targets
-      float pid_out_l = PID_Update(&pid_left, rpm_target, rpm_l, dt_s);
-      float pid_out_r = PID_Update(&pid_right, rpm_target, rpm_r, dt_s);
-
-      // Ramp duties toward PID outputs for smooth actuation
-      Ramp_SetTarget(&ramp_left, pid_out_l);
-      Ramp_SetTarget(&ramp_right, pid_out_r);
-      float duty_cmd_l = Ramp_Update(&ramp_left, dt_s);
-      float duty_cmd_r = Ramp_Update(&ramp_right, dt_s);
+      // Control loop (PI + ramp) gated by state
+      bool enabled = ControlState_IsEnabled(&ctrl_state);
+      float rpm_target = 0.0f;
+      float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
+      ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target);
       Motor_SetDuty(&m_left, duty_cmd_l);
       Motor_SetDuty(&m_right, duty_cmd_r);
 
@@ -231,32 +204,34 @@ int main(void)
         duty_r = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2) * 100.0f) / (float)(arr + 1U);
       }
 
-      // Currents (mA) with filtering/polarity handled inside helper
-      int32_t curr_l_mA = 0;
-      int32_t curr_r_mA = 0;
-      uint16_t adc_l_counts = 0;
-      uint16_t adc_r_counts = 0;
-      if (!CurrentSense_ReadFiltered(&current_sense, &curr_l_mA, &curr_r_mA,
-                                     &adc_l_counts, &adc_r_counts)) {
-        curr_l_mA = curr_r_mA = 0;
-      }
+      // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
+      uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target, duty_l, duty_r, SAMPLE_INTERVAL_MS);
+
+      // Update control state (faults from detection above, estop TBD)
+      ControlInputs cin = {0};
+      cin.enable_cmd = true;
+      cin.fault_bits = fault_bits;
+      ControlState_Update(&ctrl_state, &cin, now);
+      // enabled flag will be used on next tick
 
       TelemetryFrame frame = {
         .t_ms = now,
-        .cnt_l = cnt_l_now,
-        .cnt_r = cnt_r_now,
-        .rpm_l_x10 = (int32_t)(rpm_l * 10.0f),
-        .rpm_r_x10 = (int32_t)(rpm_r * 10.0f),
+        .cnt_l = sense.cnt_l,
+        .cnt_r = sense.cnt_r,
+        .rpm_l_x10 = (int32_t)(sense.rpm_l * 10.0f),
+        .rpm_r_x10 = (int32_t)(sense.rpm_r * 10.0f),
         .rpm_l_tgt_x10 = (int32_t)(rpm_target * 10.0f),
         .rpm_r_tgt_x10 = (int32_t)(rpm_target * 10.0f),
         .duty_l_pct = (int32_t)duty_l,
         .duty_r_pct = (int32_t)duty_r,
-        .adc_l_counts = adc_l_counts,
-        .adc_r_counts = adc_r_counts,
-        .zero_l_counts = current_sense.zero_left,
-        .zero_r_counts = current_sense.zero_right,
-        .curr_l_mA = curr_l_mA,
-        .curr_r_mA = curr_r_mA
+        .adc_l_counts = sense.adc_l_counts,
+        .adc_r_counts = sense.adc_r_counts,
+        .zero_l_counts = sense.zero_l_counts,
+        .zero_r_counts = sense.zero_r_counts,
+        .curr_l_mA = sense.curr_l_mA,
+        .curr_r_mA = sense.curr_r_mA,
+        .state = (uint32_t)ControlState_GetState(&ctrl_state),
+        .fault_mask = ControlState_GetFaultMask(&ctrl_state)
       };
 
       // Periodic header every 10s
