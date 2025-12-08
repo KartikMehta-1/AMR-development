@@ -11,12 +11,15 @@ typedef struct {
   uint32_t cnt_r;
   float rpm_l;
   float rpm_r;
+  float rpm_l_raw;
+  float rpm_r_raw;
   int32_t curr_l_mA;
   int32_t curr_r_mA;
   uint16_t adc_l_counts;
   uint16_t adc_r_counts;
   uint16_t zero_l_counts;
   uint16_t zero_r_counts;
+  uint8_t curr_valid;
 } SensingData;
 
 typedef struct {

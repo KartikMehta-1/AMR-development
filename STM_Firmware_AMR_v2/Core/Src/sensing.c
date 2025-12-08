@@ -25,6 +25,8 @@ void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
 
   float rpm_l_raw = Encoder_GetRPM(s->enc_l);
   float rpm_r_raw = Encoder_GetRPM(s->enc_r);
+  out->rpm_l_raw = rpm_l_raw;
+  out->rpm_r_raw = rpm_r_raw;
 
   if (!s->rpm_filt_init) {
     s->rpm_l_filt = rpm_l_raw;
@@ -42,8 +44,9 @@ void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
   out->curr_r_mA = 0;
   out->adc_l_counts = 0;
   out->adc_r_counts = 0;
-  if (!CurrentSense_ReadFiltered(s->curr, &out->curr_l_mA, &out->curr_r_mA,
-                                 &out->adc_l_counts, &out->adc_r_counts)) {
+  out->curr_valid = CurrentSense_ReadFiltered(s->curr, &out->curr_l_mA, &out->curr_r_mA,
+                                              &out->adc_l_counts, &out->adc_r_counts);
+  if (!out->curr_valid) {
     out->curr_l_mA = out->curr_r_mA = 0;
   }
   out->zero_l_counts = s->curr->zero_left;
