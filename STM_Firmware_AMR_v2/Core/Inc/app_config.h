@@ -8,7 +8,11 @@
 
 // Encoder/rate reporting configuration
 #define ENCODER_COUNTS_PER_REV  2400U   // 600 PPR A-4 quadrature
-#define SAMPLE_INTERVAL_MS      100U    // 100 ms sample period for UART reporting
+#define CONTROL_LOOP_HZ         100U    // fixed-rate control loop (Hz)
+#define CONTROL_LOOP_DT_MS      (1000U / CONTROL_LOOP_HZ)
+#define CONTROL_LOOP_DT_S       (1.0f / (float)CONTROL_LOOP_HZ)
+#define TELEMETRY_DECIMATION    10U     // send telemetry every N control ticks (100 Hz / 10 = 10 Hz)
+#define SAMPLE_INTERVAL_MS      100U    // legacy/telemetry period reference (ms)
 
 // Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
 #define ADC_VREF_VOLTS        3.3f

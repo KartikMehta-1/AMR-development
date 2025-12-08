@@ -56,12 +56,15 @@ DMA_HandleTypeDef hdma_adc1;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-static uint32_t last_sample_tick = 0;
 static uint32_t last_header_tick = 0;
+static volatile uint8_t control_tick_flag = 0;
+static volatile uint32_t control_tick_count = 0;
+static uint32_t telemetry_decim_counter = 0;
 static EncoderChannel enc_left;
 static EncoderChannel enc_right;
 static CurrentSense current_sense;
@@ -81,6 +84,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -125,6 +129,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   // Initialize and run both motors at 10% duty (Cytron MDD20A)
   MotorChannel m_left;
@@ -156,7 +161,8 @@ int main(void)
   Encoder_Init(&enc_right, &htim2, ENCODER_COUNTS_PER_REV, 0xFFFFFFFFU);
   Encoder_Start(&enc_left);
   Encoder_Start(&enc_right);
-  last_sample_tick = HAL_GetTick();
+  HAL_TIM_Base_Start_IT(&htim4);
+  last_header_tick = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -166,46 +172,52 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // Periodic encoder sampling and UART printout
+    // Wait for 100 Hz control tick (TIM4 interrupt sets flag)
+    if (!control_tick_flag) {
+      continue;
+    }
+    control_tick_flag = 0;
     uint32_t now = HAL_GetTick();
-    if ((now - last_sample_tick) >= SAMPLE_INTERVAL_MS) {
-      float dt_s = (now - last_sample_tick) / 1000.0f;
-      last_sample_tick = now;
+    float dt_s = CONTROL_LOOP_DT_S;
 
-      // Sense encoders/currents
-      sense.rpm_l = sense.rpm_r = 0.0f;
-      Sensing_Step(&sensing, dt_s, &sense);
-      // Apply encoder polarity
-      sense.rpm_l *= LEFT_ENCODER_POLARITY;
-      sense.rpm_r *= RIGHT_ENCODER_POLARITY;
+    // Sense encoders/currents
+    sense.rpm_l = sense.rpm_r = 0.0f;
+    Sensing_Step(&sensing, dt_s, &sense);
+    // Apply encoder polarity
+    sense.rpm_l *= LEFT_ENCODER_POLARITY;
+    sense.rpm_r *= RIGHT_ENCODER_POLARITY;
 
-      // Control loop (PI + ramp) gated by state
-      bool enabled = ControlState_IsEnabled(&ctrl_state);
-      float rpm_target = 0.0f;
-      float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
-      ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target);
-      Motor_SetDuty(&m_left, duty_cmd_l);
-      Motor_SetDuty(&m_right, duty_cmd_r);
+    // Control loop (PI + ramp) gated by state
+    bool enabled = ControlState_IsEnabled(&ctrl_state);
+    float rpm_target = 0.0f;
+    float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
+    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target);
+    Motor_SetDuty(&m_left, duty_cmd_l);
+    Motor_SetDuty(&m_right, duty_cmd_r);
 
-      // Compute commanded duty (percent) from timer compare
-      float duty_l = 0.0f;
-      float duty_r = 0.0f;
-      uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
-      if (arr > 0U) {
-        duty_l = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1) * 100.0f) / (float)(arr + 1U);
-        duty_r = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2) * 100.0f) / (float)(arr + 1U);
-      }
+    // Compute commanded duty (percent) from timer compare
+    float duty_l = 0.0f;
+    float duty_r = 0.0f;
+    uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
+    if (arr > 0U) {
+      duty_l = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1) * 100.0f) / (float)(arr + 1U);
+      duty_r = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2) * 100.0f) / (float)(arr + 1U);
+    }
 
-      // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
-      uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target, duty_l, duty_r, SAMPLE_INTERVAL_MS);
+    // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
+    uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target, duty_l, duty_r, CONTROL_LOOP_DT_MS);
 
-      // Update control state (faults from detection above, estop TBD)
-      ControlInputs cin = {0};
-      cin.enable_cmd = true;
-      cin.fault_bits = fault_bits;
-      ControlState_Update(&ctrl_state, &cin, now);
-      // enabled flag will be used on next tick
+    // Update control state (faults from detection above, estop TBD)
+    ControlInputs cin = {0};
+    cin.enable_cmd = true;
+    cin.fault_bits = fault_bits;
+    ControlState_Update(&ctrl_state, &cin, now);
+    // enabled flag will be used on next tick
 
+    // Telemetry decimated to 10 Hz
+    telemetry_decim_counter++;
+    if (telemetry_decim_counter >= TELEMETRY_DECIMATION) {
+      telemetry_decim_counter = 0;
       TelemetryFrame frame = {
         .t_ms = now,
         .cnt_l = sense.cnt_l,
@@ -513,6 +525,58 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * @brief TIM4 Initialization Function (control loop tick)
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+  // Configure TIM4 as 100 Hz base timer for control loop tick
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+  uint32_t tim_freq = HAL_RCC_GetPCLK1Freq();
+  if ((RCC->CFGR & RCC_CFGR_PPRE1) != RCC_CFGR_PPRE1_DIV1) {
+    tim_freq *= 2U; // timer clock doubles when APB1 prescaler != 1
+  }
+  const uint32_t timer_tick_hz = 10000U; // derive coarse 10 kHz tick
+  uint32_t prescaler = (tim_freq / timer_tick_hz) - 1U;
+  uint32_t period = (timer_tick_hz / CONTROL_LOOP_HZ) - 1U;
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = prescaler;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = period;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+  HAL_NVIC_SetPriority(TIM4_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(TIM4_IRQn);
+  /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -611,6 +675,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM4) {
+    control_tick_flag = 1;
+    control_tick_count++;
+  }
+}
 
 /* USER CODE END 4 */
 

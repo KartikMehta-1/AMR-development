@@ -11,7 +11,8 @@
 - Progress: 8/18 weeks complete (~44%)
 - Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected.
 - Current Focus: Speed PI tuning and fault thresholds (overcurrent/stall) using current sensing; optional feedforward to reduce duty skew.
-- Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; decide on cascaded current loop vs. using current only for protection.
+- Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
+- Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; leave cascaded loop deferred.
 - Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; custom PCB is low priority/optional.
   - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
@@ -33,7 +34,7 @@ Legend: Done, In Progress, Partial, Planned, Blocked
 | 9 | Firmware v2: Encoder Integration | Done | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; pull-ups to be added. |
 | 10 | Firmware v2: Current Telemetry + Calibration | Done | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
 | 11 | Firmware v2: Control (Single-Loop PID) | In Progress | Closed-loop speed PI both wheels; duty ramp; polarity fix; target toggling and plotting; continuing gain/feedforward tuning. |
-| 12 | Firmware v2: Cascaded Control + Comparison | Planned | Inner current PI + outer speed PID; add i_* telemetry; compare vs single-loop with plots/metrics (may defer if current stays protection-only). |
+| 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. |
 | 13 | Firmware v2: Differential Drive | Planned | Map (v, I%) + (left, right); saturation and ramp coordination; basic tests. |
 | 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 8x proximity sensors (TBD interface: GPIO/ADC/I2C); wiring, pull-ups, protection; update pin map; bench power budget. |
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 8 sensors; debouncing/filtering; fault detection; add to telemetry. |
@@ -176,3 +177,4 @@ Consequences: Redesign mount; add airflow
 - 2025-11-XX: Added DSN-DVM/DUM-368 battery voltage display (fed after main switch) to specs and wiring docs.
 - 2025-11-XX: Selected 4x CS100A ultrasonic proximity sensors (trig/echo to STM32); updated specs, wiring, and diagram.
 - 2025-11-XX: Power split: XH-M401 (XL4016 class) for Jetson/hub 5 V rail; LM2596 for logic/proximity 5 V rail.
+- 2025-11-XX: Cascaded current loop deferred; continue single-loop speed PI until higher-accuracy current sensor is added.
