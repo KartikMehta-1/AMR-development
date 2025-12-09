@@ -35,7 +35,7 @@ Legend: Done, In Progress, Partial, Planned, Blocked
 | 10 | Firmware v2: Current Telemetry + Calibration | Done | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
 | 11 | Firmware v2: Control (Single-Loop PID) | In Progress | Closed-loop speed PI both wheels; duty ramp; polarity fix; target toggling and plotting; continuing gain/feedforward tuning. |
 | 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. |
-| 13 | Firmware v2: Differential Drive | Planned | Map (v, I%) + (left, right); saturation and ramp coordination; basic tests. |
+| 13 | Firmware v2: Differential Drive | Done | Map (v, ω) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. |
 | 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 8x proximity sensors (TBD interface: GPIO/ADC/I2C); wiring, pull-ups, protection; update pin map; bench power budget. |
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 8 sensors; debouncing/filtering; fault detection; add to telemetry. |
 | 16 | Firmware v2: micro-ROS Bring-up | Planned | Integrate micro-ROS on STM32; define msgs; publish wheel_state/obstacles; subscribe wheel_cmd/estop; stable transport to agent. |

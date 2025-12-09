@@ -33,6 +33,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -189,9 +190,15 @@ int main(void)
 
     // Control loop (PI + ramp) gated by state
     bool enabled = ControlState_IsEnabled(&ctrl_state);
-    float rpm_target = 0.0f;
+    float rpm_target_l = 0.0f;
+    float rpm_target_r = 0.0f;
     float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
-    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target);
+    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target_l, &rpm_target_r);
+    // Set direction pins based on commanded sign, then apply magnitude as duty
+    uint8_t dir_l = (duty_cmd_l >= 0.0f) ? LEFT_DIR_POLARITY : (LEFT_DIR_POLARITY ? 0U : 1U);
+    uint8_t dir_r = (duty_cmd_r >= 0.0f) ? RIGHT_DIR_POLARITY : (RIGHT_DIR_POLARITY ? 0U : 1U);
+    Motor_SetDirection(&m_left, dir_l);
+    Motor_SetDirection(&m_right, dir_r);
     Motor_SetDuty(&m_left, duty_cmd_l);
     Motor_SetDuty(&m_right, duty_cmd_r);
 
@@ -205,7 +212,7 @@ int main(void)
     }
 
     // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
-    uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target, duty_l, duty_r, CONTROL_LOOP_DT_MS);
+    uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target_l, rpm_target_r, duty_l, duty_r, CONTROL_LOOP_DT_MS);
 
     // Update control state (faults from detection above, estop TBD)
     ControlInputs cin = {0};
@@ -224,8 +231,8 @@ int main(void)
         .cnt_r = sense.cnt_r,
         .rpm_l_x10 = (int32_t)(sense.rpm_l * 10.0f),
         .rpm_r_x10 = (int32_t)(sense.rpm_r * 10.0f),
-        .rpm_l_tgt_x10 = (int32_t)(rpm_target * 10.0f),
-        .rpm_r_tgt_x10 = (int32_t)(rpm_target * 10.0f),
+        .rpm_l_tgt_x10 = (int32_t)(rpm_target_l * 10.0f),
+        .rpm_r_tgt_x10 = (int32_t)(rpm_target_r * 10.0f),
         .duty_l_pct = (int32_t)duty_l,
         .duty_r_pct = (int32_t)duty_r,
         .adc_l_counts = sense.adc_l_counts,

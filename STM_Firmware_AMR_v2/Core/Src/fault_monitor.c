@@ -46,23 +46,32 @@ uint32_t FaultMonitor_Update(FaultMonitor *fm,
   if (fm->enc_r_idle_ms >= FAULT_ENC_TIMEOUT_MS) fault_bits |= CTRL_FAULT_ENC_TIMEOUT_RIGHT;
 
 #if FAULT_ADC_STUCK_ENABLED
-  // ADC stuck/rail detection (only when current read is valid)
+  // ADC stuck/rail detection (only when current read is valid and some duty commanded)
   if (sense->curr_valid) {
-    bool rail_l = (sense->adc_l_counts <= FAULT_ADC_RAIL_THRESH) || (sense->adc_l_counts >= (uint16_t)(ADC_MAX_COUNTS - FAULT_ADC_RAIL_THRESH));
-    bool rail_r = (sense->adc_r_counts <= FAULT_ADC_RAIL_THRESH) || (sense->adc_r_counts >= (uint16_t)(ADC_MAX_COUNTS - FAULT_ADC_RAIL_THRESH));
-    bool same_l = (sense->adc_l_counts == fm->adc_l_last);
-    bool same_r = (sense->adc_r_counts == fm->adc_r_last);
-    if ((rail_l && rail_r) || (same_l && same_r)) {
-      if (fm->adc_stuck_count < 0xFFFFFFFFU) {
-        fm->adc_stuck_count++;
+    float aduty_l = fabsf(duty_l_pct);
+    float aduty_r = fabsf(duty_r_pct);
+    bool active = (aduty_l >= FAULT_ADC_STUCK_MIN_DUTY) || (aduty_r >= FAULT_ADC_STUCK_MIN_DUTY);
+    if (active) {
+      bool rail_l = (sense->adc_l_counts <= FAULT_ADC_RAIL_THRESH) || (sense->adc_l_counts >= (uint16_t)(ADC_MAX_COUNTS - FAULT_ADC_RAIL_THRESH));
+      bool rail_r = (sense->adc_r_counts <= FAULT_ADC_RAIL_THRESH) || (sense->adc_r_counts >= (uint16_t)(ADC_MAX_COUNTS - FAULT_ADC_RAIL_THRESH));
+      bool same_l = (sense->adc_l_counts == fm->adc_l_last);
+      bool same_r = (sense->adc_r_counts == fm->adc_r_last);
+      if ((rail_l && rail_r) || (same_l && same_r)) {
+        if (fm->adc_stuck_count < 0xFFFFFFFFU) {
+          fm->adc_stuck_count++;
+        }
+      } else {
+        fm->adc_stuck_count = 0U;
+      }
+      fm->adc_l_last = sense->adc_l_counts;
+      fm->adc_r_last = sense->adc_r_counts;
+      if (fm->adc_stuck_count >= FAULT_ADC_STUCK_SAMPLES) {
+        fault_bits |= CTRL_FAULT_ADC_STUCK;
       }
     } else {
       fm->adc_stuck_count = 0U;
-    }
-    fm->adc_l_last = sense->adc_l_counts;
-    fm->adc_r_last = sense->adc_r_counts;
-    if (fm->adc_stuck_count >= FAULT_ADC_STUCK_SAMPLES) {
-      fault_bits |= CTRL_FAULT_ADC_STUCK;
+      fm->adc_l_last = sense->adc_l_counts;
+      fm->adc_r_last = sense->adc_r_counts;
     }
   } else {
     fm->adc_stuck_count = 0U;

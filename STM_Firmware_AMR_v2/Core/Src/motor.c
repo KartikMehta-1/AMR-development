@@ -1,4 +1,5 @@
 #include "motor.h"
+#include "app_config.h"
 
 static inline void set_compare(MotorChannel *m, uint32_t ccr)
 {
@@ -34,8 +35,8 @@ void Motor_SetDirection(MotorChannel *m, uint8_t forward)
 
 void Motor_SetDuty(MotorChannel *m, float duty_01)
 {
-    if (duty_01 < 0.0f) duty_01 = 0.0f;
-    if (duty_01 > 0.30f) duty_01 = 0.30f;  // cap at 30% duty
+    if (duty_01 < 0.0f) duty_01 = -duty_01; // magnitude; direction handled separately
+    if (duty_01 > MOTOR_DUTY_MAX) duty_01 = MOTOR_DUTY_MAX;   // cap at configured max duty
     uint32_t ccr = (uint32_t)((m->arr + 1) * duty_01);
     if (ccr > m->arr) ccr = m->arr;
     set_compare(m, ccr);

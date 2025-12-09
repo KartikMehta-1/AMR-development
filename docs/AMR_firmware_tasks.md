@@ -40,8 +40,8 @@ Legend: Done, In Progress, Partial, Planned, Not Started, Blocked
 ## Phase 3 - Control ticks and scheduling
 - Status: Partial
 - Tasks
-  - In Progress - Outer loop running in main tick (~10 Hz) with speed PI, duty ramp, and setpoint toggling for test plots
-  - Planned - Add base timer (100-200 Hz) for speed loop and telemetry decimation
+  - In Progress - Outer loop now on fixed 100 Hz TIM4 tick with speed PI, duty ramp, and setpoint toggling
+  - Planned - Telemetry decimation and timing cleanup as needed
   - Blocked - Inner tick (1-5 kHz) tied to PWM/ADC for current control (deferred until higher-accuracy current sensor)
   - Blocked - Scheduler items tied to inner current loop (ADC sample/filter + current PI + duty) deferred with cascade
 
@@ -69,10 +69,11 @@ Legend: Done, In Progress, Partial, Planned, Not Started, Blocked
   - Planned - Fault mask and telemetry bits
 
 ## Phase 7 - Differential drive and tuning
-- Status: Planned
+- Status: Done
 - Tasks
-  - Planned - Map (v, omega) to (left, right); saturation and ramp coordination
-  - Planned - Tune gains; document results in `docs/pid.md`
+  - Done - Map (v, omega) to wheel RPM setpoints using geometry; ramp/coordination added
+  - Done - Curvature-preserving duty saturation with shared scaling
+  - Planned - Tune gains and document results in `docs/pid.md`
 
 ## Deferred - Cascaded current + speed control (requires accurate current sensor)
 - Status: Blocked

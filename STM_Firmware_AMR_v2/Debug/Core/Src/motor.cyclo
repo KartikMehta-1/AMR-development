@@ -1,6 +1,6 @@
-../Core/Src/motor.c:3:20:set_compare	5
-../Core/Src/motor.c:14:6:Motor_Init	1
-../Core/Src/motor.c:30:6:Motor_SetDirection	1
-../Core/Src/motor.c:35:6:Motor_SetDuty	4
-../Core/Src/motor.c:44:6:Motor_Start	1
-../Core/Src/motor.c:49:6:Motor_Stop	1
+../Core/Src/motor.c:4:20:set_compare	5
+../Core/Src/motor.c:15:6:Motor_Init	1
+../Core/Src/motor.c:31:6:Motor_SetDirection	1
+../Core/Src/motor.c:36:6:Motor_SetDuty	4
+../Core/Src/motor.c:45:6:Motor_Start	1
+../Core/Src/motor.c:50:6:Motor_Stop	1

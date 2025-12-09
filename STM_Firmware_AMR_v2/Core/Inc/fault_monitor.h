@@ -21,7 +21,8 @@ typedef struct {
 void FaultMonitor_Init(FaultMonitor *fm);
 uint32_t FaultMonitor_Update(FaultMonitor *fm,
                              const SensingData *sense,
-                             float rpm_target,
+                             float rpm_target_l,
+                             float rpm_target_r,
                              float duty_l_pct,
                              float duty_r_pct,
                              uint32_t dt_ms);

@@ -13,6 +13,8 @@
 #define CONTROL_LOOP_DT_S       (1.0f / (float)CONTROL_LOOP_HZ)
 #define TELEMETRY_DECIMATION    10U     // send telemetry every N control ticks (100 Hz / 10 = 10 Hz)
 #define SAMPLE_INTERVAL_MS      100U    // legacy/telemetry period reference (ms)
+#define TRACK_WIDTH_M           0.386f  // wheel-to-wheel track width (meters)
+#define WHEEL_RADIUS_M          0.0615f // wheel radius (meters)
 
 // Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
 #define ADC_VREF_VOLTS        3.3f
@@ -45,9 +47,9 @@
 #define SPEED_PID_KP_R     0.025f
 #define SPEED_PID_KI_R     0.040f
 #define SPEED_PID_KD_R     0.00f
-#define SPEED_PID_OUT_MIN  0.0f
+#define SPEED_PID_OUT_MIN -0.30f
 #define SPEED_PID_OUT_MAX  0.30f
-#define SPEED_PID_I_MIN    0.0f
+#define SPEED_PID_I_MIN   -0.20f
 #define SPEED_PID_I_MAX    0.20f
 #define SPEED_PID_DEADBAND_RPM 0.20f   // do not integrate when error magnitude is below this
 
@@ -55,6 +57,19 @@
 #define SPEED_TEST_RPM_LOW   2.0f
 #define SPEED_TEST_RPM_HIGH  4.0f
 #define SPEED_TEST_TOGGLE_MS 5000U
+
+// Ramp rates for command slewing (applied to v, w) and duty limit
+#define V_CMD_RAMP_RATE_MPS   0.20f    // max change in linear velocity per second
+#define W_CMD_RAMP_RATE_RAD   0.80f    // max change in angular velocity per second
+#define MOTOR_DUTY_MAX        0.30f    // absolute duty limit for scaling/clamp
+
+// Differential drive test cases (v, omega) toggled every 5s
+#define DIFF_TEST_V1_MPS   0.20f
+#define DIFF_TEST_W1_RPS   0.0f
+#define DIFF_TEST_V2_MPS   0.15f
+#define DIFF_TEST_W2_RPS   0.30f
+#define DIFF_TEST_V3_MPS   0.0f
+#define DIFF_TEST_W3_RPS   0.50f
 
 // RPM filtering before PID (simple exponential filter)
 #define RPM_LPF_ALPHA 0.20f   // higher = less smoothing
@@ -70,5 +85,6 @@
 #define FAULT_ADC_STUCK_ENABLED   1      // set to 1 to re-enable ADC stuck/rail fault (disabled for testing)
 #define FAULT_ADC_STUCK_SAMPLES   30     // consecutive identical/rail samples to declare ADC stuck
 #define FAULT_ADC_RAIL_THRESH     5      // counts from rail to consider as rail (0 or max)
+#define FAULT_ADC_STUCK_MIN_DUTY  2.0f   // only check ADC stuck when |duty| >= this percent on either wheel
 
 #endif // APP_CONFIG_H
