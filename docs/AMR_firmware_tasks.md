@@ -2,7 +2,7 @@
 
 Owner: Kartik Mehta  
 Status: In progress - dual-motor speed PI tuning; cascaded current loop deferred until higher-accuracy current sensor.  
-Last Updated: 2025-12-08
+Last Updated: 2025-12-09
 
 Legend: Done, In Progress, Partial, Planned, Not Started, Blocked
 
@@ -91,3 +91,4 @@ Notes
 - Hardware support (buck + perfboard) to unblock sensing:
   - Add regulated 5 V buck from 12 V bench/battery for sensors/encoders/ACS758; tie grounds common.
   - Build a small perfboard/shield for Nucleo: encoder 3.3 V pull-ups, ACS758 dividers + RC filters, decoupling caps, screw terminals/headers for clean wiring.
+- Schedule cross-ref (see `docs/AMR_project.md`): W20 Mechanical Design Finalization; W21 Electrical Design & Battery AMR (battery operation + robust harness); W22 Dockerized Workspace; W23 ROS2 topics bring-up/validation (cmd_vel/wheel_state/LiDAR/depth/proximity).

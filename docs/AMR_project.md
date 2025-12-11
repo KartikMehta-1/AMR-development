@@ -1,19 +1,19 @@
-# Kartik's AMR Project Tracker (18 Weeks)
+# Kartik's AMR Project Tracker (34 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2025-11-05  
+**Last Updated:** 2025-12-09  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
 
 ---
 
 ## Status Summary
 - Overall: On track with tuning in progress
-- Progress: 8/18 weeks complete (~44%)
+- Progress: 10/34 weeks complete (~29%)
 - Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected.
 - Current Focus: Speed PI tuning and fault thresholds (overcurrent/stall) using current sensing; optional feedforward to reduce duty skew.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; leave cascaded loop deferred.
-- Timeline: Flexible (plan extended beyond 18 weeks). Prioritize firmware + ROS; custom PCB is low priority/optional.
+- Timeline: Flexible (now a 34-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
   - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
 Legend: Done, In Progress, Partial, Planned, Blocked
@@ -35,23 +35,29 @@ Legend: Done, In Progress, Partial, Planned, Blocked
 | 10 | Firmware v2: Current Telemetry + Calibration | Done | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
 | 11 | Firmware v2: Control (Single-Loop PID) | In Progress | Closed-loop speed PI both wheels; duty ramp; polarity fix; target toggling and plotting; continuing gain/feedforward tuning. |
 | 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. |
-| 13 | Firmware v2: Differential Drive | Done | Map (v, ω) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. |
-| 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 8x proximity sensors (TBD interface: GPIO/ADC/I2C); wiring, pull-ups, protection; update pin map; bench power budget. |
-| 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 8 sensors; debouncing/filtering; fault detection; add to telemetry. |
+| 13 | Firmware v2: Differential Drive | Done | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. |
+| 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 4x proximity sensors (GPIO/ADC/I2C TBD); mounts, wiring, pull-ups/protection; update pin map; bench power budget. |
+| 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 4 sensors; debouncing/filtering; fault detection; add to telemetry. |
 | 16 | Firmware v2: micro-ROS Bring-up | Planned | Integrate micro-ROS on STM32; define msgs; publish wheel_state/obstacles; subscribe wheel_cmd/estop; stable transport to agent. |
-| 17 | Jetson ROS2 + Agent + Docker | Planned | Set up micro-ROS agent and ROS2 workspace on Jetson; dockerize dev/runtime; compose services; basic end-to-end echo tests. |
-| 18 | ROS2 Architecture & Topics | Planned | Define node graph, topics, QoS, message types; draft test plans (unit/integration/sim); document interfaces for motion, safety, sensors. |
-| 19 | URDF Modeling | Planned | Base chassis + wheels URDF; inertia estimates; visual/collision meshes; joint limits; TF tree. |
-| 20 | Gazebo Simulation | Planned | Diff-drive plugin tuning; sensor plugins for LiDAR/depth/proximity; sim-worlds; baseline nav in sim. |
-| 21 | ROS2 Node Implementation | Planned | Implement nodes per architecture (odometry, safety_monitor, sensor_fusion, teleop); CI for lint/build/test. |
-| 22 | System Tests & CI | Planned | Sim integration tests; logging/bagging; performance dashboards; dockerized CI pipeline. |
-| 23 | Field Bring-up | Planned | On-robot tests: drive, stop, obstacle detection; telemetry review; safety validation. |
-| 24 | Polish & Docs | Planned | User/developer docs; scripts; troubleshooting; backlog triage. |
-| 25 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
-| 26 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
-| 27 | Custom Motor Driver Integration | Planned | Drop Cytron; design dual H-bridge with gate driver (e.g., DRV87xx) + MOSFETs + shunt/Hall sensing; protection (TVS/fuse/reverse); thermal + EMC checks. |
-| 28 | Bare MCU Integration | Planned | Replace Nucleo with bare STM32F401: crystal, boot config, SWD header, decoupling, ESD/TVS/brownout; firmware port and bring-up (clocks/debug/motor control). |
-| 29 | EMC & Production Prep | Planned | 4-layer stack, split/stitched grounds, Kelvin/star grounds, common-mode chokes + TVS, test points, silks/labels, panelization; pre-scan EMC/ESD; pilot build (5-10 units). |
+| 17 | Dev PC Env & Tooling | Planned | Install ROS2 desktop + colcon, VS Code/devcontainer, CLI tools; micro-ROS agent loopback; cross-build toolchain; base Docker/compose aligned with Jetson; SSH keys + dotfiles for reproducible setup. |
+| 18 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware. |
+| 19 | Wireless PC<->Nano | Planned | Add Wi-Fi module/antennas; configure NetworkManager/wpa_supplicant; set static/reserved IP + SSH keys (no passwords); ping/iperf latency check; NTP sync; optional VPN (WireGuard/Tailscale). |
+| 20 | Mechanical Design Finalization | Planned | Complete CAD for chassis/enclosures/sensor mounts; wire harness routing/lengths; connectors + strain relief; STEP/DXF + exploded assembly + BOM; serviceability review. |
+| 21 | Electrical Design & Battery AMR | Planned | Operate AMR on battery; finalize wiring harness and routing for robustness (strain relief, protection); power tree battery->fuse->switch->bucks; E-stop integration; charger/BMS pick; ground strategy; bench validation under load. |
+| 22 | Dockerized Workspace | Planned | Build desktop + Jetson images (Ubuntu+ROS2+micro-ROS agent); JetPack runtime in Jetson containers; compose with volumes for logs/bags; GPU access validated; `ros2 topic echo` across containers over Wi-Fi; helper scripts. |
+| 23 | ROS2 Topics Bring-up & Validation | Planned | Create/validate topics: `cmd_vel`/`/amr/wheel_cmd`, wheel_state, LiDAR scan, depth cam image/point cloud, proximity ranges; set QoS; rosbag + playback tests; document message contracts. |
+| 24 | URDF Modeling | Planned | Base chassis + wheels URDF; inertia estimates; visual/collision meshes; joint limits; TF tree; sync with mechanical CAD. |
+| 25 | Gazebo Simulation | Planned | Diff-drive plugin tuning; sensor plugins for LiDAR/depth/proximity; sim-worlds; baseline nav in sim; align topics/QoS with real robot. |
+| 26 | ROS2 Node Implementation | Planned | Implement nodes per architecture (odometry, safety_monitor, sensor_fusion, teleop); CI for lint/build/test. |
+| 27 | System Tests & CI | Planned | Sim integration tests; logging/bagging; performance dashboards; dockerized CI pipeline. |
+| 28 | Field Bring-up | Planned | On-robot tests: drive, stop, obstacle detection; telemetry review; safety validation. |
+| 29 | Polish & Docs | Planned | User/developer docs; scripts; troubleshooting; backlog triage. |
+| 30 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
+| 31 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
+| 32 | Custom Motor Driver Integration | Planned | Drop Cytron; design dual H-bridge with gate driver (e.g., DRV87xx) + MOSFETs + shunt/Hall sensing; protection (TVS/fuse/reverse); thermal + EMC checks. |
+| 33 | Bare MCU Integration | Planned | Replace Nucleo with bare STM32F401: crystal, boot config, SWD header, decoupling, ESD/TVS/brownout; firmware port and bring-up (clocks/debug/motor control). |
+| 34 | EMC & Production Prep | Planned | 4-layer stack, split/stitched grounds, Kelvin/star grounds, common-mode chokes + TVS, test points, silks/labels, panelization; pre-scan EMC/ESD; pilot build (5-10 units). |
+
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
 ---

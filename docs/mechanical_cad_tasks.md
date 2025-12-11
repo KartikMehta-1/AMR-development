@@ -25,7 +25,7 @@ Tasks
 - Sensors
   - YDLidar G4 mount (level, 360° FOV)
   - RealSense D455 front mount (rigid, vibration-damped, unobstructed)
-  - Proximity sensor brackets (x8) with consistent field of view
+  - Proximity sensor brackets (x4) with consistent field of view
 - Manipulators
   - Integrate dual SO101 arm manipulators on AMR top plate; verify clearances, wiring paths, and fastener patterns
 - Cable routing and strain relief
