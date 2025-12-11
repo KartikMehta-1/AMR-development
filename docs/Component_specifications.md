@@ -242,3 +242,17 @@ Three supplies recommended; exact models TBD.
 | Output | 12.0 V |
 | Max Current | TBD |
 | Notes | Only needed if any sensor requires 12 V |
+
+---
+
+## 15. Jetson Soft Power Button
+**Model (suggested):** Bulgin MP0045/1E2-C (12 mm anti-vandal, momentary N.O., IP67, no LED)
+
+| Parameter | Value |
+|------------|--------|
+| Type | Momentary, normally-open pushbutton |
+| Mounting | 12 mm panel cutout (threaded body with nut) |
+| Contacts | SPST N.O., rated for low-voltage signal use (PWR_BTN to GND) |
+| Interface | Wire across Jetson Nano PWR_BTN and GND pins (header); no power switching |
+| Ingress | IP67 (front face) |
+| Notes | Use for graceful Jetson start/stop; does not cut 5 V rail. Any similar 12 mm N.O. momentary switch works; omit LED to keep wiring simple. |

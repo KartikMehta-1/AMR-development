@@ -45,6 +45,7 @@ graph TD
     STM[STM32 Nucleo F401RE]
     JET[Jetson Nano Dev Kit]
     USBHUB[Powered USB Hub]
+    PWRBTN[Jetson Soft Power Button<br/>momentary to PWR_BTN]
   end
 
   %% Sensors
@@ -80,6 +81,7 @@ graph TD
   DEPTH --> USBHUB
   USBHUB --> JET
   STM <-.-> JET
+  PWRBTN -.-> JET
 
   %% Styles: power vs data
   linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 stroke:#e67e22,stroke-width:3px;
@@ -92,3 +94,4 @@ graph TD
 - Main power switch sits at pack output ahead of fuse and E-Stop for full isolation during service/storage.
 - Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off.
 - Proximity sensors: 4x CS100A ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; stagger triggers to avoid crosstalk.
+- Jetson soft power button: momentary N.O. switch across JET PWR_BTN to GND for graceful shutdown/start (no power cut).
