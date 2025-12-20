@@ -1,19 +1,19 @@
-# Kartik's AMR Project Tracker (34 Weeks)
+# Kartik's AMR Project Tracker (38 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
 **Last Updated:** 2025-12-09  
-**Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation.
+**Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
 - Overall: On track with tuning in progress
-- Progress: 10/34 weeks complete (~29%)
+- Progress: 10/38 weeks complete (~26%)
 - Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected.
 - Current Focus: Speed PI tuning and fault thresholds (overcurrent/stall) using current sensing; optional feedforward to reduce duty skew.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; leave cascaded loop deferred.
-- Timeline: Flexible (now a 34-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
+- Timeline: Flexible (now a 38-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
   - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
 Legend: Done, In Progress, Partial, Planned, Blocked
@@ -42,21 +42,25 @@ Legend: Done, In Progress, Partial, Planned, Blocked
 | 17 | Dev PC Env & Tooling | Planned | Install ROS2 desktop + colcon, VS Code/devcontainer, CLI tools; micro-ROS agent loopback; cross-build toolchain; base Docker/compose aligned with Jetson; SSH keys + dotfiles for reproducible setup. |
 | 18 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware. |
 | 19 | Wireless PC<->Nano | Planned | Add Wi-Fi module/antennas; configure NetworkManager/wpa_supplicant; set static/reserved IP + SSH keys (no passwords); ping/iperf latency check; NTP sync; optional VPN (WireGuard/Tailscale). |
-| 20 | Mechanical Design Finalization | Planned | Complete CAD for chassis/enclosures/sensor mounts; wire harness routing/lengths; connectors + strain relief; STEP/DXF + exploded assembly + BOM; serviceability review. |
-| 21 | Electrical Design & Battery AMR | Planned | Operate AMR on battery; finalize wiring harness and routing for robustness (strain relief, protection); power tree battery->fuse->switch->bucks; E-stop integration; charger/BMS pick; ground strategy; bench validation under load. |
-| 22 | Dockerized Workspace | Planned | Build desktop + Jetson images (Ubuntu+ROS2+micro-ROS agent); JetPack runtime in Jetson containers; compose with volumes for logs/bags; GPU access validated; `ros2 topic echo` across containers over Wi-Fi; helper scripts. |
-| 23 | ROS2 Topics Bring-up & Validation | Planned | Create/validate topics: `cmd_vel`/`/amr/wheel_cmd`, wheel_state, LiDAR scan, depth cam image/point cloud, proximity ranges; set QoS; rosbag + playback tests; document message contracts. |
-| 24 | URDF Modeling | Planned | Base chassis + wheels URDF; inertia estimates; visual/collision meshes; joint limits; TF tree; sync with mechanical CAD. |
-| 25 | Gazebo Simulation | Planned | Diff-drive plugin tuning; sensor plugins for LiDAR/depth/proximity; sim-worlds; baseline nav in sim; align topics/QoS with real robot. |
-| 26 | ROS2 Node Implementation | Planned | Implement nodes per architecture (odometry, safety_monitor, sensor_fusion, teleop); CI for lint/build/test. |
-| 27 | System Tests & CI | Planned | Sim integration tests; logging/bagging; performance dashboards; dockerized CI pipeline. |
-| 28 | Field Bring-up | Planned | On-robot tests: drive, stop, obstacle detection; telemetry review; safety validation. |
-| 29 | Polish & Docs | Planned | User/developer docs; scripts; troubleshooting; backlog triage. |
-| 30 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
-| 31 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
-| 32 | Custom Motor Driver Integration | Planned | Drop Cytron; design dual H-bridge with gate driver (e.g., DRV87xx) + MOSFETs + shunt/Hall sensing; protection (TVS/fuse/reverse); thermal + EMC checks. |
-| 33 | Bare MCU Integration | Planned | Replace Nucleo with bare STM32F401: crystal, boot config, SWD header, decoupling, ESD/TVS/brownout; firmware port and bring-up (clocks/debug/motor control). |
-| 34 | EMC & Production Prep | Planned | 4-layer stack, split/stitched grounds, Kelvin/star grounds, common-mode chokes + TVS, test points, silks/labels, panelization; pre-scan EMC/ESD; pilot build (5-10 units). |
+| 20 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, sensors, inertias; TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. |
+| 21 | Navigation & Mapping Bring-up | Planned | Nav2 stack with LiDAR/odom/IMU; map server or SLAM; AMCL/localization; tuned costmaps; go-to-pose with safety limits and review bags. |
+| 22 | Navigation Validation & Safety | Planned | Regression routes, obstacle handling, recovery behaviors; watchdogs/staleness; log success/latency; refine limits before adding arms. |
+| 23 | Mechanical Integration: Dual SO-101 Arms | Planned | Mount both arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. |
+| 24 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. |
+| 25 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. |
+| 26 | Calibration & Perception Baseline | Planned | Hand-eye and base-to-arm extrinsics; AprilTag validation; RGB-D grasp perception baseline (segmentation/keypoints); log pipeline for RGB-D+joints. |
+| 27 | Teleop + Dataset Collection | Planned | Teleop/teaching tools (SpaceMouse/joystick); record synchronized video/joints/gripper for pick/place tasks; label successes/failures. |
+| 28 | Classical Grasp Pipeline | Planned | Perception -> grasp pose -> MoveIt planning/execution; guarded moves and retreat behaviors; bench metrics (success, cycle time, contact faults). |
+| 29 | Base+Arm Integration (Classical) | Planned | Navigate to pickup pose, align with RGB-D, run classical grasp, place at drop zone; recovery behaviors (regrasp/replan base pose) and watchdogs. |
+| 30 | VLA/VLM Model Trials (Sim) | Planned | Run state-of-the-art open VLA/VLM (OpenVLA/Octo/RT-class/diffusion) in sim with domain randomization; profile latency on Jetson/external GPU. |
+| 31 | VLA Guarded Hardware Replay | Planned | Deploy selected policies on hardware with action clamps/safety envelopes; compare to classical baseline; track success/intervention rate. |
+| 32 | End-to-End Autonomy Sprints | Planned | Full loop: navigate to goal -> pick -> place -> return; measure success, cycle time, collisions, latency; tighten limits/thresholds and logging. |
+| 33 | Field Bring-up (Supervised) | Planned | On-robot runs with manipulators: drive + pick/place in controlled environment; telemetry review; safety validation and recovery drills. |
+| 34 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
+| 35 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
+| 36 | Custom Motor Driver / Production Prep | Planned | Begin custom H-bridge integration plan (DRV87xx + MOSFETs) and EMC/ESD prep; outline 4-layer stack, grounds, TVS/CMC, test points, panelization; plan pilot build. |
+| 37 | Voice I/O Architecture & ASR Integration | Planned | Select ASR (offline-capable small model) + wake-word; route mic->ASR->command parser->task planner; define grammar/safety filters; initial hotword + basic intents on Nano. |
+| 38 | TTS/Dialogue & Safety Guards | Planned | Add TTS for robot responses; integrate dialogue manager/LLM for natural commands with explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails and fallback teleop. |
 
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
@@ -184,3 +188,58 @@ Consequences: Redesign mount; add airflow
 - 2025-11-XX: Selected 4x CS100A ultrasonic proximity sensors (trig/echo to STM32); updated specs, wiring, and diagram.
 - 2025-11-XX: Power split: XH-M401 (XL4016 class) for Jetson/hub 5 V rail; LM2596 for logic/proximity 5 V rail.
 - 2025-11-XX: Cascaded current loop deferred; continue single-loop speed PI until higher-accuracy current sensor is added.
+
+---
+
+## Manipulator + AI Roadmap (SO-101 arms with VLA/VLM/LLM stack)
+
+Goal: two open-source SO-101 arms mounted on the AMR, capable of autonomous pick/place of small objects. Control runs through ROS2/micro-ROS, with state-of-the-art vision-language-action (VLA), vision-language (VLM), and LLM-based planners on the Jetson or a paired edge GPU when needed.
+
+### Phase A: Mechanical + Electrical Bring-up
+- Mount both SO-101 arms on the chassis (verify payload, reach, FOV clearances). Add strain relief and service loops for cables.
+- Power: size 5 V/12 V rails or separate buck for the arms; confirm inrush/peak current; fuse per arm. Tie grounds at star point.
+- IO: decide arm drivers (existing SO-101 controller or custom): interface via USB/RS485/CAN; level-shift if needed; map pins/connectors.
+- Safety: add arm E-stop integration (shared with base) and per-arm enable; confirm brakes/hold torque expectations.
+
+### Phase B: Kinematics, URDF, and ROS2 Control
+- Create SO-101 URDF/Xacro with collision/visual meshes; add to the AMR URDF with correct frames and inertias.
+- Calibrate DH/offsets and tool frames; define grasp frame and camera frames (RealSense + LiDAR + any wrist cam if added).
+- Bring up control stack (MoveIt 2 or ros2_control drivers): joint state publisher, trajectory action server, and gripper control.
+- Run bench tests: joint jogging, homing, limits, soft-stops, and basic Cartesian moves.
+
+### Phase C: Perception and Calibration
+- Extrinsics: hand-eye calibration (if wrist cam), base-to-arm, and camera-to-arm transforms; store in YAML and validate with AprilTags.
+- Grasp perception: start with classical + learned hybrids (AprilTags/ArUco for fixtures, then segmentation/keypoint nets on RGB-D).
+- Build data/logging pipeline for RGB-D + joint states + gripper status + base pose; include bagging scripts and dataset versioning.
+
+### Phase D: Teleop and Dataset Collection
+- Add teleop/kinesthetic teaching tools: SpaceMouse/VR controller/joystick + MoveIt task recording; log synchronized video and joint trajectories.
+- Collect canonical tasks: pick/place from bins/table, handoff to base, simple sorting. Label successes/failures; track intervention rate.
+- Generate synthetic data in sim (Gazebo) with domain randomization for lighting/textures/poses to augment the real dataset.
+
+### Phase E: Classical Baselines
+- Baseline pipeline: perception -> grasp pose -> Motion planning (MoveIt RRT*/OMPL) -> execution with compliance/velocity caps.
+- Add guarded moves (force/torque thresholds if available) and retreat behaviors; log metrics (success, time-to-grasp, contact faults).
+
+### Phase F: VLA/VLM/LLM Integration (state-of-the-art models)
+- VLA policies for manipulation: prototype with open models (e.g., OpenVLA-style policies, Octo/RT-1/RT-2 class, diffusion policies) conditioned on RGB-D + text; start in sim, then replay on hardware with action clamps and safety envelopes.
+- VLMs for perception: try segment-anything/grounding-style models for object proposals; fuse with depth for grasp pose proposals.
+- LLM for task planning: route high-level instructions to sequences (navigate -> detect -> pick -> place). Keep execution guarded by deterministic controllers; enforce staleness timeouts and safety checks.
+- Jetson constraints: profile latency; offload heavy models to external GPU if needed; fall back to lighter distilled variants on Nano.
+
+### Phase G: Policy Training and Evaluation
+- Training loop: dataset curation -> supervised behavior cloning for pick/place primitives -> fine-tune with RL or offline RL where feasible.
+- Safety guards: action filters (joint limits, velocity caps, collision checks), watchdogs, and automatic stop on perception dropouts.
+- Metrics: success rate per object/scene, grasp quality, cycle time, collision/near-miss count, latency budget, sim-to-real gap.
+- A/B compare: classical pipeline vs VLA policy vs hybrids (VLA proposes grasp + classical planner executes).
+
+### Phase H: Integrated Autonomy with Base
+- Task graph: plan base pose for manipulation (nav goal), align using LiDAR/depth, then run arm sequence; recover on failure (regrasp, replan base pose).
+- Multi-modal sensing: fuse LiDAR/depth/proximity for base; use RGB-D for arms; maintain transforms so grasps align with base frame.
+- Field tests: constrained lab runs -> supervised floor runs -> limited unsupervised with watchdog; track intervention rate and MTBF.
+
+### Deliverables per phase
+- CAD mounts, updated URDF, MoveIt configs, calibration files.
+- ROS2 packages: arm drivers, perception nodes, task orchestrator, policy runner with safety filters.
+- Datasets and training scripts; evaluation reports with metrics and plots.
+- Safety checklist: E-stop integration, speed/force limits, tested recovery behaviors.

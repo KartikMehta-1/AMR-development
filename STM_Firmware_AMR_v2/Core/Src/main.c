@@ -18,6 +18,13 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include <stdbool.h>
+#include <stdint.h>
+#include <math.h>
 #include "motor.h"
 #include "encoder.h"
 #include "app_config.h"
@@ -29,14 +36,10 @@
 #include "sensing.h"
 #include "fault_monitor.h"
 #include "control_loop.h"
-
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-#include <stdint.h>
-#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
+typedef StaticTask_t osStaticThreadDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -60,7 +63,45 @@ TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
+/* Definitions for control_task */
+osThreadId_t control_taskHandle;
+uint32_t control_taskBuffer[ 1500 ];
+osStaticThreadDef_t control_taskControlBlock;
+const osThreadAttr_t control_task_attributes = {
+  .name = "control_task",
+  .cb_mem = &control_taskControlBlock,
+  .cb_size = sizeof(control_taskControlBlock),
+  .stack_mem = &control_taskBuffer[0],
+  .stack_size = sizeof(control_taskBuffer),
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for ros_exec_task */
+osThreadId_t ros_exec_taskHandle;
+uint32_t RosExecTaskBuffer[ 2500 ];
+osStaticThreadDef_t RosExecTaskControlBlock;
+const osThreadAttr_t ros_exec_task_attributes = {
+  .name = "ros_exec_task",
+  .cb_mem = &RosExecTaskControlBlock,
+  .cb_size = sizeof(RosExecTaskControlBlock),
+  .stack_mem = &RosExecTaskBuffer[0],
+  .stack_size = sizeof(RosExecTaskBuffer),
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for ros_pub_task */
+osThreadId_t ros_pub_taskHandle;
+uint32_t ros_pub_taskBuffer[ 2000 ];
+osStaticThreadDef_t ros_pub_taskControlBlock;
+const osThreadAttr_t ros_pub_task_attributes = {
+  .name = "ros_pub_task",
+  .cb_mem = &ros_pub_taskControlBlock,
+  .cb_size = sizeof(ros_pub_taskControlBlock),
+  .stack_mem = &ros_pub_taskBuffer[0],
+  .stack_size = sizeof(ros_pub_taskBuffer),
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE BEGIN PV */
 static uint32_t last_header_tick = 0;
 static volatile uint8_t control_tick_flag = 0;
@@ -74,6 +115,8 @@ static Sensing sensing;
 static SensingData sense;
 static FaultMonitor fault_mon;
 static ControlLoop control_loop;
+static MotorChannel m_left;
+static MotorChannel m_right;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -86,6 +129,10 @@ static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
+void StartControlTask(void *argument);
+void StartRosExecTask(void *argument);
+void StartRosPubTask(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -133,9 +180,6 @@ int main(void)
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   // Initialize and run both motors at 10% duty (Cytron MDD20A)
-  MotorChannel m_left;
-  MotorChannel m_right;
-
   // Left motor (M1): PA8 PWM (TIM1_CH1), PB4 DIR
   Motor_Init(&m_left, &htim1, TIM_CHANNEL_1, DIR_LEFT_GPIO_Port, DIR_LEFT_Pin, __HAL_TIM_GET_AUTORELOAD(&htim1));
   Motor_SetDirection(&m_left, LEFT_DIR_POLARITY);   // forward (adjust if wiring requires inversion)
@@ -166,6 +210,48 @@ int main(void)
   last_header_tick = HAL_GetTick();
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of control_task */
+  control_taskHandle = osThreadNew(StartControlTask, NULL, &control_task_attributes);
+
+  /* creation of ros_exec_task */
+  ros_exec_taskHandle = osThreadNew(StartRosExecTask, NULL, &ros_exec_task_attributes);
+
+  /* creation of ros_pub_task */
+  ros_pub_taskHandle = osThreadNew(StartRosPubTask, NULL, &ros_pub_task_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -173,86 +259,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    // Wait for 100 Hz control tick (TIM4 interrupt sets flag)
-    if (!control_tick_flag) {
-      continue;
-    }
-    control_tick_flag = 0;
-    uint32_t now = HAL_GetTick();
-    float dt_s = CONTROL_LOOP_DT_S;
-
-    // Sense encoders/currents
-    sense.rpm_l = sense.rpm_r = 0.0f;
-    Sensing_Step(&sensing, dt_s, &sense);
-    // Apply encoder polarity
-    sense.rpm_l *= LEFT_ENCODER_POLARITY;
-    sense.rpm_r *= RIGHT_ENCODER_POLARITY;
-
-    // Control loop (PI + ramp) gated by state
-    bool enabled = ControlState_IsEnabled(&ctrl_state);
-    float rpm_target_l = 0.0f;
-    float rpm_target_r = 0.0f;
-    float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
-    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target_l, &rpm_target_r);
-    // Set direction pins based on commanded sign, then apply magnitude as duty
-    uint8_t dir_l = (duty_cmd_l >= 0.0f) ? LEFT_DIR_POLARITY : (LEFT_DIR_POLARITY ? 0U : 1U);
-    uint8_t dir_r = (duty_cmd_r >= 0.0f) ? RIGHT_DIR_POLARITY : (RIGHT_DIR_POLARITY ? 0U : 1U);
-    Motor_SetDirection(&m_left, dir_l);
-    Motor_SetDirection(&m_right, dir_r);
-    Motor_SetDuty(&m_left, duty_cmd_l);
-    Motor_SetDuty(&m_right, duty_cmd_r);
-
-    // Compute commanded duty (percent) from timer compare
-    float duty_l = 0.0f;
-    float duty_r = 0.0f;
-    uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
-    if (arr > 0U) {
-      duty_l = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1) * 100.0f) / (float)(arr + 1U);
-      duty_r = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2) * 100.0f) / (float)(arr + 1U);
-    }
-
-    // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
-    uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target_l, rpm_target_r, duty_l, duty_r, CONTROL_LOOP_DT_MS);
-
-    // Update control state (faults from detection above, estop TBD)
-    ControlInputs cin = {0};
-    cin.enable_cmd = true;
-    cin.fault_bits = fault_bits;
-    ControlState_Update(&ctrl_state, &cin, now);
-    // enabled flag will be used on next tick
-
-    // Telemetry decimated to 10 Hz
-    telemetry_decim_counter++;
-    if (telemetry_decim_counter >= TELEMETRY_DECIMATION) {
-      telemetry_decim_counter = 0;
-      TelemetryFrame frame = {
-        .t_ms = now,
-        .cnt_l = sense.cnt_l,
-        .cnt_r = sense.cnt_r,
-        .rpm_l_x10 = (int32_t)(sense.rpm_l * 10.0f),
-        .rpm_r_x10 = (int32_t)(sense.rpm_r * 10.0f),
-        .rpm_l_tgt_x10 = (int32_t)(rpm_target_l * 10.0f),
-        .rpm_r_tgt_x10 = (int32_t)(rpm_target_r * 10.0f),
-        .duty_l_pct = (int32_t)duty_l,
-        .duty_r_pct = (int32_t)duty_r,
-        .adc_l_counts = sense.adc_l_counts,
-        .adc_r_counts = sense.adc_r_counts,
-        .zero_l_counts = sense.zero_l_counts,
-        .zero_r_counts = sense.zero_r_counts,
-        .curr_l_mA = sense.curr_l_mA,
-        .curr_r_mA = sense.curr_r_mA,
-        .state = (uint32_t)ControlState_GetState(&ctrl_state),
-        .fault_mask = ControlState_GetFaultMask(&ctrl_state)
-      };
-
-      // Periodic header every 10s
-      if ((now - last_header_tick) > 10000U) {
-        Telemetry_SendHeader(&huart2);
-        last_header_tick = now;
-      }
-
-      Telemetry_SendFrame(&huart2, &frame);
-    }
+    osDelay(1);
   }
   /* USER CODE END 3 */
 }
@@ -334,7 +341,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;  // poll per conversion in the sequence
+  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     Error_Handler();
@@ -344,7 +351,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_8;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;  // longer sample to settle RC filter
+  sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -532,7 +539,7 @@ static void MX_TIM3_Init(void)
 }
 
 /**
-  * @brief TIM4 Initialization Function (control loop tick)
+  * @brief TIM4 Initialization Function
   * @param None
   * @retval None
   */
@@ -540,25 +547,19 @@ static void MX_TIM4_Init(void)
 {
 
   /* USER CODE BEGIN TIM4_Init 0 */
-  // Configure TIM4 as 100 Hz base timer for control loop tick
+
   /* USER CODE END TIM4_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
 
   /* USER CODE BEGIN TIM4_Init 1 */
-  uint32_t tim_freq = HAL_RCC_GetPCLK1Freq();
-  if ((RCC->CFGR & RCC_CFGR_PPRE1) != RCC_CFGR_PPRE1_DIV1) {
-    tim_freq *= 2U; // timer clock doubles when APB1 prescaler != 1
-  }
-  const uint32_t timer_tick_hz = 10000U; // derive coarse 10 kHz tick
-  uint32_t prescaler = (tim_freq / timer_tick_hz) - 1U;
-  uint32_t period = (timer_tick_hz / CONTROL_LOOP_HZ) - 1U;
+
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = prescaler;
+  htim4.Init.Prescaler = 8399;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = period;
+  htim4.Init.Period = 99;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -577,8 +578,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM4_Init 2 */
-  HAL_NVIC_SetPriority(TIM4_IRQn, 1, 0);
-  HAL_NVIC_EnableIRQ(TIM4_IRQn);
+
   /* USER CODE END TIM4_Init 2 */
 
 }
@@ -624,10 +624,17 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA2_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
 }
@@ -688,10 +695,146 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM4) {
     control_tick_flag = 1;
     control_tick_count++;
+  } else if (htim->Instance == TIM5) {
+    HAL_IncTick();
   }
 }
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartControlTask */
+/**
+  * @brief  Function implementing the control_task thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartControlTask */
+void StartControlTask(void *argument)
+{
+  /* USER CODE BEGIN StartControlTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    // Wait for 100 Hz control tick (TIM4 interrupt sets flag)
+    if (!control_tick_flag) {
+      osDelay(1);
+      continue;
+    }
+    control_tick_flag = 0;
+    uint32_t now = HAL_GetTick();
+    float dt_s = CONTROL_LOOP_DT_S;
+
+    // Sense encoders/currents
+    sense.rpm_l = sense.rpm_r = 0.0f;
+    Sensing_Step(&sensing, dt_s, &sense);
+    // Apply encoder polarity
+    sense.rpm_l *= LEFT_ENCODER_POLARITY;
+    sense.rpm_r *= RIGHT_ENCODER_POLARITY;
+
+    // Control loop (PI + ramp) gated by state
+    bool enabled = ControlState_IsEnabled(&ctrl_state);
+    float rpm_target_l = 0.0f;
+    float rpm_target_r = 0.0f;
+    float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
+    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target_l, &rpm_target_r);
+    // Set direction pins based on commanded sign, then apply magnitude as duty
+    uint8_t dir_l = (duty_cmd_l >= 0.0f) ? LEFT_DIR_POLARITY : (LEFT_DIR_POLARITY ? 0U : 1U);
+    uint8_t dir_r = (duty_cmd_r >= 0.0f) ? RIGHT_DIR_POLARITY : (RIGHT_DIR_POLARITY ? 0U : 1U);
+    Motor_SetDirection(&m_left, dir_l);
+    Motor_SetDirection(&m_right, dir_r);
+    Motor_SetDuty(&m_left, duty_cmd_l);
+    Motor_SetDuty(&m_right, duty_cmd_r);
+
+    // Compute commanded duty (percent) from timer compare
+    float duty_l = 0.0f;
+    float duty_r = 0.0f;
+    uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
+    if (arr > 0U) {
+      duty_l = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_1) * 100.0f) / (float)(arr + 1U);
+      duty_r = (__HAL_TIM_GET_COMPARE(&htim1, TIM_CHANNEL_2) * 100.0f) / (float)(arr + 1U);
+    }
+
+    // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
+    uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target_l, rpm_target_r, duty_l, duty_r, CONTROL_LOOP_DT_MS);
+
+    // Update control state (faults from detection above, estop TBD)
+    ControlInputs cin = {0};
+    cin.enable_cmd = true;
+    cin.fault_bits = fault_bits;
+    ControlState_Update(&ctrl_state, &cin, now);
+    // enabled flag will be used on next tick
+
+    // Telemetry decimated to 10 Hz
+    telemetry_decim_counter++;
+    if (telemetry_decim_counter >= TELEMETRY_DECIMATION) {
+      telemetry_decim_counter = 0;
+      TelemetryFrame frame = {
+        .t_ms = now,
+        .cnt_l = sense.cnt_l,
+        .cnt_r = sense.cnt_r,
+        .rpm_l_x10 = (int32_t)(sense.rpm_l * 10.0f),
+        .rpm_r_x10 = (int32_t)(sense.rpm_r * 10.0f),
+        .rpm_l_tgt_x10 = (int32_t)(rpm_target_l * 10.0f),
+        .rpm_r_tgt_x10 = (int32_t)(rpm_target_r * 10.0f),
+        .duty_l_pct = (int32_t)duty_l,
+        .duty_r_pct = (int32_t)duty_r,
+        .adc_l_counts = sense.adc_l_counts,
+        .adc_r_counts = sense.adc_r_counts,
+        .zero_l_counts = sense.zero_l_counts,
+        .zero_r_counts = sense.zero_r_counts,
+        .curr_l_mA = sense.curr_l_mA,
+        .curr_r_mA = sense.curr_r_mA,
+        .state = (uint32_t)ControlState_GetState(&ctrl_state),
+        .fault_mask = ControlState_GetFaultMask(&ctrl_state)
+      };
+
+      // Periodic header every 10s
+      if ((now - last_header_tick) > 10000U) {
+        Telemetry_SendHeader(&huart2);
+        last_header_tick = now;
+      }
+
+      Telemetry_SendFrame(&huart2, &frame);
+    }
+  }
+  /* USER CODE END StartControlTask */
+}
+
+/* USER CODE BEGIN Header_StartRosExecTask */
+/**
+  * @brief  Function implementing the ros_exec_task thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartRosExecTask */
+void StartRosExecTask(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartRosPubTask */
+/**
+* @brief Function implementing the ros_pub_task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartRosPubTask */
+void StartRosPubTask(void *argument)
+{
+  /* USER CODE BEGIN StartRosPubTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartRosPubTask */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
