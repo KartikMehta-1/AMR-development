@@ -27,7 +27,6 @@
 #include <math.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
-#include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
 #include <uxr/client/transport.h>
 #include <rcutils/allocator.h>
@@ -54,8 +53,6 @@ typedef StaticTask_t osStaticThreadDef_t;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MICRO_ROS_SMOKE_TEST 0
-#define SKIP_CONTROL_TASK_FOR_ROS 0  // set to 1 to run ROS publishers alone
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -89,17 +86,6 @@ const osThreadAttr_t control_task_attributes = {
   .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for ros_exec_task */
-osThreadId_t ros_exec_taskHandle;
-uint32_t RosExecTaskBuffer[ 2500 ];
-osStaticThreadDef_t RosExecTaskControlBlock;
-const osThreadAttr_t ros_exec_task_attributes = {
-  .name = "ros_exec_task",
-  .cb_mem = &RosExecTaskControlBlock,
-  .cb_size = sizeof(RosExecTaskControlBlock),
-  .stack_mem = &RosExecTaskBuffer[0],
-  .stack_size = sizeof(RosExecTaskBuffer),
-  .priority = (osPriority_t) osPriorityHigh,
-};
 /* Definitions for ros_pub_task */
 osThreadId_t ros_pub_taskHandle;
 uint32_t ros_pub_taskBuffer[ 2000 ];
@@ -111,18 +97,6 @@ const osThreadAttr_t ros_pub_task_attributes = {
   .stack_mem = &ros_pub_taskBuffer[0],
   .stack_size = sizeof(ros_pub_taskBuffer),
   .priority = (osPriority_t) osPriorityHigh,
-};
-/* Definitions for ros_smoke_task */
-osThreadId_t ros_smoke_taskHandle;
-uint32_t ros_smoke_taskBuffer[ 1200 ];
-osStaticThreadDef_t ros_smoke_taskControlBlock;
-const osThreadAttr_t ros_smoke_task_attributes = {
-  .name = "ros_smoke_task",
-  .cb_mem = &ros_smoke_taskControlBlock,
-  .cb_size = sizeof(ros_smoke_taskControlBlock),
-  .stack_mem = &ros_smoke_taskBuffer[0],
-  .stack_size = sizeof(ros_smoke_taskBuffer),
-  .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
 static uint32_t last_header_tick = 0;
@@ -142,15 +116,12 @@ static MotorChannel m_right;
 static rcl_allocator_t ros_allocator;
 static rclc_support_t ros_support;
 static rcl_node_t ros_node;
-static rclc_executor_t ros_executor;
 static rcl_publisher_t pub_rpm_left;
 static rcl_publisher_t pub_rpm_right;
 static rcl_publisher_t pub_fault_mask;
-static rcl_publisher_t pub_debug_counter;
 static std_msgs__msg__Int32 msg_rpm_left;
 static std_msgs__msg__Int32 msg_rpm_right;
 static std_msgs__msg__Int32 msg_fault_mask;
-static std_msgs__msg__Int32 msg_debug_counter;
 static volatile bool ros_ready = false;
 static volatile int ros_init_fail_stage = 0;
 /* USER CODE END PV */
@@ -166,9 +137,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 void StartControlTask(void *argument);
-void StartRosExecTask(void *argument);
 void StartRosPubTask(void *argument);
-void StartRosSmokeTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -275,18 +244,11 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-#if MICRO_ROS_SMOKE_TEST
-  /* creation of ros_smoke_task */
-  ros_smoke_taskHandle = osThreadNew(StartRosSmokeTask, NULL, &ros_smoke_task_attributes);
-#else
-#if !SKIP_CONTROL_TASK_FOR_ROS
   /* creation of control_task */
   control_taskHandle = osThreadNew(StartControlTask, NULL, &control_task_attributes);
-#endif
 
   /* creation of ros_pub_task */
   ros_pub_taskHandle = osThreadNew(StartRosPubTask, NULL, &ros_pub_task_attributes);
-#endif
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -818,21 +780,6 @@ void StartControlTask(void *argument)
   /* USER CODE END StartControlTask */
 }
 
-/* USER CODE BEGIN Header_StartRosExecTask */
-/**
-  * @brief  Function implementing the ros_exec_task thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartRosExecTask */
-void StartRosExecTask(void *argument)
-{
-  /* USER CODE BEGIN 5 */
-  // Not used; kept as stub
-  for(;;) { osDelay(1000); }
-  /* USER CODE END 5 */
-}
-
 /* USER CODE BEGIN Header_StartRosPubTask */
 /**
 * @brief Function implementing the ros_pub_task thread.
@@ -896,35 +843,23 @@ void StartRosPubTask(void *argument)
     goto ros_init_fail;
   }
 
-  if (rclc_publisher_init_best_effort(
-          &pub_debug_counter,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/debug_counter") != RCL_RET_OK) {
-    ros_init_fail_stage = 6;
-    goto ros_init_fail;
-  }
-
   ros_ready = true;
 
   /* Infinite loop */
   bool led_state = false;
-  int32_t dbg_counter = 0;
   for(;;)
   {
     // Publish wheel RPM (x10) and current fault mask
     msg_rpm_left.data = (int32_t)(sense.rpm_l * 10.0f);
     msg_rpm_right.data = (int32_t)(sense.rpm_r * 10.0f);
     msg_fault_mask.data = (int32_t)ControlState_GetFaultMask(&ctrl_state);
-    msg_debug_counter.data = dbg_counter++;
 
     rcl_ret_t rc1 = rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
     rcl_ret_t rc2 = rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
     rcl_ret_t rc3 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
-    rcl_ret_t rc4 = rcl_publish(&pub_debug_counter, &msg_debug_counter, NULL);
 
     // Blink LED when publish succeeds; hold solid ON if any publish fails
-    if ((rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK) && (rc4 == RCL_RET_OK)) {
+    if ((rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK)) {
       led_state = !led_state;
       HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
     } else {
@@ -935,7 +870,7 @@ void StartRosPubTask(void *argument)
   }
 
 ros_init_fail:
-  // Blink stage count to indicate where init failed (1-6)
+  // Blink stage count to indicate where init failed (1-5)
   while (1) {
     for (int i = 0; i < ros_init_fail_stage; i++) {
       HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
@@ -947,82 +882,6 @@ ros_init_fail:
   }
   /* USER CODE END StartRosPubTask */
 }
-
-#if MICRO_ROS_SMOKE_TEST
-/* USER CODE BEGIN Header_StartRosSmokeTask */
-/**
-* @brief Simple micro-ROS smoke test publisher on USART2.
-*/
-/* USER CODE END Header_StartRosSmokeTask */
-void StartRosSmokeTask(void *argument)
-{
-  /* USER CODE BEGIN StartRosSmokeTask */
-  int fail_stage = 0;
-  rmw_uros_set_custom_transport(
-      true,
-      (void *)&huart2,
-      cubemx_transport_open,
-      cubemx_transport_close,
-      cubemx_transport_write,
-      cubemx_transport_read);
-
-  ros_allocator = rcl_get_default_allocator();
-  ros_allocator.allocate = microros_allocate;
-  ros_allocator.deallocate = microros_deallocate;
-  ros_allocator.reallocate = microros_reallocate;
-  ros_allocator.zero_allocate = microros_zero_allocate;
-  (void)rcutils_set_default_allocator(&ros_allocator);
-
-  if (rclc_support_init(&ros_support, 0, NULL, &ros_allocator) != RCL_RET_OK) {
-    fail_stage = 1;
-    goto smoke_fail;
-  }
-
-  if (rclc_node_init_default(&ros_node, "amr_smoke", "", &ros_support) != RCL_RET_OK) {
-    fail_stage = 2;
-    goto smoke_fail;
-  }
-
-  rcl_publisher_t smoke_pub;
-  if (rclc_publisher_init_best_effort(
-          &smoke_pub,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/smoke_counter") != RCL_RET_OK) {
-    fail_stage = 3;
-    goto smoke_fail;
-  }
-
-  std_msgs__msg__Int32 smoke_msg;
-  smoke_msg.data = 0;
-  bool led_state = false;
-
-  for(;;)
-  {
-    rcl_ret_t rc = rcl_publish(&smoke_pub, &smoke_msg, NULL);
-    if (rc == RCL_RET_OK) {
-      led_state = !led_state;
-      HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
-      smoke_msg.data++;
-    } else {
-      HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
-    }
-    osDelay(100); // 10 Hz
-  }
-
-smoke_fail:
-  while (1) {
-    for (int i = 0; i < fail_stage; i++) {
-      HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
-      osDelay(150);
-      HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_RESET);
-      osDelay(150);
-    }
-    osDelay(600);
-  }
-  /* USER CODE END StartRosSmokeTask */
-}
-#endif
 
 /**
   * @brief  This function is executed in case of error occurrence.

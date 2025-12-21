@@ -1,4 +1,5 @@
 #include "sensing.h"
+#include <math.h>
 
 void Sensing_Init(Sensing *s, EncoderChannel *enc_l, EncoderChannel *enc_r, CurrentSense *curr, float rpm_lpf_alpha)
 {
@@ -25,6 +26,14 @@ void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
 
   float rpm_l_raw = Encoder_GetRPM(s->enc_l);
   float rpm_r_raw = Encoder_GetRPM(s->enc_r);
+
+  // Reject implausible raw RPM spikes (wraps or scheduling stalls)
+  if (fabsf(rpm_l_raw) > RPM_SPIKE_LIMIT_RPM) {
+    rpm_l_raw = s->rpm_filt_init ? s->rpm_l_filt : 0.0f;
+  }
+  if (fabsf(rpm_r_raw) > RPM_SPIKE_LIMIT_RPM) {
+    rpm_r_raw = s->rpm_filt_init ? s->rpm_r_filt : 0.0f;
+  }
   out->rpm_l_raw = rpm_l_raw;
   out->rpm_r_raw = rpm_r_raw;
 

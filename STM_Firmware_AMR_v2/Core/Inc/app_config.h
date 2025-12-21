@@ -72,7 +72,8 @@
 #define DIFF_TEST_W3_RPS   0.50f
 
 // RPM filtering before PID (simple exponential filter)
-#define RPM_LPF_ALPHA 0.20f   // higher = less smoothing
+#define RPM_LPF_ALPHA 0.85f   // higher = less smoothing (faster response)
+#define RPM_SPIKE_LIMIT_RPM 500.0f  // reject raw RPM magnitudes beyond this (likely noise/wrap)
 
 // Fault thresholds
 #define FAULT_OC_THRESH_MA        1500   // overcurrent threshold (mA)

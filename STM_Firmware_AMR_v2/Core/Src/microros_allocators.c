@@ -48,3 +48,4 @@ void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element,
   usedMemory += number_of_elements*size_of_element;
   return pvPortCallocMicroROS(number_of_elements,size_of_element);
 }
+
