@@ -25,12 +25,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <math.h>
-#include <rcl/rcl.h>
-#include <rclc/rclc.h>
-#include <rclc/executor.h>
-#include <std_msgs/msg/int32.h>
-#include <uxr/client/transport.h>
-#include <rmw_microros/rmw_microros.h>
 #include "motor.h"
 #include "encoder.h"
 #include "app_config.h"
@@ -123,16 +117,6 @@ static FaultMonitor fault_mon;
 static ControlLoop control_loop;
 static MotorChannel m_left;
 static MotorChannel m_right;
-static rcl_allocator_t ros_allocator;
-static rclc_support_t ros_support;
-static rcl_node_t ros_node;
-static rcl_publisher_t pub_rpm_left;
-static rcl_publisher_t pub_rpm_right;
-static rcl_publisher_t pub_fault_mask;
-static std_msgs__msg__Int32 msg_rpm_left;
-static std_msgs__msg__Int32 msg_rpm_right;
-static std_msgs__msg__Int32 msg_fault_mask;
-static volatile bool ros_ready = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -151,14 +135,6 @@ void StartRosPubTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
-bool cubemx_transport_open(struct uxrCustomTransport * transport);
-bool cubemx_transport_close(struct uxrCustomTransport * transport);
-size_t cubemx_transport_write(struct uxrCustomTransport* transport, uint8_t * buf, size_t len, uint8_t * err);
-size_t cubemx_transport_read(struct uxrCustomTransport* transport, uint8_t* buf, size_t len, int timeout, uint8_t* err);
-void * microros_allocate(size_t size, void * state);
-void microros_deallocate(void * pointer, void * state);
-void * microros_reallocate(void * pointer, size_t size, void * state);
-void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element, void * state);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -812,14 +788,13 @@ void StartControlTask(void *argument)
         .fault_mask = ControlState_GetFaultMask(&ctrl_state)
       };
 
-      if (!ros_ready) {
-        // Periodic header every 10s (legacy UART telemetry only when micro-ROS not active)
-        if ((now - last_header_tick) > 10000U) {
-          Telemetry_SendHeader(&huart2);
-          last_header_tick = now;
-        }
-        Telemetry_SendFrame(&huart2, &frame);
+      // Periodic header every 10s
+      if ((now - last_header_tick) > 10000U) {
+        Telemetry_SendHeader(&huart2);
+        last_header_tick = now;
       }
+
+      Telemetry_SendFrame(&huart2, &frame);
     }
   }
   /* USER CODE END StartControlTask */
@@ -835,56 +810,7 @@ void StartControlTask(void *argument)
 void StartRosExecTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
-  // micro-ROS transport via UART2 DMA (matches dma_transport.c)
-  rmw_uros_set_custom_transport(
-      true,
-      (void *)&huart2,
-      cubemx_transport_open,
-      cubemx_transport_close,
-      cubemx_transport_write,
-      cubemx_transport_read);
-
-  ros_allocator = rcl_get_default_allocator();
-  ros_allocator.allocate = microros_allocate;
-  ros_allocator.deallocate = microros_deallocate;
-  ros_allocator.reallocate = microros_reallocate;
-  ros_allocator.zero_allocate = microros_zero_allocate;
-
-  if (rclc_support_init(&ros_support, 0, NULL, &ros_allocator) != RCL_RET_OK) {
-    Error_Handler();
-  }
-
-  if (rclc_node_init_default(&ros_node, "amr_firmware", "", &ros_support) != RCL_RET_OK) {
-    Error_Handler();
-  }
-
-  if (rclc_publisher_init_default(
-          &pub_rpm_left,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/wheel_rpm_left") != RCL_RET_OK) {
-    Error_Handler();
-  }
-
-  if (rclc_publisher_init_default(
-          &pub_rpm_right,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/wheel_rpm_right") != RCL_RET_OK) {
-    Error_Handler();
-  }
-
-  if (rclc_publisher_init_default(
-          &pub_fault_mask,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/fault_mask") != RCL_RET_OK) {
-    Error_Handler();
-  }
-
-  ros_ready = true;
-
-  // Minimal spin/yield loop (no subscriptions yet)
+  /* Infinite loop */
   for(;;)
   {
     osDelay(1);
@@ -905,17 +831,7 @@ void StartRosPubTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    if (ros_ready) {
-      // Publish wheel RPM (x10) and current fault mask
-      msg_rpm_left.data = (int32_t)(sense.rpm_l * 10.0f);
-      msg_rpm_right.data = (int32_t)(sense.rpm_r * 10.0f);
-      msg_fault_mask.data = (int32_t)ControlState_GetFaultMask(&ctrl_state);
-
-      rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
-      rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
-      rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
-    }
-    osDelay(50); // 20 Hz publish rate
+    osDelay(1);
   }
   /* USER CODE END StartRosPubTask */
 }
