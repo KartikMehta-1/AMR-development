@@ -1,4 +1,0 @@
-../Core/Src/encoder.c:3:23:encoder_delta	104	static
-../Core/Src/encoder.c:15:6:Encoder_Init	24	static
-../Core/Src/encoder.c:28:19:Encoder_Start	24	static
-../Core/Src/encoder.c:35:6:Encoder_Update	32	static

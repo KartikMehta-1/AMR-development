@@ -911,6 +911,8 @@ void StartRosPubTask(void *argument)
 {
   /* USER CODE BEGIN StartRosPubTask */
   /* Infinite loop */
+  bool led_state = false;
+  uint32_t last_pub_fail = 0;
   for(;;)
   {
     if (ros_ready) {
@@ -919,9 +921,18 @@ void StartRosPubTask(void *argument)
       msg_rpm_right.data = (int32_t)(sense.rpm_r * 10.0f);
       msg_fault_mask.data = (int32_t)ControlState_GetFaultMask(&ctrl_state);
 
-      rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
-      rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
-      rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
+      rcl_ret_t rc1 = rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
+      rcl_ret_t rc2 = rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
+      rcl_ret_t rc3 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
+
+      // Blink LED when publish succeeds; hold solid ON if any publish fails
+      if ((rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK)) {
+        led_state = !led_state;
+        HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+      } else {
+        last_pub_fail = HAL_GetTick();
+        HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
+      }
     }
     osDelay(50); // 20 Hz publish rate
   }

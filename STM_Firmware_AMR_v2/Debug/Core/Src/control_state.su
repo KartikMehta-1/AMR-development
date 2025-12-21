@@ -1,2 +1,0 @@
-../Core/Src/control_state.c:3:6:ControlState_Init	16	static
-../Core/Src/control_state.c:9:6:ControlState_Update	32	static

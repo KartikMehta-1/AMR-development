@@ -1,2 +1,0 @@
-../Core/Src/fault_monitor.c:5:6:FaultMonitor_Init	16	static
-../Core/Src/fault_monitor.c:14:10:FaultMonitor_Update	80	static

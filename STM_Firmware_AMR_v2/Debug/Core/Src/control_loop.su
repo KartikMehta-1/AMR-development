@@ -1,5 +1,0 @@
-../Core/Inc/ramp.h:14:20:Ramp_Init	24	static
-../Core/Inc/ramp.h:22:20:Ramp_SetTarget	16	static
-../Core/Inc/ramp.h:34:21:Ramp_Update	24	static
-../Core/Src/control_loop.c:14:6:ControlLoop_Init	16	static
-../Core/Src/control_loop.c:32:6:ControlLoop_Update	88	static

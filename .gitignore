@@ -2,3 +2,11 @@
 ros_ws/build/
 ros_ws/install/
 ros_ws/log/
+
+# STM32CubeIDE project metadata and build outputs
+.settings/
+.project
+.cproject
+.metadata/
+Debug/
+Release/
