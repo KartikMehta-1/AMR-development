@@ -126,6 +126,7 @@ static MotorChannel m_right;
 static rcl_allocator_t ros_allocator;
 static rclc_support_t ros_support;
 static rcl_node_t ros_node;
+static rclc_executor_t ros_executor;
 static rcl_publisher_t pub_rpm_left;
 static rcl_publisher_t pub_rpm_right;
 static rcl_publisher_t pub_fault_mask;
@@ -882,12 +883,19 @@ void StartRosExecTask(void *argument)
     Error_Handler();
   }
 
+  // Executor with no handles (publisher-only) to keep the XRCE session pumped
+  if (rclc_executor_init(&ros_executor, &ros_support.context, 0, &ros_allocator) != RCL_RET_OK) {
+    Error_Handler();
+  }
+
   ros_ready = true;
 
   // Minimal spin/yield loop (no subscriptions yet)
   for(;;)
   {
-    osDelay(1);
+    // Pump the XRCE session so reliable stream flushes/keep-alives work
+    rclc_executor_spin_some(&ros_executor, 5000000ULL); // 5 ms
+    osDelay(5);
   }
   /* USER CODE END 5 */
 }
