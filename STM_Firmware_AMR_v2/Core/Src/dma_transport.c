@@ -30,12 +30,13 @@ bool cubemx_transport_close(struct uxrCustomTransport * transport){
     return true;
 }
 
-size_t cubemx_transport_write(struct uxrCustomTransport* transport, uint8_t * buf, size_t len, uint8_t * err){
+size_t cubemx_transport_write(struct uxrCustomTransport* transport, const uint8_t * buf, size_t len, uint8_t * err){
     UART_HandleTypeDef * uart = (UART_HandleTypeDef*) transport->args;
+    (void)err;
 
     HAL_StatusTypeDef ret;
     if (uart->gState == HAL_UART_STATE_READY){
-        ret = HAL_UART_Transmit_DMA(uart, buf, len);
+        ret = HAL_UART_Transmit_DMA(uart, (uint8_t *)buf, len);
         while (ret == HAL_OK && uart->gState != HAL_UART_STATE_READY){
             osDelay(1);
         }
@@ -48,6 +49,7 @@ size_t cubemx_transport_write(struct uxrCustomTransport* transport, uint8_t * bu
 
 size_t cubemx_transport_read(struct uxrCustomTransport* transport, uint8_t* buf, size_t len, int timeout, uint8_t* err){
     UART_HandleTypeDef * uart = (UART_HandleTypeDef*) transport->args;
+    (void)err;
 
     int ms_used = 0;
     do
