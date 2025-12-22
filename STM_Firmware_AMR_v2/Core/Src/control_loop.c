@@ -6,11 +6,6 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-typedef struct {
-  float v_mps;
-  float w_rps;
-} DiffTestCase;
-
 void ControlLoop_Init(ControlLoop *cl)
 {
   Ramp_Init(&cl->ramp_l, 0.0f, DUTY_RAMP_RATE_PER_SEC);
@@ -23,15 +18,15 @@ void ControlLoop_Init(ControlLoop *cl)
            SPEED_PID_OUT_MIN, SPEED_PID_OUT_MAX, SPEED_PID_I_MIN, SPEED_PID_I_MAX);
   cl->rpm_target_l = 0.0f;
   cl->rpm_target_r = 0.0f;
-  cl->cmd_v_mps = DIFF_TEST_V1_MPS;
-  cl->cmd_w_rps = DIFF_TEST_W1_RPS;
-  cl->last_toggle_ms = 0U;
-  cl->test_case_idx = 0U;
+  cl->cmd_v_mps = 0.0f;
+  cl->cmd_w_rps = 0.0f;
 }
 
 void ControlLoop_Update(ControlLoop *cl,
                         float rpm_l, float rpm_r,
                         bool enabled,
+                        float v_cmd_mps,
+                        float w_cmd_rps,
                         float dt_s,
                         uint32_t now_ms,
                         float *duty_cmd_l,
@@ -39,11 +34,6 @@ void ControlLoop_Update(ControlLoop *cl,
                         float *rpm_target_l_out,
                         float *rpm_target_r_out)
 {
-  static const DiffTestCase cases[3] = {
-    { DIFF_TEST_V1_MPS, DIFF_TEST_W1_RPS }, // straight
-    { DIFF_TEST_V2_MPS, DIFF_TEST_W2_RPS }, // gentle turn
-    { DIFF_TEST_V3_MPS, DIFF_TEST_W3_RPS }  // in-place spin
-  };
   const float rpm_scale = 30.0f / ((float)M_PI * WHEEL_RADIUS_M); // v [m/s] -> RPM
   const float half_track = 0.5f * TRACK_WIDTH_M;
 
@@ -57,13 +47,8 @@ void ControlLoop_Update(ControlLoop *cl,
     Ramp_SetTarget(&cl->ramp_v, 0.0f);
     Ramp_SetTarget(&cl->ramp_w, 0.0f);
   } else {
-    // Toggle between three (v, w) test cases every 5 seconds
-    if ((now_ms - cl->last_toggle_ms) >= SPEED_TEST_TOGGLE_MS) {
-      cl->test_case_idx = (uint8_t)((cl->test_case_idx + 1U) % 3U);
-      cl->last_toggle_ms = now_ms;
-    }
-    cl->cmd_v_mps = cases[cl->test_case_idx].v_mps;
-    cl->cmd_w_rps = cases[cl->test_case_idx].w_rps;
+    cl->cmd_v_mps = v_cmd_mps;
+    cl->cmd_w_rps = w_cmd_rps;
     Ramp_SetTarget(&cl->ramp_v, cl->cmd_v_mps);
     Ramp_SetTarget(&cl->ramp_w, cl->cmd_w_rps);
 

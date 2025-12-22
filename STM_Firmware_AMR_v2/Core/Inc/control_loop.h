@@ -18,14 +18,14 @@ typedef struct {
   float rpm_target_r;
   float cmd_v_mps;
   float cmd_w_rps;
-  uint32_t last_toggle_ms;
-  uint8_t test_case_idx;
 } ControlLoop;
 
 void ControlLoop_Init(ControlLoop *cl);
 void ControlLoop_Update(ControlLoop *cl,
                         float rpm_l, float rpm_r,
                         bool enabled,
+                        float v_cmd_mps,
+                        float w_cmd_rps,
                         float dt_s,
                         uint32_t now_ms,
                         float *duty_cmd_l,

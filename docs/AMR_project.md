@@ -1,75 +1,75 @@
-# Kartik's AMR Project Tracker (38 Weeks)
+# Kartik's AMR Project Tracker (39 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2025-12-09  
+**Last Updated:** 2025-12-22  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
 - Overall: On track with tuning in progress
-- Progress: 10/38 weeks complete (~26%)
+- Progress: 10/39 weeks complete (~26%)
 - Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected.
+- micro-ROS: STM32 bring-up on USART2 with `/cmd_vel` subscription, RPM + fault mask publishers, and UART telemetry disabled to avoid contention.
 - Current Focus: Speed PI tuning and fault thresholds (overcurrent/stall) using current sensing; optional feedforward to reduce duty skew.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; leave cascaded loop deferred.
-- Timeline: Flexible (now a 38-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
+- Timeline: Flexible (now a 39-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
   - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
-Legend: Done, In Progress, Partial, Planned, Blocked
+Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">In Progress</span>, Partial, Planned, Blocked
 
 ---
 
 ## Week-by-Week Plan (canonical view)
 | Week | Focus | Status | Key Tasks / Notes |
 |---:|---|:---:|---|
-| 1 | Safety & Tools Setup | Done | E-stop path reviewed; fused power path; STM32 toolchain + Blink verified. |
-| 2 | UART + Debug (ADC skipped) | Done | Serial comms working; pin mapping documented; ADC intentionally skipped at this stage. |
+| 1 | Safety & Tools Setup | <span style="color: green">Done</span> | E-stop path reviewed; fused power path; STM32 toolchain + Blink verified. |
+| 2 | UART + Debug (ADC skipped) | <span style="color: green">Done</span> | Serial comms working; pin mapping documented; ADC intentionally skipped at this stage. |
 | 3 | PWM + Motor Driver (L298N) | Partial | PWM verified, motor spins; ramp duty + E-stop integration deferred to PID stage. |
-| 4 | Encoder Hookup & Counting | Done | Encoder integrated; direction & count validated; stable RPM reading. |
-| 5 | RPM Calculation & Telemetry | Done | RPM derived from ticks; serial telemetry logging functional. |
-| 6 | PID-Based Motor Control (Implementation) | Done | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
-| 7 | Firmware v2: Scaffold + Pin Map + Current | Done | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
-| 8 | Firmware v2: Dual-Motor Duty Bring-Up | Done | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E-stop cut and GND common confirmed. |
-| 9 | Firmware v2: Encoder Integration | Done | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; pull-ups to be added. |
-| 10 | Firmware v2: Current Telemetry + Calibration | Done | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
-| 11 | Firmware v2: Control (Single-Loop PID) | In Progress | Closed-loop speed PI both wheels; duty ramp; polarity fix; target toggling and plotting; continuing gain/feedforward tuning. |
+| 4 | Encoder Hookup & Counting | <span style="color: green">Done</span> | Encoder integrated; direction & count validated; stable RPM reading. |
+| 5 | RPM Calculation & Telemetry | <span style="color: green">Done</span> | RPM derived from ticks; serial telemetry logging functional. |
+| 6 | PID-Based Motor Control (Implementation) | <span style="color: green">Done</span> | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
+| 7 | Firmware v2: Scaffold + Pin Map + Current | <span style="color: green">Done</span> | New project `STM_Firmware_AMR_v2`; TIM1 @ 20 kHz (CH1=PA8 left, CH2=PA9 right); Encoders: TIM3 (PA6/PA7 left), TIM2 (PA0/PA1 right); ADC1 with DMA: PB0=IN8 (left current), PC1=IN11 (right current); UART banner. |
+| 8 | Firmware v2: Dual-Motor Duty Bring-Up | <span style="color: green">Done</span> | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E-stop cut and GND common confirmed. |
+| 9 | Firmware v2: Encoder Integration | <span style="color: green">Done</span> | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; TODO: add external 3.3 V pull-ups or software invert flag. |
+| 10 | Firmware v2: Current Telemetry + Calibration | <span style="color: green">Done</span> | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
+| 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: goldenrod">In Progress</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); collect step/ramp plots + document tuning (docs/pid.md); continue gain/feedforward tuning. |
 | 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. |
-| 13 | Firmware v2: Differential Drive | Done | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. |
+| 13 | Firmware v2: Differential Drive | <span style="color: green">Done</span> | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. |
 | 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 4x proximity sensors (GPIO/ADC/I2C TBD); mounts, wiring, pull-ups/protection; update pin map; bench power budget. |
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 4 sensors; debouncing/filtering; fault detection; add to telemetry. |
-| 16 | Firmware v2: micro-ROS Bring-up | Planned | Integrate micro-ROS on STM32; define msgs; publish wheel_state/obstacles; subscribe wheel_cmd/estop; stable transport to agent. |
-| 17 | Dev PC Env & Tooling | Planned | Install ROS2 desktop + colcon, VS Code/devcontainer, CLI tools; micro-ROS agent loopback; cross-build toolchain; base Docker/compose aligned with Jetson; SSH keys + dotfiles for reproducible setup. |
-| 18 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware. |
-| 19 | Wireless PC<->Nano | Planned | Add Wi-Fi module/antennas; configure NetworkManager/wpa_supplicant; set static/reserved IP + SSH keys (no passwords); ping/iperf latency check; NTP sync; optional VPN (WireGuard/Tailscale). |
-| 20 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, sensors, inertias; TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. |
-| 21 | Navigation & Mapping Bring-up | Planned | Nav2 stack with LiDAR/odom/IMU; map server or SLAM; AMCL/localization; tuned costmaps; go-to-pose with safety limits and review bags. |
-| 22 | Navigation Validation & Safety | Planned | Regression routes, obstacle handling, recovery behaviors; watchdogs/staleness; log success/latency; refine limits before adding arms. |
-| 23 | Mechanical Integration: Dual SO-101 Arms | Planned | Mount both arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. |
-| 24 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. |
-| 25 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. |
-| 26 | Calibration & Perception Baseline | Planned | Hand-eye and base-to-arm extrinsics; AprilTag validation; RGB-D grasp perception baseline (segmentation/keypoints); log pipeline for RGB-D+joints. |
-| 27 | Teleop + Dataset Collection | Planned | Teleop/teaching tools (SpaceMouse/joystick); record synchronized video/joints/gripper for pick/place tasks; label successes/failures. |
-| 28 | Classical Grasp Pipeline | Planned | Perception -> grasp pose -> MoveIt planning/execution; guarded moves and retreat behaviors; bench metrics (success, cycle time, contact faults). |
-| 29 | Base+Arm Integration (Classical) | Planned | Navigate to pickup pose, align with RGB-D, run classical grasp, place at drop zone; recovery behaviors (regrasp/replan base pose) and watchdogs. |
-| 30 | VLA/VLM Model Trials (Sim) | Planned | Run state-of-the-art open VLA/VLM (OpenVLA/Octo/RT-class/diffusion) in sim with domain randomization; profile latency on Jetson/external GPU. |
-| 31 | VLA Guarded Hardware Replay | Planned | Deploy selected policies on hardware with action clamps/safety envelopes; compare to classical baseline; track success/intervention rate. |
-| 32 | End-to-End Autonomy Sprints | Planned | Full loop: navigate to goal -> pick -> place -> return; measure success, cycle time, collisions, latency; tighten limits/thresholds and logging. |
-| 33 | Field Bring-up (Supervised) | Planned | On-robot runs with manipulators: drive + pick/place in controlled environment; telemetry review; safety validation and recovery drills. |
-| 34 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
-| 35 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
-| 36 | Custom Motor Driver / Production Prep | Planned | Begin custom H-bridge integration plan (DRV87xx + MOSFETs) and EMC/ESD prep; outline 4-layer stack, grounds, TVS/CMC, test points, panelization; plan pilot build. |
-| 37 | Voice I/O Architecture & ASR Integration | Planned | Select ASR (offline-capable small model) + wake-word; route mic->ASR->command parser->task planner; define grammar/safety filters; initial hotword + basic intents on Nano. |
-| 38 | TTS/Dialogue & Safety Guards | Planned | Add TTS for robot responses; integrate dialogue manager/LLM for natural commands with explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails and fallback teleop. |
+| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: goldenrod">In Progress</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/fault_mask` pubs at 20 Hz; legacy UART telemetry disabled. Planned: `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; safety gate + fault latch/clear; `/amr/wheel_state`, `/amr/safety_state`; document fault mask; add voltage faults when available. |
+| 17 | Mechanical Assembly + Enclosure | Planned | Complete mechanical assembly; 3D print electronics enclosure; complete wiring; integrate battery; modify height; install LiDAR, depth camera, proximity sensors; 3D print AMR cover; build perfboard/shield for encoder pull-ups, ACS758 filters, and decoupling.<br>CAD tasks: survey/measurements (envelope, keep-outs, bend radii); base plate + mounts (Nucleo, Cytron, Jetson, hub, battery/BMS, DC-DC); sensor mounts; cable routing/strain relief; outputs (STEP/IGES, DXF, fastener BOM, assembly guide); include arm mounting provisions for Week 24 integration. |
+| 18 | Dev PC Env & Tooling | Planned | Install ROS2 desktop + colcon, VS Code/devcontainer, CLI tools; micro-ROS agent loopback; cross-build toolchain; base Docker/compose aligned with Jetson; SSH keys + dotfiles for reproducible setup. |
+| 19 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware. |
+| 20 | Wireless PC<->Nano | Planned | Add Wi-Fi module/antennas; configure NetworkManager/wpa_supplicant; set static/reserved IP + SSH keys (no passwords); ping/iperf latency check; NTP sync; optional VPN (WireGuard/Tailscale). |
+| 21 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, sensors, inertias; TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. |
+| 22 | Navigation & Mapping Bring-up | Planned | Nav2 stack with LiDAR/odom/IMU; map server or SLAM; AMCL/localization; tuned costmaps; go-to-pose with safety limits and review bags. |
+| 23 | Navigation Validation & Safety | Planned | Regression routes, obstacle handling, recovery behaviors; watchdogs/staleness; log success/latency; refine limits before adding arms. |
+| 24 | Mechanical Integration: Dual SO-101 Arms | Planned | Mount both arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. |
+| 25 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. |
+| 26 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. |
+| 27 | Calibration & Perception Baseline | Planned | Hand-eye and base-to-arm extrinsics; AprilTag validation; RGB-D grasp perception baseline (segmentation/keypoints); log pipeline for RGB-D+joints. |
+| 28 | Teleop + Dataset Collection | Planned | Teleop/teaching tools (SpaceMouse/joystick); record synchronized video/joints/gripper for pick/place tasks; label successes/failures. |
+| 29 | Classical Grasp Pipeline | Planned | Perception -> grasp pose -> MoveIt planning/execution; guarded moves and retreat behaviors; bench metrics (success, cycle time, contact faults). |
+| 30 | Base+Arm Integration (Classical) | Planned | Navigate to pickup pose, align with RGB-D, run classical grasp, place at drop zone; recovery behaviors (regrasp/replan base pose) and watchdogs. |
+| 31 | VLA/VLM Model Trials (Sim) | Planned | Run state-of-the-art open VLA/VLM (OpenVLA/Octo/RT-class/diffusion) in sim with domain randomization; profile latency on Jetson/external GPU. |
+| 32 | VLA Guarded Hardware Replay | Planned | Deploy selected policies on hardware with action clamps/safety envelopes; compare to classical baseline; track success/intervention rate. |
+| 33 | End-to-End Autonomy Sprints | Planned | Full loop: navigate to goal -> pick -> place -> return; measure success, cycle time, collisions, latency; tighten limits/thresholds and logging. |
+| 34 | Field Bring-up (Supervised) | Planned | On-robot runs with manipulators: drive + pick/place in controlled environment; telemetry review; safety validation and recovery drills. |
+| 35 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. |
+| 36 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. |
+| 37 | Custom Motor Driver / Production Prep | Planned | Begin custom H-bridge integration plan (DRV87xx + MOSFETs) and EMC/ESD prep; outline 4-layer stack, grounds, TVS/CMC, test points, panelization; plan pilot build. |
+| 38 | Voice I/O Architecture & ASR Integration | Planned | Select ASR (offline-capable small model) + wake-word; route mic->ASR->command parser->task planner; define grammar/safety filters; initial hotword + basic intents on Nano. |
+| 39 | TTS/Dialogue & Safety Guards | Planned | Add TTS for robot responses; integrate dialogue manager/LLM for natural commands with explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails and fallback teleop. |
 
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
 ---
 
 ## Detailed Tasks
-The granular task board has been moved to docs/AMR_firmware_tasks.md to keep this file focused on high-level goals and the weekly schedule.
-
-Status: See the Status Summary above and task-by-task statuses in docs/AMR_firmware_tasks.md.
+Firmware tasks have been consolidated into the weekly tracker above. Use the Week-by-Week Plan as the single source of truth.
 
 ---
 
@@ -81,7 +81,7 @@ Status: See the Status Summary above and task-by-task statuses in docs/AMR_firmw
 - Cascaded control: Inner current loop stable; outer speed loop SSE <= 5%, overshoot <= 10%; comparison plots and gains documented
 - FreeRTOS (W13): Tasks meet deadlines under load; CPU < 70%; no missed watchdog
 - Validation (W16): E-stop latency <= 50 ms; current-limit interaction stable under step loads
-- SLAM demo (W18): Successful nav in mapped area for ~15 min without collision or watchdog resets
+- SLAM demo (W19): Successful nav in mapped area for ~15 min without collision or watchdog resets
 
 ---
 
@@ -119,18 +119,29 @@ Status: See the Status Summary above and task-by-task statuses in docs/AMR_firmw
 
 ## ROS2 Architecture (Draft)
 - Nodes
-  - `mc_interface` (micro-ROS on STM32): subscribes `/amr/wheel_cmd`, `/amr/estop`; publishes `/amr/wheel_state`, `/amr/obstacles`
+  - `mc_interface` (micro-ROS on STM32): subscribes `/cmd_vel`; publishes `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/fault_mask` (current implementation). Planned: `/amr/wheel_state`, `/amr/estop`, `/amr/enable`, `/amr/clear_fault`
   - `odometry`: subscribes `/amr/wheel_state`; publishes `/odom`, `/tf`
   - `safety_monitor`: subscribes `/amr/obstacles`, `/amr/estop`; publishes `/amr/safety_state`
   - `sensor_fusion`: fuses proximity/LiDAR/depth; publishes `/amr/obstacles`
   - `teleop` or higher-level commander: publishes `/cmd_vel` or `/amr/wheel_cmd`
   - `sim_bridge`: interfaces Gazebo topics with AMR topics
-- Topics (proposed)
+- Topics (current firmware)
+  - `/cmd_vel` (geometry_msgs/Twist)
+  - `/amr/wheel_rpm_left` (std_msgs/Int32, RPM x10)
+  - `/amr/wheel_rpm_right` (std_msgs/Int32, RPM x10)
+  - `/amr/fault_mask` (std_msgs/Int32)
+- Topics (planned)
   - `/amr/wheel_cmd` (geometry_msgs/Twist or custom wheel velocities)
   - `/amr/wheel_state` (sensor_msgs/JointState)
   - `/amr/obstacles` (sensor_msgs/Range[] or custom)
   - `/amr/estop` (std_msgs/Bool), `/amr/safety_state` (std_msgs/UInt32)
   - `/odom` (nav_msgs/Odometry), `/tf`, `/tf_static`
+
+---
+
+## Architecture Docs
+- STM32 firmware architecture: `docs/STM_architecture.md`
+- Jetson Nano runtime architecture: `docs/jetson_architecture.md`
 
 ---
 
@@ -181,6 +192,10 @@ Consequences: Redesign mount; add airflow
 ---
 
 ## Change Log
+- 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/STM_architecture.md`; removed merged task/architecture files.
+- 2025-12-22: Consolidated firmware tasks into weekly tracker; merged STM32 architecture docs; added Jetson Nano architecture doc.
+- 2025-12-22: Added Week 17 mechanical assembly + enclosure tasks; shifted schedule by one week.
+- 2025-12-22: micro-ROS bring-up on STM32 (USART2 transport, `/cmd_vel` sub, RPM + fault mask pubs); updated ROS topic list.
 - 2025-10-28: Marked Week 2 ADC as skipped; set Week 8 next focus to E-stop feature; added Final Drivetrain Migration step; noted flexible timeline and PCB as optional.
 - 2025-11-XX: Started AMR CAD assembly with dual SO101 arm manipulators mounted; initial rough layout committed to repo.
 - 2025-11-XX: Added main power switch at pack output ahead of fuse/E-Stop; updated hardware block diagram accordingly.

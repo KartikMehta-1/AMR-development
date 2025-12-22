@@ -27,7 +27,9 @@
 #include <math.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
+#include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
+#include <geometry_msgs/msg/twist.h>
 #include <uxr/client/transport.h>
 #include <rcutils/allocator.h>
 #include <rcutils/error_handling.h>
@@ -116,14 +118,20 @@ static MotorChannel m_right;
 static rcl_allocator_t ros_allocator;
 static rclc_support_t ros_support;
 static rcl_node_t ros_node;
+static rclc_executor_t ros_executor;
 static rcl_publisher_t pub_rpm_left;
 static rcl_publisher_t pub_rpm_right;
 static rcl_publisher_t pub_fault_mask;
+static rcl_subscription_t sub_cmd_vel;
+static geometry_msgs__msg__Twist msg_cmd_vel;
 static std_msgs__msg__Int32 msg_rpm_left;
 static std_msgs__msg__Int32 msg_rpm_right;
 static std_msgs__msg__Int32 msg_fault_mask;
 static volatile bool ros_ready = false;
 static volatile int ros_init_fail_stage = 0;
+static volatile float cmd_v_mps = 0.0f;
+static volatile float cmd_w_rps = 0.0f;
+static volatile uint32_t last_cmd_ms = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -138,6 +146,7 @@ static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 void StartControlTask(void *argument);
 void StartRosPubTask(void *argument);
+void CmdVelCallback(const void * msgin);
 
 /* USER CODE BEGIN PFP */
 
@@ -154,6 +163,15 @@ void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element,
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 /* Current sensing moved to current_sense.c */
+
+// Store latest cmd_vel values (linear x, angular z) with timestamp
+void CmdVelCallback(const void * msgin)
+{
+  const geometry_msgs__msg__Twist * msg = (const geometry_msgs__msg__Twist *)msgin;
+  cmd_v_mps = msg->linear.x;
+  cmd_w_rps = msg->angular.z;
+  last_cmd_ms = HAL_GetTick();
+}
 /* USER CODE END 0 */
 
 /**
@@ -744,10 +762,18 @@ void StartControlTask(void *argument)
 
     // Control loop (PI + ramp) gated by state
     bool enabled = ControlState_IsEnabled(&ctrl_state);
+    float v_cmd = cmd_v_mps;
+    float w_cmd = cmd_w_rps;
+    uint32_t cmd_age = (last_cmd_ms > 0U) ? (now - last_cmd_ms) : (CMD_TIMEOUT_MS + 1U);
+    if (cmd_age > CMD_TIMEOUT_MS) {
+      v_cmd = 0.0f;
+      w_cmd = 0.0f;
+    }
+
     float rpm_target_l = 0.0f;
     float rpm_target_r = 0.0f;
     float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
-    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target_l, &rpm_target_r);
+    ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, v_cmd, w_cmd, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target_l, &rpm_target_r);
     // Set direction pins based on commanded sign, then apply magnitude as duty
     uint8_t dir_l = (duty_cmd_l >= 0.0f) ? LEFT_DIR_POLARITY : (LEFT_DIR_POLARITY ? 0U : 1U);
     uint8_t dir_r = (duty_cmd_r >= 0.0f) ? RIGHT_DIR_POLARITY : (RIGHT_DIR_POLARITY ? 0U : 1U);
@@ -843,12 +869,35 @@ void StartRosPubTask(void *argument)
     goto ros_init_fail;
   }
 
+  // teleop_twist_keyboard publishes /cmd_vel as RELIABLE, so keep subscriber RELIABLE to match
+  if (rclc_subscription_init_default(
+          &sub_cmd_vel,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+          "/cmd_vel") != RCL_RET_OK) {
+    ros_init_fail_stage = 6;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_init(&ros_executor, &ros_support.context, 1, &ros_allocator) != RCL_RET_OK) {
+    ros_init_fail_stage = 7;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_cmd_vel, &msg_cmd_vel, CmdVelCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 8;
+    goto ros_init_fail;
+  }
+
   ros_ready = true;
 
   /* Infinite loop */
   bool led_state = false;
   for(;;)
   {
+    // Pump executor to receive cmd_vel
+    rclc_executor_spin_some(&ros_executor, 1000000ULL); // 1 ms
+
     // Publish wheel RPM (x10) and current fault mask
     msg_rpm_left.data = (int32_t)(sense.rpm_l * 10.0f);
     msg_rpm_right.data = (int32_t)(sense.rpm_r * 10.0f);
@@ -870,7 +919,7 @@ void StartRosPubTask(void *argument)
   }
 
 ros_init_fail:
-  // Blink stage count to indicate where init failed (1-5)
+  // Blink stage count to indicate where init failed (1-8)
   while (1) {
     for (int i = 0; i < ros_init_fail_stage; i++) {
       HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);

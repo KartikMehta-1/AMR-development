@@ -74,6 +74,7 @@
 // RPM filtering before PID (simple exponential filter)
 #define RPM_LPF_ALPHA 0.85f   // higher = less smoothing (faster response)
 #define RPM_SPIKE_LIMIT_RPM 500.0f  // reject raw RPM magnitudes beyond this (likely noise/wrap)
+#define CMD_TIMEOUT_MS 500U          // zero commands if no cmd_vel within this timeout
 
 // Fault thresholds
 #define FAULT_OC_THRESH_MA        1500   // overcurrent threshold (mA)

@@ -13,7 +13,7 @@ typedef enum {
     SAFETY_FAULT = 1,
 } SafetyStatus;
 
-// Fault mask bit assignments (aligns with docs/firmware_motor_control.md)
+// Fault mask bit assignments (aligns with docs/STM_architecture.md)
 #define SAFETY_FAULT_ESTOP_ACTIVE         (1u << 0)
 #define SAFETY_FAULT_OVERCURRENT_LEFT     (1u << 1)
 #define SAFETY_FAULT_OVERCURRENT_RIGHT    (1u << 2)
@@ -44,4 +44,3 @@ uint8_t     Safety_IsSafe(void);
 #endif
 
 #endif // SAFETY_H
-
