@@ -95,7 +95,7 @@ gpio:
 safety:
   estop:
     sense:
-      pin: TBD
+      pin: PC7
       active_state: low        # low or high
       pull: pullup_3v3         # pullup_3v3 or pulldown
       debounce_ms: 10
@@ -117,13 +117,13 @@ sensors:
     notes: USB 3 bandwidth required; prefer powered hub if multiple devices
   proximity:
     quantity: 4
-    model: cs100a_ultrasonic
+    model: hc_sr04_ultrasonic
     power_rail: 5v
     interface: gpio_trig_echo
     units: distance           # mm in firmware
     level_shift: echo_divider_to_3v3   # ensure echo is 3.3 V safe
     firing_strategy: staggered_round_robin
-    notes: Stagger triggers to avoid crosstalk; add 0.1 uF + 10 uF per module; keep leads short
+    notes: Stagger triggers to avoid crosstalk; HC-SR04 echo is 5 V (level-shift to 3.3 V); add 0.1 uF + 10 uF per module; keep leads short
     channels:
       - id: S1
         position: front_left

@@ -200,7 +200,7 @@ Consequences: Redesign mount; add airflow
 - 2025-11-XX: Started AMR CAD assembly with dual SO101 arm manipulators mounted; initial rough layout committed to repo.
 - 2025-11-XX: Added main power switch at pack output ahead of fuse/E-Stop; updated hardware block diagram accordingly.
 - 2025-11-XX: Added DSN-DVM/DUM-368 battery voltage display (fed after main switch) to specs and wiring docs.
-- 2025-11-XX: Selected 4x CS100A ultrasonic proximity sensors (trig/echo to STM32); updated specs, wiring, and diagram.
+- 2025-11-XX: Selected 4x HC-SR04 ultrasonic proximity sensors (trig/echo to STM32); updated specs, wiring, and diagram.
 - 2025-11-XX: Power split: XH-M401 (XL4016 class) for Jetson/hub 5 V rail; LM2596 for logic/proximity 5 V rail.
 - 2025-11-XX: Cascaded current loop deferred; continue single-loop speed PI until higher-accuracy current sensor is added.
 

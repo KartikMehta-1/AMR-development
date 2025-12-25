@@ -24,6 +24,7 @@ Last Updated: 2025-12-22
 - Encoders: TIM3 (left PA6/PA7), TIM2 (right PA0/PA1).
 - ADC: ADC1 CH8 (PB0), CH11 (PC1) for ACS758 current.
 - UART: USART2 460800 bps for micro-ROS custom transport.
+- E-stop sense: PC7 (active low, pull-up).
 
 ## Parameters (current values in app_config.h)
 - Geometry: TRACK_WIDTH_M=0.386, WHEEL_RADIUS_M=0.0615.
@@ -59,7 +60,7 @@ Last Updated: 2025-12-22
 graph TD
   subgraph Inputs
     CMD[Speed Setpoint]
-    ESTOP[Estop GPIO]
+    ESTOP[Estop GPIO PC7]
   end
 
   subgraph Sensing
@@ -160,7 +161,12 @@ flowchart TD
     W_L[Outer Speed PI Left]
     W_R[Outer Speed PI Right]
     VEL[Velocity Estimator\nenc deltas to RPM]
-    SAFE[Fault Monitor + State]\n    MODE[Mode Manager]\n    PWM1[PWM OUT TIM1 CH1]\n    PWM2[PWM OUT TIM1 CH2]\n    ENC[Encoders TIM2/TIM3]\n    ADC[ADC1 CH8/11]
+    SAFE[Fault Monitor + State]    
+    MODE[Mode Manager]    
+    PWM1[PWM OUT TIM1 CH1]    
+    WM2[PWM OUT TIM1 CH2]    
+    ENC[Encoders TIM2/TIM3]    
+    ADC[ADC1 CH8/11]
   end
 
   subgraph TASKS[FreeRTOS Tasks]

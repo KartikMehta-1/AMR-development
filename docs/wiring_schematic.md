@@ -12,7 +12,7 @@ This document captures the practical wiring plan for the AMR project: power dist
   - Branches:
     - Motor Power Bus + Motor Driver VM (Cytron MDD20A)
     - DC-DC Buck 5 V (Jetson Nano, USB hub) — XH-M401 / XL4016 class
-    - DC-DC Buck 5 V/12 V for sensors (LiDAR, depth cam, CS100A proximity) — LM2596 for 5 V logic rail; 12 V optional if needed
+    - DC-DC Buck 5 V/12 V for sensors (LiDAR, depth cam, HC-SR04 proximity) — LM2596 for 5 V logic rail; 12 V optional if needed
   - Battery voltage display (DSN-DVM-368) fed after main switch so it is off when the robot is off
 
 Notes
@@ -128,7 +128,7 @@ Notes
 
 Wiring summary
 - E-stop switch in series with motor supply to Cytron MDD20A VM.
-- E-stop sense line + STM32 GPIO (with pull-up/down as appropriate). Debounce in hardware and/or firmware.
+- E-stop sense line + STM32 GPIO `PC7` (active-low with 3.3 V pull-up). Debounce in hardware and/or firmware.
 
 ---
 
@@ -184,7 +184,7 @@ Power (Jetson)
 
 - LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
 - Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
-- Proximity Sensors: 4x CS100A ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; use 3.3 V-compatible echo or level-shift if echo drives 5 V.
+- Proximity Sensors: 4x HC-SR04 ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; level-shift echo to 3.3 V (HC-SR04 echo is 5 V).
 
 Notes
 - Use powered USB hub if multiple high-draw USB devices are attached.
@@ -192,11 +192,11 @@ Notes
 
 ---
 
-## 7) Proximity Sensors + STM32 (4x CS100A Ultrasonic)
+## 7) Proximity Sensors + STM32 (4x HC-SR04 Ultrasonic)
 
-Goal: Obstruction detection around the AMR perimeter using 4 CS100A ultrasonic sensors mounted near corners/edges.
+Goal: Obstruction detection around the AMR perimeter using 4 HC-SR04 ultrasonic sensors mounted near corners/edges.
 
-Interface and pin map (STM32 3.3 V GPIO):
+Interface and pin map (STM32 3.3 V GPIO; echo level-shift to 3.3 V):
 - S1 front_left: TRIG -> PC0, ECHO -> PA10 (level shift/divider on echo if 5 V)
 - S2 front_right: TRIG -> PC2, ECHO -> PA11 (level shift/divider on echo if 5 V)
 - S3 rear_left: TRIG -> PC3, ECHO -> PA12 (level shift/divider on echo if 5 V)
@@ -254,13 +254,14 @@ Safety and layout
   - `PC1 / ADC1_IN11` + Right motor current (ACS758)
   - `PA2/PA3` + UART2 TX/RX to Jetson (optional)
   - `PA5` + Status LED
+  - `PC7` + E-stop sense input (active-low, pull-up to 3.3 V)
 - Motor Driver:
   - Cytron MDD20A terminals: M1 PWM, M1 DIR, M2 PWM, M2 DIR, VM, GND, Motor outputs
 - Encoder: A, B, V+, GND (open-collector outputs with 3.3 V pull-ups)
-- Proximity Sensors (x4 CS100A): V+, GND, TRIG, ECHO to STM32 GPIOs (echo level-shift to 3.3 V if needed)
+- Proximity Sensors (x4 HC-SR04): V+, GND, TRIG, ECHO to STM32 GPIOs (echo level-shift to 3.3 V)
 - Jetson Nano: 5 V, GND, USB ports, J41 UART if used
 - YDLidar G4 / RealSense D455: USB to Jetson via powered hub; 5 V from sensor/USB rail
- - Proximity: Trigger/Echo GPIO (see mapping above)
+- Proximity: Trigger/Echo GPIO (HC-SR04, see mapping above)
 
 ---
 

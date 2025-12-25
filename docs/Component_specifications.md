@@ -107,17 +107,17 @@ Mounting and effective resolution
 ---
 
 ## 7. Proximity Sensors
-**Model:** CS100A Ultrasonic (x4 units)
+**Model:** HC-SR04 Ultrasonic (x4 units)
 
 | Parameter | Value |
 |------------|--------|
 | Quantity | 4 |
 | Power | 5 V DC |
-| Interface | Digital trigger/echo (similar to HC-SR04 style) |
-| Range | ~2 cm to ~450 cm (typical); validate per batch |
+| Interface | Digital trigger/echo (HC-SR04 compatible) |
+| Range | ~2 cm to ~400 cm (typical); validate per batch |
 | Update Rate | On-demand via trigger; duty-cycle to avoid crosstalk |
 | Mounting | Corners/edges of chassis for obstruction detection |
-| Notes | Use per-sensor staggered firing to prevent echo overlap; add small RC on echo if needed to tame ringing; level-shift echo to 3.3 V if module drives 5 V logic high. Decouple 0.1 uF + 10 uF at each module. |
+| Notes | Use per-sensor staggered firing to prevent echo overlap; add small RC on echo if needed to tame ringing; level-shift echo to 3.3 V (HC-SR04 echo is 5 V). Decouple 0.1 uF + 10 uF at each module. |
 
 ---
 

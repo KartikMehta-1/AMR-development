@@ -54,7 +54,7 @@ graph TD
     ENC_R[Right Encoder 600 PPR<br/>5V NPN OC]
     LIDAR[YDLidar G4<br/>USB, 5V from hub]
     DEPTH[RealSense D455<br/>USB 3, 5V from hub]
-    PROX[Proximity x4<br/>CS100A ultrasonic 5V trig/echo]
+    PROX[Proximity x4<br/>HC-SR04 ultrasonic 5V trig/echo]
   end
 
   %% Power distribution thick orange
@@ -93,5 +93,5 @@ graph TD
 - Power links are thick/orange; data/sense links are thinner/blue for quick visual separation.
 - Main power switch sits at pack output ahead of fuse and E-Stop for full isolation during service/storage.
 - Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off.
-- Proximity sensors: 4x CS100A ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; stagger triggers to avoid crosstalk.
+- Proximity sensors: 4x HC-SR04 ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; stagger triggers to avoid crosstalk.
 - Jetson soft power button: momentary N.O. switch across JET PWR_BTN to GND for graceful shutdown/start (no power cut).
