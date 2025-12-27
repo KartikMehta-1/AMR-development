@@ -29,6 +29,7 @@
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
+#include <std_msgs/msg/float32.h>
 #include <geometry_msgs/msg/twist.h>
 #include <uxr/client/transport.h>
 #include <rcutils/allocator.h>
@@ -104,7 +105,7 @@ const osThreadAttr_t ros_pub_task_attributes = {
 static uint32_t last_header_tick = 0;
 static volatile uint8_t control_tick_flag = 0;
 static volatile uint32_t control_tick_count = 0;
-static uint32_t telemetry_decim_counter = 0;
+//static uint32_t telemetry_decim_counter = 0;
 static EncoderChannel enc_left;
 static EncoderChannel enc_right;
 static CurrentSense current_sense;
@@ -122,16 +123,22 @@ static rclc_executor_t ros_executor;
 static rcl_publisher_t pub_rpm_left;
 static rcl_publisher_t pub_rpm_right;
 static rcl_publisher_t pub_fault_mask;
+static rcl_publisher_t pub_duty_left;
+static rcl_publisher_t pub_duty_right;
 static rcl_subscription_t sub_cmd_vel;
 static geometry_msgs__msg__Twist msg_cmd_vel;
 static std_msgs__msg__Int32 msg_rpm_left;
 static std_msgs__msg__Int32 msg_rpm_right;
 static std_msgs__msg__Int32 msg_fault_mask;
+static std_msgs__msg__Float32 msg_duty_left;
+static std_msgs__msg__Float32 msg_duty_right;
 static volatile bool ros_ready = false;
 static volatile int ros_init_fail_stage = 0;
 static volatile float cmd_v_mps = 0.0f;
 static volatile float cmd_w_rps = 0.0f;
 static volatile uint32_t last_cmd_ms = 0U;
+static volatile float duty_cmd_l_pub = 0.0f;
+static volatile float duty_cmd_r_pub = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -774,6 +781,8 @@ void StartControlTask(void *argument)
     float rpm_target_r = 0.0f;
     float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
     ControlLoop_Update(&control_loop, sense.rpm_l, sense.rpm_r, enabled, v_cmd, w_cmd, dt_s, now, &duty_cmd_l, &duty_cmd_r, &rpm_target_l, &rpm_target_r);
+    duty_cmd_l_pub = duty_cmd_l;
+    duty_cmd_r_pub = duty_cmd_r;
     // Set direction pins based on commanded sign, then apply magnitude as duty
     uint8_t dir_l = (duty_cmd_l >= 0.0f) ? LEFT_DIR_POLARITY : (LEFT_DIR_POLARITY ? 0U : 1U);
     uint8_t dir_r = (duty_cmd_r >= 0.0f) ? RIGHT_DIR_POLARITY : (RIGHT_DIR_POLARITY ? 0U : 1U);
@@ -869,23 +878,41 @@ void StartRosPubTask(void *argument)
     goto ros_init_fail;
   }
 
+  if (rclc_publisher_init_best_effort(
+          &pub_duty_left,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+          "/amr/duty_cmd_left") != RCL_RET_OK) {
+    ros_init_fail_stage = 6;
+    goto ros_init_fail;
+  }
+
+  if (rclc_publisher_init_best_effort(
+          &pub_duty_right,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+          "/amr/duty_cmd_right") != RCL_RET_OK) {
+    ros_init_fail_stage = 7;
+    goto ros_init_fail;
+  }
+
   // teleop_twist_keyboard publishes /cmd_vel as RELIABLE, so keep subscriber RELIABLE to match
   if (rclc_subscription_init_default(
           &sub_cmd_vel,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
           "/cmd_vel") != RCL_RET_OK) {
-    ros_init_fail_stage = 6;
+    ros_init_fail_stage = 8;
     goto ros_init_fail;
   }
 
   if (rclc_executor_init(&ros_executor, &ros_support.context, 1, &ros_allocator) != RCL_RET_OK) {
-    ros_init_fail_stage = 7;
+    ros_init_fail_stage = 9;
     goto ros_init_fail;
   }
 
   if (rclc_executor_add_subscription(&ros_executor, &sub_cmd_vel, &msg_cmd_vel, CmdVelCallback, ON_NEW_DATA) != RCL_RET_OK) {
-    ros_init_fail_stage = 8;
+    ros_init_fail_stage = 10;
     goto ros_init_fail;
   }
 
@@ -902,13 +929,18 @@ void StartRosPubTask(void *argument)
     msg_rpm_left.data = (int32_t)(sense.rpm_l * 10.0f);
     msg_rpm_right.data = (int32_t)(sense.rpm_r * 10.0f);
     msg_fault_mask.data = (int32_t)ControlState_GetFaultMask(&ctrl_state);
+    msg_duty_left.data = duty_cmd_l_pub * 100.0f;
+    msg_duty_right.data = duty_cmd_r_pub * 100.0f;
 
     rcl_ret_t rc1 = rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
     rcl_ret_t rc2 = rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
     rcl_ret_t rc3 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
+    rcl_ret_t rc4 = rcl_publish(&pub_duty_left, &msg_duty_left, NULL);
+    rcl_ret_t rc5 = rcl_publish(&pub_duty_right, &msg_duty_right, NULL);
 
     // Blink LED when publish succeeds; hold solid ON if any publish fails
-    if ((rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK)) {
+    if ((rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK) &&
+        (rc4 == RCL_RET_OK) && (rc5 == RCL_RET_OK)) {
       led_state = !led_state;
       HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
     } else {

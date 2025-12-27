@@ -47,10 +47,10 @@
 #define SPEED_PID_KP_R     0.025f
 #define SPEED_PID_KI_R     0.040f
 #define SPEED_PID_KD_R     0.00f
-#define SPEED_PID_OUT_MIN -0.30f
-#define SPEED_PID_OUT_MAX  0.30f
-#define SPEED_PID_I_MIN   -0.20f
-#define SPEED_PID_I_MAX    0.20f
+#define SPEED_PID_OUT_MIN -0.60f
+#define SPEED_PID_OUT_MAX  0.60f
+#define SPEED_PID_I_MIN   -0.40f
+#define SPEED_PID_I_MAX    0.40f
 #define SPEED_PID_DEADBAND_RPM 0.20f   // do not integrate when error magnitude is below this
 
 // Test setpoints (RPM) and toggle interval
@@ -61,7 +61,7 @@
 // Ramp rates for command slewing (applied to v, w) and duty limit
 #define V_CMD_RAMP_RATE_MPS   0.20f    // max change in linear velocity per second
 #define W_CMD_RAMP_RATE_RAD   0.80f    // max change in angular velocity per second
-#define MOTOR_DUTY_MAX        0.30f    // absolute duty limit for scaling/clamp
+#define MOTOR_DUTY_MAX        0.60f    // absolute duty limit for scaling/clamp
 
 // Differential drive test cases (v, omega) toggled every 5s
 #define DIFF_TEST_V1_MPS   0.20f
