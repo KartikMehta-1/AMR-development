@@ -20,6 +20,8 @@ void ControlLoop_Init(ControlLoop *cl)
   cl->rpm_target_r = 0.0f;
   cl->cmd_v_mps = 0.0f;
   cl->cmd_w_rps = 0.0f;
+  cl->v_l_mps = 0.0f;
+  cl->v_r_mps = 0.0f;
 }
 
 void ControlLoop_Update(ControlLoop *cl,
@@ -42,6 +44,8 @@ void ControlLoop_Update(ControlLoop *cl,
     cl->rpm_target_r = 0.0f;
     cl->cmd_v_mps = 0.0f;
     cl->cmd_w_rps = 0.0f;
+    cl->v_l_mps = 0.0f;
+    cl->v_r_mps = 0.0f;
     Ramp_SetTarget(&cl->ramp_l, 0.0f);
     Ramp_SetTarget(&cl->ramp_r, 0.0f);
     Ramp_SetTarget(&cl->ramp_v, 0.0f);
@@ -49,16 +53,23 @@ void ControlLoop_Update(ControlLoop *cl,
   } else {
     cl->cmd_v_mps = v_cmd_mps;
     cl->cmd_w_rps = w_cmd_rps;
+#if RAMPING_ENABLE
     Ramp_SetTarget(&cl->ramp_v, cl->cmd_v_mps);
     Ramp_SetTarget(&cl->ramp_w, cl->cmd_w_rps);
 
     // Slew v, w to targets to keep turns coordinated and smooth
     float v_cmd = Ramp_Update(&cl->ramp_v, dt_s);
     float w_cmd = Ramp_Update(&cl->ramp_w, dt_s);
+#else
+    float v_cmd = cl->cmd_v_mps;
+    float w_cmd = cl->cmd_w_rps;
+#endif
 
     // Differential-drive kinematics to wheel linear velocities
     float v_l = v_cmd - (w_cmd * half_track);
     float v_r = v_cmd + (w_cmd * half_track);
+    cl->v_l_mps = v_l;
+    cl->v_r_mps = v_r;
 
     // Convert to RPM targets
     cl->rpm_target_l = v_l * rpm_scale;
@@ -68,13 +79,23 @@ void ControlLoop_Update(ControlLoop *cl,
     float pid_out_l = PID_Update(&cl->pid_l, cl->rpm_target_l, rpm_l, dt_s);
     float pid_out_r = PID_Update(&cl->pid_r, cl->rpm_target_r, rpm_r, dt_s);
 
+#if RAMPING_ENABLE
     // Ramp duties toward PID outputs for smooth actuation
     Ramp_SetTarget(&cl->ramp_l, pid_out_l);
     Ramp_SetTarget(&cl->ramp_r, pid_out_r);
+#else
+    cl->ramp_l.value = pid_out_l;
+    cl->ramp_r.value = pid_out_r;
+#endif
   }
 
+#if RAMPING_ENABLE
   *duty_cmd_l = Ramp_Update(&cl->ramp_l, dt_s);
   *duty_cmd_r = Ramp_Update(&cl->ramp_r, dt_s);
+#else
+  *duty_cmd_l = cl->ramp_l.value;
+  *duty_cmd_r = cl->ramp_r.value;
+#endif
   // Saturate both duties together to preserve curvature when limiting
   float max_abs = fabsf(*duty_cmd_l);
   float abs_r = fabsf(*duty_cmd_r);

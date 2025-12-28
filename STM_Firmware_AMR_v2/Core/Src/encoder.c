@@ -15,7 +15,8 @@ static inline int32_t encoder_delta(uint32_t now, uint32_t last, uint32_t max_co
 void Encoder_Init(EncoderChannel *e,
                   TIM_HandleTypeDef *htim,
                   uint32_t counts_per_rev,
-                  uint32_t max_count)
+                  uint32_t max_count,
+                  int8_t polarity)
 {
     e->htim = htim;
     e->counts_per_rev = counts_per_rev;
@@ -23,6 +24,7 @@ void Encoder_Init(EncoderChannel *e,
     e->last_hw_count = 0U;
     e->position = 0;
     e->rpm = 0.0f;
+    e->polarity = (polarity >= 0) ? 1 : -1;
 }
 
 HAL_StatusTypeDef Encoder_Start(EncoderChannel *e)
@@ -38,8 +40,8 @@ void Encoder_Update(EncoderChannel *e, float dt_seconds)
     uint32_t now = __HAL_TIM_GET_COUNTER(e->htim);
     int32_t dcnt = encoder_delta(now, e->last_hw_count, e->max_count);
     e->last_hw_count = now;
+    dcnt *= e->polarity;
     e->position += dcnt;
     float revs = (e->counts_per_rev > 0U) ? ((float)dcnt / (float)e->counts_per_rev) : 0.0f;
     e->rpm = revs / dt_seconds * 60.0f;
 }
-

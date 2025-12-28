@@ -3,6 +3,7 @@
 #define ENCODER_H
 
 #include "main.h"
+#include <stdint.h>
 
 typedef struct {
     TIM_HandleTypeDef *htim;   // TIM in encoder mode (already configured by MX_TIMx_Init)
@@ -11,12 +12,14 @@ typedef struct {
     uint32_t last_hw_count;    // previous raw counter sample
     int32_t position;          // accumulated counts (signed)
     float rpm;                 // last computed RPM
+    int8_t polarity;           // +1 or -1 to flip direction
 } EncoderChannel;
 
 void Encoder_Init(EncoderChannel *e,
                   TIM_HandleTypeDef *htim,
                   uint32_t counts_per_rev,
-                  uint32_t max_count);
+                  uint32_t max_count,
+                  int8_t polarity);
 
 HAL_StatusTypeDef Encoder_Start(EncoderChannel *e);
 
@@ -27,4 +30,3 @@ static inline float   Encoder_GetRPM(const EncoderChannel *e)      { return e->r
 static inline uint32_t Encoder_GetRawCount(const EncoderChannel *e) { return __HAL_TIM_GET_COUNTER(e->htim); }
 
 #endif // ENCODER_H
-

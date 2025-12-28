@@ -49,6 +49,7 @@ void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
   out->rpm_l = s->rpm_l_filt;
   out->rpm_r = s->rpm_r_filt;
 
+#if CURRENT_SENSE_ENABLE
   out->curr_l_mA = 0;
   out->curr_r_mA = 0;
   out->adc_l_counts = 0;
@@ -60,4 +61,13 @@ void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
   }
   out->zero_l_counts = s->curr->zero_left;
   out->zero_r_counts = s->curr->zero_right;
+#else
+  out->curr_l_mA = 0;
+  out->curr_r_mA = 0;
+  out->adc_l_counts = 0;
+  out->adc_r_counts = 0;
+  out->zero_l_counts = 0;
+  out->zero_r_counts = 0;
+  out->curr_valid = 0;
+#endif
 }

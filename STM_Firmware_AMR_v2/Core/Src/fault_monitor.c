@@ -35,13 +35,15 @@ uint32_t FaultMonitor_Update(FaultMonitor *fm,
   if (fm->stall_l_accum_ms >= FAULT_STALL_DWELL_MS) fault_bits |= CTRL_FAULT_STALL_LEFT;
   if (fm->stall_r_accum_ms >= FAULT_STALL_DWELL_MS) fault_bits |= CTRL_FAULT_STALL_RIGHT;
 
-  // Encoder timeout: commanded rpm above threshold but RPM ~0 for dwell
+  // Encoder timeout: commanded rpm above threshold but RPM ~0 for dwell (only when actually driving)
   float tgt_rpm_l_abs = fabsf(rpm_target_l);
   float tgt_rpm_r_abs = fabsf(rpm_target_r);
   bool cmd_active_l = tgt_rpm_l_abs >= FAULT_ENC_TIMEOUT_RPM_MIN;
   bool cmd_active_r = tgt_rpm_r_abs >= FAULT_ENC_TIMEOUT_RPM_MIN;
-  fm->enc_l_idle_ms = (cmd_active_l && fabsf(sense->rpm_l) <= FAULT_ENC_TIMEOUT_RPM_MIN) ? (fm->enc_l_idle_ms + dt_ms) : 0U;
-  fm->enc_r_idle_ms = (cmd_active_r && fabsf(sense->rpm_r) <= FAULT_ENC_TIMEOUT_RPM_MIN) ? (fm->enc_r_idle_ms + dt_ms) : 0U;
+  bool enc_check_l = cmd_active_l && driving_l;
+  bool enc_check_r = cmd_active_r && driving_r;
+  fm->enc_l_idle_ms = (enc_check_l && fabsf(sense->rpm_l) <= FAULT_ENC_TIMEOUT_RPM_MIN) ? (fm->enc_l_idle_ms + dt_ms) : 0U;
+  fm->enc_r_idle_ms = (enc_check_r && fabsf(sense->rpm_r) <= FAULT_ENC_TIMEOUT_RPM_MIN) ? (fm->enc_r_idle_ms + dt_ms) : 0U;
   if (fm->enc_l_idle_ms >= FAULT_ENC_TIMEOUT_MS) fault_bits |= CTRL_FAULT_ENC_TIMEOUT_LEFT;
   if (fm->enc_r_idle_ms >= FAULT_ENC_TIMEOUT_MS) fault_bits |= CTRL_FAULT_ENC_TIMEOUT_RIGHT;
 

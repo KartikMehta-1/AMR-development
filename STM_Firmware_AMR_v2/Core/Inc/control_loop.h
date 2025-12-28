@@ -18,6 +18,8 @@ typedef struct {
   float rpm_target_r;
   float cmd_v_mps;
   float cmd_w_rps;
+  float v_l_mps;
+  float v_r_mps;
 } ControlLoop;
 
 void ControlLoop_Init(ControlLoop *cl);

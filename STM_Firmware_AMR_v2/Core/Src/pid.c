@@ -10,6 +10,10 @@ void PID_Init(PID *pid, float kp, float ki, float kd,
   pid->kp = kp;
   pid->ki = ki;
   pid->kd = kd;
+  pid->last_p = 0.0f;
+  pid->last_d = 0.0f;
+  pid->last_out = 0.0f;
+  pid->last_error = 0.0f;
   pid->integrator = 0.0f;
   pid->prev_meas = 0.0f;
   pid->init = 0;
@@ -23,6 +27,10 @@ void PID_Init(PID *pid, float kp, float ki, float kd,
 // Reset integrator and previous measurement.
 void PID_Reset(PID *pid, float meas)
 {
+  pid->last_p = 0.0f;
+  pid->last_d = 0.0f;
+  pid->last_out = 0.0f;
+  pid->last_error = 0.0f;
   pid->integrator = 0.0f;
   pid->prev_meas = meas;
   pid->init = 1;
@@ -41,6 +49,7 @@ float PID_Update(PID *pid, float setpoint, float meas, float dt_sec)
   }
 
   float error = setpoint - meas;
+  pid->last_error = error;
   // Apply deadband to error for integration (and proportional if desired)
   float err_for_pid = error;
   if (fabsf(error) < pid->deadband) {
@@ -56,9 +65,15 @@ float PID_Update(PID *pid, float setpoint, float meas, float dt_sec)
   float deriv = -(meas - pid->prev_meas) / dt_sec;  // derivative on measurement
   pid->prev_meas = meas;
 
-  float out = pid->kp * err_for_pid + pid->integrator + pid->kd * deriv;
+  float p_term = pid->kp * err_for_pid;
+  float i_term = pid->integrator;
+  float d_term = pid->kd * deriv;
+  float out = p_term + i_term + d_term;
 
   if (out > pid->out_max) out = pid->out_max;
   if (out < pid->out_min) out = pid->out_min;
+  pid->last_p = p_term;
+  pid->last_d = d_term;
+  pid->last_out = out;
   return out;
 }

@@ -8,6 +8,10 @@ typedef struct {
   float kp;
   float ki;
   float kd;
+  float last_p;
+  float last_d;
+  float last_out;
+  float last_error;
   float integrator;
   float prev_meas;
   uint8_t init;
