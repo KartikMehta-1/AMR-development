@@ -41,15 +41,15 @@
 #define DUTY_RAMP_RATE_PER_SEC 2.0f    // slew limit for motor duty (e.g., 20% per second)
 
 // Encoder polarity (set to -1 to flip RPM sign for that wheel)
-#define LEFT_ENCODER_POLARITY  -1
-#define RIGHT_ENCODER_POLARITY 1
+#define LEFT_ENCODER_POLARITY  1
+#define RIGHT_ENCODER_POLARITY -1
 
 // Speed PID gains (per wheel). Output is duty 0..1 (clamped to 0..0.3)
 #define SPEED_PID_KP_L     0.5f
-#define SPEED_PID_KI_L     0.00f
+#define SPEED_PID_KI_L     0.002f
 #define SPEED_PID_KD_L     0.0f
 #define SPEED_PID_KP_R     0.5f
-#define SPEED_PID_KI_R     0.00f
+#define SPEED_PID_KI_R     0.002f
 #define SPEED_PID_KD_R     0.0f
 #define SPEED_PID_OUT_MIN -0.90f
 #define SPEED_PID_OUT_MAX  0.90f
@@ -70,8 +70,8 @@
 
 // Open-loop motor test (bypass PID/control loop; fixed duty regardless of cmd_vel)
 #define MOTOR_OPEN_LOOP_TEST        0
-#define MOTOR_OPEN_LOOP_DUTY_LEFT   0.20f
-#define MOTOR_OPEN_LOOP_DUTY_RIGHT  -0.20f
+#define MOTOR_OPEN_LOOP_DUTY_LEFT   0.0f
+#define MOTOR_OPEN_LOOP_DUTY_RIGHT  0.20f
 
 // Differential drive test cases (v, omega) toggled every 5s
 #define DIFF_TEST_V1_MPS   0.20f
