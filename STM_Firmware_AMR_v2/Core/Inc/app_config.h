@@ -16,6 +16,9 @@
 #define ROS_PUB_PERIOD_MS       200U    // publish period for ROS topics (ms)
 #define ROS_EXEC_DELAY_MS       10U     // executor loop delay to service subscriptions (ms)
 #define ROS_PUB_PID_DIAG        0       // set to 1 to publish PID P/I/D/error topics over ROS
+#define SERIAL_TELEMETRY_ENABLE 1       // set to 1 to disable ROS pub task and stream UART telemetry
+#define SERIAL_TELEMETRY_PERIOD_MS SAMPLE_INTERVAL_MS // UART telemetry period (ms)
+#define SERIAL_TELEMETRY_HEADER_PERIOD_MS 1000U       // resend header so plotter can sync (ms)
 #define TRACK_WIDTH_M           0.386f  // wheel-to-wheel track width (meters)
 #define WHEEL_RADIUS_M          0.0615f // wheel radius (meters)
 
@@ -45,12 +48,12 @@
 #define RIGHT_ENCODER_POLARITY -1
 
 // Speed PID gains (per wheel). Output is duty 0..1 (clamped to 0..0.3)
-#define SPEED_PID_KP_L     0.5f
-#define SPEED_PID_KI_L     0.002f
-#define SPEED_PID_KD_L     0.0f
-#define SPEED_PID_KP_R     0.5f
-#define SPEED_PID_KI_R     0.002f
-#define SPEED_PID_KD_R     0.0f
+#define SPEED_PID_KP_L     0.4f
+#define SPEED_PID_KI_L     0.001f
+#define SPEED_PID_KD_L     0.01f
+#define SPEED_PID_KP_R     0.4f
+#define SPEED_PID_KI_R     0.001f
+#define SPEED_PID_KD_R     0.01f
 #define SPEED_PID_OUT_MIN -0.90f
 #define SPEED_PID_OUT_MAX  0.90f
 #define SPEED_PID_I_MIN   -2.0f
@@ -61,6 +64,13 @@
 #define SPEED_TEST_RPM_LOW   2.0f
 #define SPEED_TEST_RPM_HIGH  4.0f
 #define SPEED_TEST_TOGGLE_MS 5000U
+
+// PID tuning sweep (percent of PID_TUNING_RPM_MAX)
+#define PID_TUNING_ENABLE    1
+#define PID_TUNING_RPM_MAX   50.0f
+#define PID_TUNING_LOW_FRAC  0.20f
+#define PID_TUNING_HIGH_FRAC 0.50f
+#define PID_TUNING_TOGGLE_MS 3000U
 
 // Ramp rates for command slewing (applied to v, w) and duty limit
 #define RAMPING_ENABLE        1        // set to 0 to disable v/w and duty ramping
@@ -82,7 +92,7 @@
 #define DIFF_TEST_W3_RPS   0.50f
 
 // RPM filtering before PID (simple exponential filter)
-#define RPM_LPF_ALPHA 0.2f   // higher = less smoothing (faster response)
+#define RPM_LPF_ALPHA 0.1f   // higher = less smoothing (faster response)
 #define RPM_SPIKE_LIMIT_RPM 500.0f  // reject raw RPM magnitudes beyond this (likely noise/wrap)
 #define CMD_TIMEOUT_MS 500U          // zero commands if no cmd_vel within this timeout
 #define CMD_STOP_EPS_MPS 0.01f        // treat linear cmd below this as zero (m/s)

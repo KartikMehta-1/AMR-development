@@ -101,6 +101,20 @@ const osThreadAttr_t ros_pub_task_attributes = {
   .stack_size = sizeof(ros_pub_taskBuffer),
   .priority = (osPriority_t) osPriorityHigh,
 };
+#if SERIAL_TELEMETRY_ENABLE
+/* Definitions for telemetry_task */
+osThreadId_t telemetry_taskHandle;
+uint32_t telemetry_taskBuffer[ 1200 ];
+osStaticThreadDef_t telemetry_taskControlBlock;
+const osThreadAttr_t telemetry_task_attributes = {
+  .name = "telemetry_task",
+  .cb_mem = &telemetry_taskControlBlock,
+  .cb_size = sizeof(telemetry_taskControlBlock),
+  .stack_mem = &telemetry_taskBuffer[0],
+  .stack_size = sizeof(telemetry_taskBuffer),
+  .priority = (osPriority_t) osPriorityLow,
+};
+#endif
 /* USER CODE BEGIN PV */
 static uint32_t last_header_tick = 0;
 static volatile uint8_t control_tick_flag = 0;
@@ -202,6 +216,9 @@ static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 void StartControlTask(void *argument);
 void StartRosPubTask(void *argument);
+#if SERIAL_TELEMETRY_ENABLE
+void StartTelemetryTask(void *argument);
+#endif
 void CmdVelCallback(const void * msgin);
 
 /* USER CODE BEGIN PFP */
@@ -322,8 +339,13 @@ int main(void)
   /* creation of control_task */
   control_taskHandle = osThreadNew(StartControlTask, NULL, &control_task_attributes);
 
+#if SERIAL_TELEMETRY_ENABLE
+  /* creation of telemetry_task */
+  telemetry_taskHandle = osThreadNew(StartTelemetryTask, NULL, &telemetry_task_attributes);
+#else
   /* creation of ros_pub_task */
   ros_pub_taskHandle = osThreadNew(StartRosPubTask, NULL, &ros_pub_task_attributes);
+#endif
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -855,17 +877,42 @@ void StartControlTask(void *argument)
     dbg_rpm_target_l = 0.0f;
     dbg_rpm_target_r = 0.0f;
 #else
-    float v_cmd = cmd_v_mps;
-    float w_cmd = cmd_w_rps;
+    float v_cmd = 0.0f;
+    float w_cmd = 0.0f;
+    bool cmd_stopped = false;
+#if PID_TUNING_ENABLE
+    static uint32_t last_toggle_ms = 0U;
+    static uint8_t test_high = 0U;
+    const float rpm_low = PID_TUNING_RPM_MAX * PID_TUNING_LOW_FRAC;
+    const float rpm_high = PID_TUNING_RPM_MAX * PID_TUNING_HIGH_FRAC;
+    if (!enabled) {
+      test_high = 0U;
+      last_toggle_ms = now;
+    } else if (last_toggle_ms == 0U) {
+      last_toggle_ms = now;
+    } else if ((now - last_toggle_ms) >= PID_TUNING_TOGGLE_MS) {
+      test_high = !test_high;
+      last_toggle_ms = now;
+    }
+    float rpm_cmd = test_high ? rpm_high : rpm_low;
+    const float two_pi = 6.28318530718f;
+    v_cmd = (rpm_cmd * two_pi * WHEEL_RADIUS_M) / 60.0f;
+    w_cmd = 0.0f;
+    cmd_age_ms = 0U;
+    cmd_stopped = !enabled;
+#else
+    v_cmd = cmd_v_mps;
+    w_cmd = cmd_w_rps;
     uint32_t cmd_age = (last_cmd_ms > 0U) ? (now - last_cmd_ms) : (CMD_TIMEOUT_MS + 1U);
     cmd_age_ms = cmd_age;
     if (cmd_age > CMD_TIMEOUT_MS) {
       v_cmd = 0.0f;
       w_cmd = 0.0f;
     }
-    bool cmd_stopped = (cmd_age > CMD_TIMEOUT_MS) ||
-                       (fabsf(v_cmd) < CMD_STOP_EPS_MPS && fabsf(w_cmd) < CMD_STOP_EPS_RPS) ||
-                       !enabled;
+    cmd_stopped = (cmd_age > CMD_TIMEOUT_MS) ||
+                  (fabsf(v_cmd) < CMD_STOP_EPS_MPS && fabsf(w_cmd) < CMD_STOP_EPS_RPS) ||
+                  !enabled;
+#endif
     static bool cmd_stopped_prev = false;
     if (cmd_stopped && !cmd_stopped_prev) {
       PID_Reset(&control_loop.pid_l, sense.rpm_l);
@@ -1193,6 +1240,61 @@ ros_init_fail:
   }
   /* USER CODE END StartRosPubTask */
 }
+
+#if SERIAL_TELEMETRY_ENABLE
+/* USER CODE BEGIN Header_StartTelemetryTask */
+/**
+* @brief Function implementing the telemetry_task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTelemetryTask */
+void StartTelemetryTask(void *argument)
+{
+  /* USER CODE BEGIN StartTelemetryTask */
+  Telemetry_SendHeader(&huart2);
+  uint32_t last_header_ms = HAL_GetTick();
+  for(;;)
+  {
+    uint32_t now = HAL_GetTick();
+    if ((now - last_header_ms) >= SERIAL_TELEMETRY_HEADER_PERIOD_MS) {
+      Telemetry_SendHeader(&huart2);
+      last_header_ms = now;
+    }
+
+    TelemetryFrame f = {0};
+    f.t_ms = now;
+    f.cnt_l = sense.cnt_l;
+    f.cnt_r = sense.cnt_r;
+    f.rpm_l_x10 = (int32_t)(sense.rpm_l * 10.0f);
+    f.rpm_r_x10 = (int32_t)(sense.rpm_r * 10.0f);
+    f.rpm_l_tgt_x10 = (int32_t)(dbg_rpm_target_l * 10.0f);
+    f.rpm_r_tgt_x10 = (int32_t)(dbg_rpm_target_r * 10.0f);
+    f.duty_l_pct = (int32_t)(duty_cmd_l_pub * 100.0f);
+    f.duty_r_pct = (int32_t)(duty_cmd_r_pub * 100.0f);
+    f.pid_p_l_pct = (int32_t)(dbg_pid_p_l * 100.0f);
+    f.pid_p_r_pct = (int32_t)(dbg_pid_p_r * 100.0f);
+    f.pid_i_l_pct = (int32_t)(dbg_pid_i_l * 100.0f);
+    f.pid_i_r_pct = (int32_t)(dbg_pid_i_r * 100.0f);
+    f.pid_d_l_pct = (int32_t)(dbg_pid_d_l * 100.0f);
+    f.pid_d_r_pct = (int32_t)(dbg_pid_d_r * 100.0f);
+    f.pid_err_l_x10 = (int32_t)(dbg_pid_err_l * 10.0f);
+    f.pid_err_r_x10 = (int32_t)(dbg_pid_err_r * 10.0f);
+    f.adc_l_counts = sense.adc_l_counts;
+    f.adc_r_counts = sense.adc_r_counts;
+    f.zero_l_counts = sense.zero_l_counts;
+    f.zero_r_counts = sense.zero_r_counts;
+    f.curr_l_mA = sense.curr_l_mA;
+    f.curr_r_mA = sense.curr_r_mA;
+    f.state = (uint32_t)ControlState_GetState(&ctrl_state);
+    f.fault_mask = ControlState_GetFaultMask(&ctrl_state);
+    Telemetry_SendFrame(&huart2, &f);
+
+    osDelay(SERIAL_TELEMETRY_PERIOD_MS);
+  }
+  /* USER CODE END StartTelemetryTask */
+}
+#endif
 
 /**
   * @brief  This function is executed in case of error occurrence.

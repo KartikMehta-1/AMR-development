@@ -15,6 +15,14 @@ typedef struct {
   int32_t rpm_r_tgt_x10;
   int32_t duty_l_pct;
   int32_t duty_r_pct;
+  int32_t pid_p_l_pct;
+  int32_t pid_p_r_pct;
+  int32_t pid_i_l_pct;
+  int32_t pid_i_r_pct;
+  int32_t pid_d_l_pct;
+  int32_t pid_d_r_pct;
+  int32_t pid_err_l_x10;
+  int32_t pid_err_r_x10;
   uint16_t adc_l_counts;
   uint16_t adc_r_counts;
   uint16_t zero_l_counts;
