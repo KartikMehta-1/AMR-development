@@ -95,7 +95,8 @@ void Error_Handler(void);
 #define DIR_RIGHT_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+#define ESTOP_Pin GPIO_PIN_10
+#define ESTOP_GPIO_Port GPIOB
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

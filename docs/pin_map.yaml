@@ -95,7 +95,7 @@ gpio:
 safety:
   estop:
     sense:
-      pin: PC7
+      pin: PB10              # Arduino D6 (right rail)
       active_state: low        # low or high
       pull: pullup_3v3         # pullup_3v3 or pulldown
       debounce_ms: 10
@@ -127,23 +127,23 @@ sensors:
     channels:
       - id: S1
         position: front_left
-        trig_pin: PC0
-        echo_pin: PA10
+        trig_pin: PA10         # Arduino D2
+        echo_pin: PC7          # Arduino D9
         notes: add divider or level shifter on echo if module drives 5 V high
       - id: S2
         position: front_right
-        trig_pin: PC2
-        echo_pin: PA11
+        trig_pin: PB3          # Arduino D3
+        echo_pin: PB6          # Arduino D10
         notes: add divider or level shifter on echo if module drives 5 V high
       - id: S3
         position: rear_left
-        trig_pin: PC3
-        echo_pin: PA12
+        trig_pin: PA4          # Arduino A2
+        echo_pin: PC0          # Arduino A5
         notes: add divider or level shifter on echo if module drives 5 V high
       - id: S4
         position: rear_right
-        trig_pin: PB10
-        echo_pin: PA15
+        trig_pin: PB9          # Arduino D14 (I2C SDA)
+        echo_pin: PB8          # Arduino D15 (I2C SCL)
         notes: add divider or level shifter on echo if module drives 5 V high
 
 buses:

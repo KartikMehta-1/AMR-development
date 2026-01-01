@@ -449,7 +449,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
     Error_Handler();
@@ -792,6 +792,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* Configure GPIO pin : ESTOP_Pin */
+  GPIO_InitStruct.Pin = ESTOP_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(ESTOP_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -853,13 +858,39 @@ void StartControlTask(void *argument)
     }
     float dt_s = CONTROL_LOOP_DT_S;
 
+    // Debounce hardware e-stop input.
+    bool estop_active = false;
+    {
+      static bool estop_init = false;
+      static bool estop_raw_prev = false;
+      static uint32_t estop_change_ms = 0U;
+      static bool estop_debounced = false;
+
+      GPIO_PinState estop_pin = HAL_GPIO_ReadPin(ESTOP_GPIO_Port, ESTOP_Pin);
+      bool estop_raw = ESTOP_ACTIVE_LOW ? (estop_pin == GPIO_PIN_RESET) : (estop_pin == GPIO_PIN_SET);
+
+      if (!estop_init) {
+        estop_init = true;
+        estop_raw_prev = estop_raw;
+        estop_change_ms = now;
+        estop_debounced = estop_raw;
+      } else if (estop_raw != estop_raw_prev) {
+        estop_raw_prev = estop_raw;
+        estop_change_ms = now;
+      } else if ((uint32_t)(now - estop_change_ms) >= ESTOP_DEBOUNCE_MS) {
+        estop_debounced = estop_raw;
+      }
+
+      estop_active = estop_debounced;
+    }
+
     // Sense encoders/currents
     sense.rpm_l = sense.rpm_r = 0.0f;
     Sensing_Step(&sensing, dt_s, &sense);
 
 
     // Control loop (PI + ramp) gated by state
-    bool enabled = ControlState_IsEnabled(&ctrl_state);
+    bool enabled = ControlState_IsEnabled(&ctrl_state) && !estop_active;
     float rpm_target_l = 0.0f;
     float rpm_target_r = 0.0f;
     float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
@@ -966,9 +997,10 @@ void StartControlTask(void *argument)
     // Fault detection (overcurrent, stall, encoder timeout, ADC stuck)
     uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target_l, rpm_target_r, duty_l, duty_r, CONTROL_LOOP_DT_MS);
 
-    // Update control state (faults from detection above, estop TBD)
+    // Update control state (faults from detection above, debounced e-stop)
     ControlInputs cin = {0};
     cin.enable_cmd = true;
+    cin.estop = estop_active;
     cin.fault_bits = fault_bits;
     ControlState_Update(&ctrl_state, &cin, now);
     // enabled flag will be used on next tick

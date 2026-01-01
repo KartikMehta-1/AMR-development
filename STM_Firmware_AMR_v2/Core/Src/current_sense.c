@@ -55,13 +55,13 @@ static uint8_t ReadAveragedCounts(CurrentSense *cs, uint16_t* left_counts, uint1
       continue;
     }
 
-    if (HAL_ADC_PollForConversion(cs->hadc, 5) != HAL_OK) {
+    if (HAL_ADC_PollForConversion(cs->hadc, CURR_ADC_POLL_TIMEOUT_MS) != HAL_OK) {
       HAL_ADC_Stop(cs->hadc);
       continue;
     }
     uint16_t l = (uint16_t)HAL_ADC_GetValue(cs->hadc);
 
-    if (HAL_ADC_PollForConversion(cs->hadc, 5) != HAL_OK) {
+    if (HAL_ADC_PollForConversion(cs->hadc, CURR_ADC_POLL_TIMEOUT_MS) != HAL_OK) {
       HAL_ADC_Stop(cs->hadc);
       continue;
     }

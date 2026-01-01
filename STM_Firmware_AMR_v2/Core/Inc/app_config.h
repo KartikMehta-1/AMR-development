@@ -6,6 +6,10 @@
 #define LEFT_DIR_POLARITY    1
 #define RIGHT_DIR_POLARITY   0
 
+// E-stop input configuration
+#define ESTOP_ACTIVE_LOW 1
+#define ESTOP_DEBOUNCE_MS 10U
+
 // Encoder/rate reporting configuration
 #define ENCODER_COUNTS_PER_REV  2400U   // 600 PPR A-4 quadrature
 #define CONTROL_LOOP_HZ         100U    // fixed-rate control loop (Hz)
@@ -23,7 +27,9 @@
 #define WHEEL_RADIUS_M          0.0615f // wheel radius (meters)
 
 // Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
-#define CURRENT_SENSE_ENABLE 0        // set to 0 to bypass current sensing
+#define CURRENT_SENSE_ENABLE 1        // set to 0 to bypass current sensing
+#define CURRENT_SENSE_DECIMATE 10U     // sample current every N control ticks (100 Hz / 5 = 20 Hz)
+#define CURR_ADC_POLL_TIMEOUT_MS 1U   // ADC poll timeout per conversion (ms)
 #define ADC_VREF_VOLTS        3.3f
 #define ADC_MAX_COUNTS        4095.0f
 #define ADC_MID_COUNTS        2048U
@@ -31,8 +37,8 @@
 #define CURR_ZERO_VOLTS       2.5f     // sensor Vout at 0 A (before divider)
 #define CURR_SENS_VOLTS_PER_A 0.040f   // 40 mV/A @ 5 V supply
 #define CURR_ZERO_SAMPLES     64U      // samples to average for zero offset
-#define CURR_AVG_SAMPLES      16U      // oversample to reduce noise without analog RC
-#define CURR_ZERO_VALID_WINDOW_COUNTS 700U  // reject zero-cal values too far from mid-scale
+#define CURR_AVG_SAMPLES      8U      // oversample to reduce noise without analog RC
+#define CURR_ZERO_VALID_WINDOW_COUNTS 2000U  // accept wider zero range; reject only near rails
 #define CURR_ZERO_TRACK_ALPHA 0.02f    // very slow IIR to track drift in zero offset
 #define CURR_ZERO_TRACK_MAX_DELTA_COUNTS 20U   // track only when delta is tiny (~<0.6 A)
 #define CURR_ZERO_TRACK_CURRENT_MA 200        // only track when measured current is near zero

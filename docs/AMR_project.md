@@ -1,7 +1,7 @@
 # Kartik's AMR Project Tracker (39 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2025-12-22  
+**Last Updated:** 2026-01-01  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
@@ -11,6 +11,7 @@
 - Progress: 10/39 weeks complete (~26%)
 - Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected.
 - micro-ROS: STM32 bring-up on USART2 with `/cmd_vel` subscription, RPM + fault mask publishers, and UART telemetry disabled to avoid contention.
+- Safety: Hardware e-stop GPIO integrated with debounce and fault latch (clear path pending).
 - Current Focus: Speed PI tuning and fault thresholds (overcurrent/stall) using current sensing; optional feedforward to reduce duty skew.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 11-12): Wrap up single-loop speed control plots/metrics; leave cascaded loop deferred.
@@ -26,7 +27,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 |---:|---|:---:|---|
 | 1 | Safety & Tools Setup | <span style="color: green">Done</span> | E-stop path reviewed; fused power path; STM32 toolchain + Blink verified. |
 | 2 | UART + Debug (ADC skipped) | <span style="color: green">Done</span> | Serial comms working; pin mapping documented; ADC intentionally skipped at this stage. |
-| 3 | PWM + Motor Driver (L298N) | Partial | PWM verified, motor spins; ramp duty + E-stop integration deferred to PID stage. |
+| 3 | PWM + Motor Driver (L298N) | Partial | PWM verified, motor spins; ramp duty + e-stop integration moved to PID stage (done in v2). |
 | 4 | Encoder Hookup & Counting | <span style="color: green">Done</span> | Encoder integrated; direction & count validated; stable RPM reading. |
 | 5 | RPM Calculation & Telemetry | <span style="color: green">Done</span> | RPM derived from ticks; serial telemetry logging functional. |
 | 6 | PID-Based Motor Control (Implementation) | <span style="color: green">Done</span> | PID loop on STM32; ramp limiter; anti-windup; clean control loop. |
@@ -34,12 +35,12 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 8 | Firmware v2: Dual-Motor Duty Bring-Up | <span style="color: green">Done</span> | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E-stop cut and GND common confirmed. |
 | 9 | Firmware v2: Encoder Integration | <span style="color: green">Done</span> | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; TODO: add external 3.3 V pull-ups or software invert flag. |
 | 10 | Firmware v2: Current Telemetry + Calibration | <span style="color: green">Done</span> | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). |
-| 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: goldenrod">In Progress</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); collect step/ramp plots + document tuning (docs/pid.md); continue gain/feedforward tuning. |
+| 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: goldenrod">In Progress</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); hardware e-stop GPIO input + debounce wired into ControlState (latched fault; clear pending); collect step/ramp plots + document tuning (docs/pid.md); continue gain/feedforward tuning. |
 | 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. |
 | 13 | Firmware v2: Differential Drive | <span style="color: green">Done</span> | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. |
 | 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 4x proximity sensors (GPIO/ADC/I2C TBD); mounts, wiring, pull-ups/protection; update pin map; bench power budget. |
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 4 sensors; debouncing/filtering; fault detection; add to telemetry. |
-| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: goldenrod">In Progress</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/fault_mask` pubs at 20 Hz; legacy UART telemetry disabled. Planned: `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; safety gate + fault latch/clear; `/amr/wheel_state`, `/amr/safety_state`; document fault mask; add voltage faults when available. |
+| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: goldenrod">In Progress</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/fault_mask` pubs at 20 Hz; legacy UART telemetry disabled. Planned: `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; add clear path for latched e-stop; `/amr/wheel_state`, `/amr/safety_state`; document fault mask; add voltage faults when available. |
 | 17 | Mechanical Assembly + Enclosure | Planned | Complete mechanical assembly; 3D print electronics enclosure; complete wiring; integrate battery; modify height; install LiDAR, depth camera, proximity sensors; 3D print AMR cover; build perfboard/shield for encoder pull-ups, ACS758 filters, and decoupling.<br>CAD tasks: survey/measurements (envelope, keep-outs, bend radii); base plate + mounts (Nucleo, Cytron, Jetson, hub, battery/BMS, DC-DC); sensor mounts; cable routing/strain relief; outputs (STEP/IGES, DXF, fastener BOM, assembly guide); include arm mounting provisions for Week 24 integration. |
 | 18 | Dev PC Env & Tooling | Planned | Install ROS2 desktop + colcon, VS Code/devcontainer, CLI tools; micro-ROS agent loopback; cross-build toolchain; base Docker/compose aligned with Jetson; SSH keys + dotfiles for reproducible setup. |
 | 19 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware. |
@@ -192,6 +193,7 @@ Consequences: Redesign mount; add airflow
 ---
 
 ## Change Log
+- 2026-01-01: Added functional hardware e-stop input with debounce + fault latch; tracker updated to reflect current clear-path gap.
 - 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/STM_architecture.md`; removed merged task/architecture files.
 - 2025-12-22: Consolidated firmware tasks into weekly tracker; merged STM32 architecture docs; added Jetson Nano architecture doc.
 - 2025-12-22: Added Week 17 mechanical assembly + enclosure tasks; shifted schedule by one week.

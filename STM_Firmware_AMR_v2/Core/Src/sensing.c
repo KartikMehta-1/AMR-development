@@ -10,6 +10,14 @@ void Sensing_Init(Sensing *s, EncoderChannel *enc_l, EncoderChannel *enc_r, Curr
   s->rpm_r_filt = 0.0f;
   s->rpm_lpf_alpha = rpm_lpf_alpha;
   s->rpm_filt_init = 0;
+  s->curr_decim_count = 0U;
+  s->curr_l_mA = 0;
+  s->curr_r_mA = 0;
+  s->adc_l_counts = 0U;
+  s->adc_r_counts = 0U;
+  s->zero_l_counts = 0U;
+  s->zero_r_counts = 0U;
+  s->curr_valid = 0U;
 }
 
 void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
@@ -50,17 +58,29 @@ void Sensing_Step(Sensing *s, float dt_s, SensingData *out)
   out->rpm_r = s->rpm_r_filt;
 
 #if CURRENT_SENSE_ENABLE
-  out->curr_l_mA = 0;
-  out->curr_r_mA = 0;
-  out->adc_l_counts = 0;
-  out->adc_r_counts = 0;
-  out->curr_valid = CurrentSense_ReadFiltered(s->curr, &out->curr_l_mA, &out->curr_r_mA,
-                                              &out->adc_l_counts, &out->adc_r_counts);
-  if (!out->curr_valid) {
-    out->curr_l_mA = out->curr_r_mA = 0;
+  if (s->curr_decim_count == 0U) {
+    s->curr_valid = CurrentSense_ReadFiltered(s->curr, &s->curr_l_mA, &s->curr_r_mA,
+                                              &s->adc_l_counts, &s->adc_r_counts);
+    if (!s->curr_valid) {
+      s->curr_l_mA = 0;
+      s->curr_r_mA = 0;
+      s->adc_l_counts = 0U;
+      s->adc_r_counts = 0U;
+    }
+    s->zero_l_counts = s->curr->zero_left;
+    s->zero_r_counts = s->curr->zero_right;
   }
-  out->zero_l_counts = s->curr->zero_left;
-  out->zero_r_counts = s->curr->zero_right;
+  s->curr_decim_count++;
+  if (s->curr_decim_count >= CURRENT_SENSE_DECIMATE) {
+    s->curr_decim_count = 0U;
+  }
+  out->curr_l_mA = s->curr_l_mA;
+  out->curr_r_mA = s->curr_r_mA;
+  out->adc_l_counts = s->adc_l_counts;
+  out->adc_r_counts = s->adc_r_counts;
+  out->zero_l_counts = s->zero_l_counts;
+  out->zero_r_counts = s->zero_r_counts;
+  out->curr_valid = s->curr_valid;
 #else
   out->curr_l_mA = 0;
   out->curr_r_mA = 0;

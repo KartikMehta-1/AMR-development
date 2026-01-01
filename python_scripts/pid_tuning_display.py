@@ -34,6 +34,14 @@ def safe_float(val):
             return float("nan")
 
 
+def to_signed32(val):
+    if val != val:
+        return val
+    if val > 2147483647.0:
+        return val - 4294967296.0
+    return val
+
+
 def normalize_time(buffers):
     if "t_ms" in buffers and len(buffers["t_ms"]) > 0:
         t0 = buffers["t_ms"][0]
@@ -179,6 +187,9 @@ try:
         elif len(values) > len(headers):
             values = values[:len(headers)]
         parsed = {h: safe_float(v) for h, v in zip(headers, values)}
+        for key in ("l_mA", "r_mA"):
+            if key in parsed:
+                parsed[key] = to_signed32(parsed[key])
         t_ms = parsed.get("t_ms")
         if t_ms is None or t_ms != t_ms:
             plt.pause(REFRESH_INTERVAL)

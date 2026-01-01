@@ -56,6 +56,7 @@ graph TD
   MSW --> FUSE[Main Fuse]
   FUSE --> ESTOP[E-stop / Switch]
   ESTOP --> VM[Motor Power Bus]
+  ESTOP -.-> ESTOP_SENSE[PB10 / D6 E-stop sense]
   MSW --> DVM[DSN-DVM-368 Volt Display]
   VM --> CS_L[ACS758L Left<br/>IP+ + IP-]
   VM --> CS_R[ACS758R Right<br/>IP+ + IP-]
@@ -88,6 +89,8 @@ graph TD
   BUCK5V --> JET[Jetson + Powered Hub]
   VM --> BUCK5V_LOGIC[5 V Buck Logic LM2596]
   BUCK5V_LOGIC --> MCU[STM32F401RE]
+  ESTOP_SENSE -.-> MCU
+  RST_BTN[Reset Button<br/>NRST->GND] -.-> MCU
   GNDALL[GND star] -.-> MDD
   GNDALL -.-> MCU
   GNDALL -.-> JET
@@ -128,7 +131,19 @@ Notes
 
 Wiring summary
 - E-stop switch in series with motor supply to Cytron MDD20A VM.
-- E-stop sense line + STM32 GPIO `PC7` (active-low with 3.3 V pull-up). Debounce in hardware and/or firmware.
+- E-stop sense line + STM32 GPIO `PB10` (Arduino D6, right rail, active-low with 3.3 V pull-up).
+  - Use 10 kOhm pull-up to 3.3 V (or internal pull-up if cable is short).
+  - Optional debounce: 100 nF to GND at the MCU pin.
+  - Optional series resistor: 100-220 Ohm at the MCU pin for ESD/EMI protection.
+
+---
+
+## 2a) Reset Button (NRST)
+
+- Wire a momentary N.O. switch between NRST and GND (NRST pin on the Nucleo header).
+- No external pull-up required; the Nucleo already provides a pull-up on NRST.
+- Optional: 100 nF from NRST to GND near the header for EMI/debounce.
+- Do not drive NRST high from an external source; leave it floating when not pressed.
 
 ---
 
@@ -184,7 +199,7 @@ Power (Jetson)
 
 - LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
 - Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
-- Proximity Sensors: 4x HC-SR04 ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; level-shift echo to 3.3 V (HC-SR04 echo is 5 V).
+- Proximity Sensors: 4x HC-SR04 ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; level-shift echo to 3.3 V (HC-SR04 echo is 5 V). Use a simple divider (10 kOhm top / 20 kOhm bottom) or a BSS138 level shifter.
 
 Notes
 - Use powered USB hub if multiple high-draw USB devices are attached.
@@ -197,10 +212,13 @@ Notes
 Goal: Obstruction detection around the AMR perimeter using 4 HC-SR04 ultrasonic sensors mounted near corners/edges.
 
 Interface and pin map (STM32 3.3 V GPIO; echo level-shift to 3.3 V):
-- S1 front_left: TRIG -> PC0, ECHO -> PA10 (level shift/divider on echo if 5 V)
-- S2 front_right: TRIG -> PC2, ECHO -> PA11 (level shift/divider on echo if 5 V)
-- S3 rear_left: TRIG -> PC3, ECHO -> PA12 (level shift/divider on echo if 5 V)
-- S4 rear_right: TRIG -> PB10, ECHO -> PA15 (level shift/divider on echo if 5 V)
+- S1 front_left: TRIG -> PA10 (Arduino D2), ECHO -> PC7 (Arduino D9)
+- S2 front_right: TRIG -> PB3 (Arduino D3), ECHO -> PB6 (Arduino D10)
+- S3 rear_left: TRIG -> PA4 (Arduino A2), ECHO -> PC0 (Arduino A5)
+- S4 rear_right: TRIG -> PB9 (Arduino D14), ECHO -> PB8 (Arduino D15)
+Notes:
+- D14/D15 are the I2C pins; if you need I2C later, move S4 to other free GPIOs.
+- Echo: use 10 kOhm / 20 kOhm divider (or level shifter) to keep MCU input at 3.3 V max.
 
 Timing
 - Stagger triggers (round-robin) to avoid crosstalk; add minimal dead time between pings.

@@ -13,7 +13,7 @@ void Telemetry_SendFrame(UART_HandleTypeDef *huart, const TelemetryFrame *f)
 {
   char buf[320];
   int len = snprintf(buf, sizeof(buf),
-                     "%lu,%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%ld,%ld,%lu,%lu\r\n",
+                     "%lu,%lu,%lu,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%ld,%u,%u,%u,%u,%ld,%ld,%lu,%lu\r\n",
                      (unsigned long)f->t_ms,
                      (unsigned long)f->cnt_l,
                      (unsigned long)f->cnt_r,
