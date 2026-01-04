@@ -22,8 +22,9 @@ Notes
 
 ### 1a) Power Distribution Details
 - Battery Pack: 12.8 V LiFePO4 4S 18 Ah with internal basic BMS. Outputs raw pack voltage; no regulated 5 V/12 V and limited telemetry.
-- DC-DC 5 V Jetson: dedicated 5 V buck with ~6-8 A continuous (e.g., Mean Well RSD-60G-5 wide-input or equivalent). Powers Jetson Nano and powered USB hub.
-- DC-DC 5 V Logic: 5 V supply for STM32 board and proximity sensors (1-2 A typical). Can share with Jetson rail if capacity and noise allow; otherwise isolate.
+- DC-DC 5 V Rail (shared): 5 V buck with ~6-8 A continuous to power Jetson Nano plus STM32 (and light sensors). Use inline fuses per branch (Jetson 4-5 A, STM32 0.5-1 A). If noise or capacity is a concern, split into a second 5 V buck for logic.
+- Jetson Nano power: feed the barrel jack (J48 set for DC-in). Avoid micro-USB for full load.
+- STM32 power: feed E5V/VIN on the Nucleo. Avoid back-powering if USB is also connected (set the Nucleo power select to external or remove the USB 5 V link per board manual).
 - DC-DC 12 V Sensors (optional): only if any sensor requires 12 V; otherwise omit.
 
 Voltage monitoring (optional)
@@ -58,6 +59,7 @@ graph TD
   ESTOP --> VM[Motor Power Bus]
   ESTOP -.-> ESTOP_SENSE[PB10 / D6 E-stop sense]
   MSW --> DVM[DSN-DVM-368 Volt Display]
+  FUSE --> BUCK5V[5 V Buck >=6-8 A]
   VM --> CS_L[ACS758L Left<br/>IP+ + IP-]
   VM --> CS_R[ACS758R Right<br/>IP+ + IP-]
   CS_L --> MDD_L[MDD20A M1 VM]
@@ -85,10 +87,11 @@ graph TD
     CS_R_V[ACS758R Vout] -->|10k/20k divider + 1k/100nF| ADC_R[PC1 ADC1_IN11]
   end
 
-  VM --> BUCK5V[5 V Buck Jetson XH-M401 >=6-8 A]
-  BUCK5V --> JET[Jetson + Powered Hub]
-  VM --> BUCK5V_LOGIC[5 V Buck Logic LM2596]
-  BUCK5V_LOGIC --> MCU[STM32F401RE]
+  BUCK5V --> FUSE_JET[5 V Fuse 4-5 A]
+  BUCK5V --> FUSE_MCU[5 V Fuse 0.5-1 A]
+  FUSE_JET --> JET[Jetson Nano + Powered Hub]
+  FUSE_MCU --> MCU[STM32F401RE (E5V/VIN)]
+  JET -->|USB VCP or UART| MCU
   ESTOP_SENSE -.-> MCU
   RST_BTN[Reset Button<br/>NRST->GND] -.-> MCU
   GNDALL[GND star] -.-> MDD
@@ -187,11 +190,14 @@ Cytron MDD20A dual channel driver is the active configuration. Connections are s
 ## 5) STM32 + Jetson Nano
 
 Data link options
-- UART (3.3 V TTL): STM32 `USART2 TX (PA2)` + Jetson `UART RX` (J41 pin 10), STM32 `USART2 RX (PA3)` + Jetson `UART TX` (J41 pin 8). GND common.
-- USB: Use ST-LINK USB serial or dedicated USB-UART adapter to Jetson USB.
+- USB (recommended): Use the Nucleo ST-LINK Virtual COM Port. Jetson sees `/dev/ttyACM0` (typical). This is the simplest path for micro-ROS agent connectivity. If USB is only for data, ensure the Nucleo is not back-powered from USB 5 V.
+- UART (3.3 V TTL): STM32 `USART2 TX (PA2)` + Jetson `UART RX` (J41 pin 10), STM32 `USART2 RX (PA3)` + Jetson `UART TX` (J41 pin 8). GND common. Disable the Jetson serial console when using `/dev/ttyTHS1`.
 
 Power (Jetson)
 - Provide dedicated 5 V rail with sufficient current (target ~6-8 A to cover Jetson plus USB peripherals). Power Jetson via 5 V header or barrel jack per NVIDIA guidance; keep harness short and low resistance.
+
+ROS topic exchange
+- Run the micro-ROS agent on the Jetson; it bridges STM32 topics into the ROS 2 graph over the selected serial link.
 
 ---
 

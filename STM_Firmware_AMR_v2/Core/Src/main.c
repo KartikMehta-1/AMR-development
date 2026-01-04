@@ -30,10 +30,16 @@
 #include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
 #include <std_msgs/msg/float32.h>
+#include <std_msgs/msg/bool.h>
+#include <std_msgs/msg/empty.h>
+#include <std_msgs/msg/u_int32.h>
 #include <geometry_msgs/msg/twist.h>
+#include <sensor_msgs/msg/joint_state.h>
 #include <uxr/client/transport.h>
 #include <rcutils/allocator.h>
 #include <rcutils/error_handling.h>
+#include <rosidl_runtime_c/string_functions.h>
+#include <rosidl_runtime_c/primitives_sequence_functions.h>
 #include <rmw_microros/rmw_microros.h>
 #include "motor.h"
 #include "encoder.h"
@@ -171,30 +177,24 @@ static rcl_publisher_t pub_rpm_right;
 static rcl_publisher_t pub_fault_mask;
 static rcl_publisher_t pub_duty_left;
 static rcl_publisher_t pub_duty_right;
-static rcl_publisher_t pub_pid_p_left;
-static rcl_publisher_t pub_pid_i_left;
-static rcl_publisher_t pub_pid_d_left;
-static rcl_publisher_t pub_pid_p_right;
-static rcl_publisher_t pub_pid_i_right;
-static rcl_publisher_t pub_pid_d_right;
-static rcl_publisher_t pub_pid_err_left;
-static rcl_publisher_t pub_pid_err_right;
+static rcl_publisher_t pub_wheel_state;
+static rcl_publisher_t pub_safety_state;
 static rcl_subscription_t sub_cmd_vel;
+static rcl_subscription_t sub_enable;
+static rcl_subscription_t sub_estop;
+static rcl_subscription_t sub_clear_fault;
 static geometry_msgs__msg__Twist msg_cmd_vel;
 static std_msgs__msg__Float32 msg_rpm_left;
 static std_msgs__msg__Float32 msg_rpm_right;
 static std_msgs__msg__Int32 msg_fault_mask;
 static std_msgs__msg__Float32 msg_duty_left;
 static std_msgs__msg__Float32 msg_duty_right;
+static sensor_msgs__msg__JointState msg_wheel_state;
+static std_msgs__msg__UInt32 msg_safety_state;
+static std_msgs__msg__Bool msg_enable;
+static std_msgs__msg__Bool msg_estop;
+static std_msgs__msg__Empty msg_clear_fault;
 static volatile uint32_t cmd_rx_count = 0;
-static std_msgs__msg__Float32 msg_pid_p_left;
-static std_msgs__msg__Float32 msg_pid_i_left;
-static std_msgs__msg__Float32 msg_pid_d_left;
-static std_msgs__msg__Float32 msg_pid_p_right;
-static std_msgs__msg__Float32 msg_pid_i_right;
-static std_msgs__msg__Float32 msg_pid_d_right;
-static std_msgs__msg__Float32 msg_pid_err_left;
-static std_msgs__msg__Float32 msg_pid_err_right;
 static volatile bool ros_ready = false;
 static volatile int ros_init_fail_stage = 0;
 static volatile float cmd_v_mps = 0.0f;
@@ -202,6 +202,9 @@ static volatile float cmd_w_rps = 0.0f;
 static volatile uint32_t last_cmd_ms = 0U;
 static volatile float duty_cmd_l_pub = 0.0f;
 static volatile float duty_cmd_r_pub = 0.0f;
+static volatile bool enable_cmd = true;
+static volatile bool soft_estop_cmd = false;
+static volatile bool clear_fault_cmd = false;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -220,6 +223,9 @@ void StartRosPubTask(void *argument);
 void StartTelemetryTask(void *argument);
 #endif
 void CmdVelCallback(const void * msgin);
+void EnableCallback(const void * msgin);
+void EstopCallback(const void * msgin);
+void ClearFaultCallback(const void * msgin);
 
 /* USER CODE BEGIN PFP */
 
@@ -245,6 +251,24 @@ void CmdVelCallback(const void * msgin)
   cmd_w_rps = CMD_W_POLARITY * msg->angular.z;
   last_cmd_ms = HAL_GetTick();
   cmd_rx_count++;
+}
+
+void EnableCallback(const void * msgin)
+{
+  const std_msgs__msg__Bool * msg = (const std_msgs__msg__Bool *)msgin;
+  enable_cmd = msg->data;
+}
+
+void EstopCallback(const void * msgin)
+{
+  const std_msgs__msg__Bool * msg = (const std_msgs__msg__Bool *)msgin;
+  soft_estop_cmd = msg->data;
+}
+
+void ClearFaultCallback(const void * msgin)
+{
+  (void)msgin;
+  clear_fault_cmd = true;
 }
 /* USER CODE END 0 */
 
@@ -883,6 +907,7 @@ void StartControlTask(void *argument)
 
       estop_active = estop_debounced;
     }
+    estop_active = estop_active || soft_estop_cmd;
 
     // Sense encoders/currents
     sense.rpm_l = sense.rpm_r = 0.0f;
@@ -890,7 +915,7 @@ void StartControlTask(void *argument)
 
 
     // Control loop (PI + ramp) gated by state
-    bool enabled = ControlState_IsEnabled(&ctrl_state) && !estop_active;
+    bool enabled = ControlState_IsEnabled(&ctrl_state) && !estop_active && enable_cmd;
     float rpm_target_l = 0.0f;
     float rpm_target_r = 0.0f;
     float duty_cmd_l = 0.0f, duty_cmd_r = 0.0f;
@@ -998,8 +1023,12 @@ void StartControlTask(void *argument)
     uint32_t fault_bits = FaultMonitor_Update(&fault_mon, &sense, rpm_target_l, rpm_target_r, duty_l, duty_r, CONTROL_LOOP_DT_MS);
 
     // Update control state (faults from detection above, debounced e-stop)
+    bool clear_cmd = clear_fault_cmd;
+    clear_fault_cmd = false;
     ControlInputs cin = {0};
-    cin.enable_cmd = true;
+    cin.enable_cmd = enable_cmd;
+    cin.disable_cmd = !enable_cmd;
+    cin.clear_cmd = clear_cmd;
     cin.estop = estop_active;
     cin.fault_bits = fault_bits;
     ControlState_Update(&ctrl_state, &cin, now);
@@ -1096,79 +1125,49 @@ void StartRosPubTask(void *argument)
     goto ros_init_fail;
   }
 
-#if ROS_PUB_PID_DIAG
   if (rclc_publisher_init_best_effort(
-          &pub_pid_p_left,
+          &pub_wheel_state,
           &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_p_left") != RCL_RET_OK) {
+          ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
+          "/amr/wheel_state") != RCL_RET_OK) {
     ros_init_fail_stage = 8;
     goto ros_init_fail;
   }
 
   if (rclc_publisher_init_best_effort(
-          &pub_pid_i_left,
+          &pub_safety_state,
           &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_i_left") != RCL_RET_OK) {
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32),
+          "/amr/safety_state") != RCL_RET_OK) {
     ros_init_fail_stage = 9;
     goto ros_init_fail;
   }
 
-  if (rclc_publisher_init_best_effort(
-          &pub_pid_d_left,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_d_left") != RCL_RET_OK) {
+  if (!sensor_msgs__msg__JointState__init(&msg_wheel_state)) {
     ros_init_fail_stage = 10;
     goto ros_init_fail;
   }
 
-  if (rclc_publisher_init_best_effort(
-          &pub_pid_p_right,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_p_right") != RCL_RET_OK) {
+  if (!rosidl_runtime_c__String__Sequence__init(&msg_wheel_state.name, 2)) {
     ros_init_fail_stage = 11;
     goto ros_init_fail;
   }
 
-  if (rclc_publisher_init_best_effort(
-          &pub_pid_i_right,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_i_right") != RCL_RET_OK) {
+  if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.position, 2)) {
     ros_init_fail_stage = 12;
     goto ros_init_fail;
   }
 
-  if (rclc_publisher_init_best_effort(
-          &pub_pid_d_right,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_d_right") != RCL_RET_OK) {
+  if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.velocity, 2)) {
     ros_init_fail_stage = 13;
     goto ros_init_fail;
   }
 
-  if (rclc_publisher_init_best_effort(
-          &pub_pid_err_left,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_err_left") != RCL_RET_OK) {
+  if (!rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[0], "wheel_left") ||
+      !rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[1], "wheel_right")) {
     ros_init_fail_stage = 14;
     goto ros_init_fail;
   }
-
-  if (rclc_publisher_init_best_effort(
-          &pub_pid_err_right,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/pid_err_right") != RCL_RET_OK) {
-    ros_init_fail_stage = 15;
-    goto ros_init_fail;
-  }
-#endif
 
   // teleop_twist_keyboard publishes /cmd_vel as RELIABLE, so keep subscriber RELIABLE to match
   if (rclc_subscription_init_default(
@@ -1176,17 +1175,59 @@ void StartRosPubTask(void *argument)
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
           "/cmd_vel") != RCL_RET_OK) {
+    ros_init_fail_stage = 15;
+    goto ros_init_fail;
+  }
+
+  if (rclc_subscription_init_default(
+          &sub_enable,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
+          "/amr/enable") != RCL_RET_OK) {
     ros_init_fail_stage = 16;
     goto ros_init_fail;
   }
 
-  if (rclc_executor_init(&ros_executor, &ros_support.context, 1, &ros_allocator) != RCL_RET_OK) {
+  if (rclc_subscription_init_default(
+          &sub_estop,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
+          "/amr/estop") != RCL_RET_OK) {
     ros_init_fail_stage = 17;
     goto ros_init_fail;
   }
 
-  if (rclc_executor_add_subscription(&ros_executor, &sub_cmd_vel, &msg_cmd_vel, CmdVelCallback, ON_NEW_DATA) != RCL_RET_OK) {
+  if (rclc_subscription_init_default(
+          &sub_clear_fault,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Empty),
+          "/amr/clear_fault") != RCL_RET_OK) {
     ros_init_fail_stage = 18;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_init(&ros_executor, &ros_support.context, 4, &ros_allocator) != RCL_RET_OK) {
+    ros_init_fail_stage = 19;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_cmd_vel, &msg_cmd_vel, CmdVelCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 20;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_enable, &msg_enable, EnableCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 21;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_estop, &msg_estop, EstopCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 22;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_clear_fault, &msg_clear_fault, ClearFaultCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 23;
     goto ros_init_fail;
   }
 
@@ -1203,51 +1244,38 @@ void StartRosPubTask(void *argument)
     uint32_t now = HAL_GetTick();
     if ((last_pub_ms == 0U) || ((now - last_pub_ms) >= ROS_PUB_PERIOD_MS)) {
       last_pub_ms = now;
-      // Publish wheel RPM (raw) and current fault mask
+      // Publish wheel RPM, wheel state, and safety status
+      uint32_t fault_mask = ControlState_GetFaultMask(&ctrl_state);
+      // safety_state: upper 16 bits = ControlState, lower 16 bits = fault mask.
+      uint32_t safety_state = ((uint32_t)ControlState_GetState(&ctrl_state) << 16) | (fault_mask & 0xFFFFu);
+      const double two_pi = 6.28318530717958647692;
+      const double rpm_to_rad_s = two_pi / 60.0;
+      const double counts_to_rad = two_pi / (double)ENCODER_COUNTS_PER_REV;
       msg_rpm_left.data = sense.rpm_l;
       msg_rpm_right.data = sense.rpm_r;
-      msg_fault_mask.data = (int32_t)ControlState_GetFaultMask(&ctrl_state);
+      msg_fault_mask.data = (int32_t)fault_mask;
+      msg_safety_state.data = safety_state;
       msg_duty_left.data = duty_cmd_l_pub * 100.0f;
       msg_duty_right.data = duty_cmd_r_pub * 100.0f;
+      msg_wheel_state.header.stamp.sec = (int32_t)(now / 1000U);
+      msg_wheel_state.header.stamp.nanosec = (uint32_t)((now % 1000U) * 1000000U);
+      msg_wheel_state.position.data[0] = (double)sense.cnt_l * counts_to_rad;
+      msg_wheel_state.position.data[1] = (double)sense.cnt_r * counts_to_rad;
+      msg_wheel_state.velocity.data[0] = (double)sense.rpm_l * rpm_to_rad_s;
+      msg_wheel_state.velocity.data[1] = (double)sense.rpm_r * rpm_to_rad_s;
 
       rcl_ret_t rc1 = rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
       rcl_ret_t rc2 = rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
       rcl_ret_t rc3 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
       rcl_ret_t rc4 = rcl_publish(&pub_duty_left, &msg_duty_left, NULL);
       rcl_ret_t rc5 = rcl_publish(&pub_duty_right, &msg_duty_right, NULL);
-      rcl_ret_t rc6 = RCL_RET_OK;
-      rcl_ret_t rc7 = RCL_RET_OK;
-      rcl_ret_t rc8 = RCL_RET_OK;
-      rcl_ret_t rc9 = RCL_RET_OK;
-      rcl_ret_t rc10 = RCL_RET_OK;
-      rcl_ret_t rc11 = RCL_RET_OK;
-      rcl_ret_t rc12 = RCL_RET_OK;
-      rcl_ret_t rc13 = RCL_RET_OK;
-#if ROS_PUB_PID_DIAG
-      msg_pid_p_left.data = control_loop.pid_l.last_p;
-      msg_pid_i_left.data = control_loop.pid_l.integrator;
-      msg_pid_d_left.data = control_loop.pid_l.last_d;
-      msg_pid_p_right.data = control_loop.pid_r.last_p;
-      msg_pid_i_right.data = control_loop.pid_r.integrator;
-      msg_pid_d_right.data = control_loop.pid_r.last_d;
-      msg_pid_err_left.data = control_loop.pid_l.last_error;
-      msg_pid_err_right.data = control_loop.pid_r.last_error;
-      rc6 = rcl_publish(&pub_pid_p_left, &msg_pid_p_left, NULL);
-      rc7 = rcl_publish(&pub_pid_i_left, &msg_pid_i_left, NULL);
-      rc8 = rcl_publish(&pub_pid_d_left, &msg_pid_d_left, NULL);
-      rc9 = rcl_publish(&pub_pid_p_right, &msg_pid_p_right, NULL);
-      rc10 = rcl_publish(&pub_pid_i_right, &msg_pid_i_right, NULL);
-      rc11 = rcl_publish(&pub_pid_d_right, &msg_pid_d_right, NULL);
-      rc12 = rcl_publish(&pub_pid_err_left, &msg_pid_err_left, NULL);
-      rc13 = rcl_publish(&pub_pid_err_right, &msg_pid_err_right, NULL);
-#endif
+      rcl_ret_t rc6 = rcl_publish(&pub_wheel_state, &msg_wheel_state, NULL);
+      rcl_ret_t rc7 = rcl_publish(&pub_safety_state, &msg_safety_state, NULL);
 
       // Blink LED when publish succeeds; hold solid ON if any publish fails
       bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK) &&
                     (rc4 == RCL_RET_OK) && (rc5 == RCL_RET_OK) && (rc6 == RCL_RET_OK) &&
-                    (rc7 == RCL_RET_OK) && (rc8 == RCL_RET_OK) && (rc9 == RCL_RET_OK) &&
-                    (rc10 == RCL_RET_OK) && (rc11 == RCL_RET_OK) && (rc12 == RCL_RET_OK) &&
-                    (rc13 == RCL_RET_OK);
+                    (rc7 == RCL_RET_OK);
       if (pub_ok) {
         led_state = !led_state;
         HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -1260,7 +1288,7 @@ void StartRosPubTask(void *argument)
   }
 
 ros_init_fail:
-  // Blink stage count to indicate where init failed (1-8)
+  // Blink stage count to indicate where init failed (1-23)
   while (1) {
     for (int i = 0; i < ros_init_fail_stage; i++) {
       HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);

@@ -19,8 +19,7 @@
 #define SAMPLE_INTERVAL_MS      100U    // legacy/telemetry period reference (ms)
 #define ROS_PUB_PERIOD_MS       200U    // publish period for ROS topics (ms)
 #define ROS_EXEC_DELAY_MS       10U     // executor loop delay to service subscriptions (ms)
-#define ROS_PUB_PID_DIAG        0       // set to 1 to publish PID P/I/D/error topics over ROS
-#define SERIAL_TELEMETRY_ENABLE 1       // set to 1 to disable ROS pub task and stream UART telemetry
+#define SERIAL_TELEMETRY_ENABLE 0       // set to 1 to disable ROS pub task and stream UART telemetry
 #define SERIAL_TELEMETRY_PERIOD_MS SAMPLE_INTERVAL_MS // UART telemetry period (ms)
 #define SERIAL_TELEMETRY_HEADER_PERIOD_MS 1000U       // resend header so plotter can sync (ms)
 #define TRACK_WIDTH_M           0.386f  // wheel-to-wheel track width (meters)
@@ -72,7 +71,7 @@
 #define SPEED_TEST_TOGGLE_MS 5000U
 
 // PID tuning sweep (percent of PID_TUNING_RPM_MAX)
-#define PID_TUNING_ENABLE    1
+#define PID_TUNING_ENABLE    0
 #define PID_TUNING_RPM_MAX   50.0f
 #define PID_TUNING_LOW_FRAC  0.20f
 #define PID_TUNING_HIGH_FRAC 0.50f

@@ -1,0 +1,16 @@
+ARG DRIVER_IMAGE=amr/ros2-foxy-drivers:amd64
+FROM ${DRIVER_IMAGE}
+
+ARG ROS_DISTRO=foxy
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV DEBIAN_FRONTEND=noninteractive
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-${ROS_DISTRO}-desktop \
+    ros-${ROS_DISTRO}-gazebo-ros-pkgs \
+    ros-${ROS_DISTRO}-navigation2 \
+    ros-${ROS_DISTRO}-nav2-bringup \
+    && rm -rf /var/lib/apt/lists/*
+
+USER dev
