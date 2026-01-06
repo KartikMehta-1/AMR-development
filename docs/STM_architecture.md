@@ -1,14 +1,14 @@
 # STM32 Architecture (Firmware + micro-ROS)
 
 Owner: Kartik Mehta  
-Status: In progress - dual-motor speed PI with ramp; current used for protection; micro-ROS client active on USART2 with /cmd_vel sub and RPM/fault publishers.  
-Last Updated: 2025-12-22
+Status: In progress - dual-motor speed PI with ramp; current used for protection; micro-ROS client active on USART2 with cmd_vel + enable/estop/clear and wheel_state + safety_state publishers.  
+Last Updated: 2026-01-04
 
 ## Current Implementation Snapshot
 - Control loop: TIM4 at 100 Hz; speed PI per wheel; duty ramp; differential-drive mapping; cmd_vel staleness timeout (500 ms).
 - Sensing: encoders TIM3 (left, 16-bit) / TIM2 (right, 32-bit) with RPM LPF; ADC1 CH8/11 current sense (ACS758) with scaling and LPF.
-- Faults: overcurrent, stall, encoder timeout, ADC stuck detection; fault mask latched in ControlState.
-- micro-ROS: USART2 custom transport; /cmd_vel sub (reliable); /amr/wheel_rpm_left, /amr/wheel_rpm_right, /amr/fault_mask pubs (best effort) at 20 Hz.
+- Faults: overcurrent, stall, encoder timeout, ADC stuck detection; fault mask latched in ControlState and cleared via /amr/clear_fault when faults/estop are inactive.
+- micro-ROS: USART2 custom transport; /cmd_vel, /amr/enable, /amr/estop, /amr/clear_fault subs; /amr/wheel_rpm_left, /amr/wheel_rpm_right, /amr/duty_cmd_left, /amr/duty_cmd_right, /amr/fault_mask, /amr/wheel_state, /amr/safety_state pubs at 20 Hz.
 - PWM/Dir: TIM1 CH1/CH2 at 20 kHz; DIR PB4/PB5; duty capped at 30%.
 - Legacy UART telemetry: disabled to avoid contention with micro-ROS on USART2.
 
@@ -52,7 +52,7 @@ Last Updated: 2025-12-22
 3) Apply duty via TIM1 CH1/CH2 (DIR set per polarity).
 4) Sense: encoder deltas -> RPM (LPF); currents -> filtered for protection.
 5) Fault monitor computes fault_bits; ControlState latches faults.
-6) micro-ROS publishes wheel RPM and fault mask.
+6) micro-ROS publishes wheel RPM, duty commands, wheel_state, and safety_state.
 
 ## Motor Control Diagrams
 
@@ -194,13 +194,12 @@ flowchart TD
 ```
 
 Current topics
-- Sub: /cmd_vel (geometry_msgs/Twist) reliable.
-- Pub: /amr/wheel_rpm_left, /amr/wheel_rpm_right (std_msgs/Int32, RPM x10) best effort.
-- Pub: /amr/fault_mask (std_msgs/Int32) best effort.
-
-Planned topics
-- Sub: /amr/estop, /amr/enable, /amr/clear_fault (Bool/Empty or service).
-- Pub: /amr/wheel_state (JointState or custom), /amr/safety_state (state + fault mask).
+- Sub: /cmd_vel (geometry_msgs/Twist).
+- Sub: /amr/enable (std_msgs/Bool), /amr/estop (std_msgs/Bool), /amr/clear_fault (std_msgs/Empty).
+- Pub: /amr/wheel_rpm_left, /amr/wheel_rpm_right (std_msgs/Float32, RPM).
+- Pub: /amr/duty_cmd_left, /amr/duty_cmd_right (std_msgs/Float32, duty percent).
+- Pub: /amr/fault_mask (std_msgs/Int32).
+- Pub: /amr/wheel_state (sensor_msgs/JointState), /amr/safety_state (std_msgs/UInt32).
 
 ## Fault Mask (current bits)
 - Bit 0: CTRL_FAULT_ESTOP
@@ -221,13 +220,9 @@ Planned topics
 - Current sensing: `STM_Firmware_AMR_v2/Core/Src/current_sense.c`.
 
 ## Known Gaps
-- estop/enable/clear_fault not wired into ControlInputs yet (enable_cmd forced true).
-- wheel_state and safety_state topics not yet implemented.
 - voltage faults pending ADC/BMS integration.
 
 ## Next Steps
-- Wire estop/enable/clear commands into ControlState and add micro-ROS topics.
-- Publish wheel_state and safety_state; document topic contracts and units.
-- Finalize fault mask documentation and add voltage faults when available.
+- Add voltage faults when available.
 - Optional: per-wheel feedforward to reduce duty skew; finalize PI gains and log overshoot with python_scripts/check_overshoot.py.
 - Defer cascaded current control unless needed; keep current for protection/logging.

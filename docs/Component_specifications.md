@@ -121,7 +121,20 @@ Mounting and effective resolution
 
 ---
 
-## 8. Current Sensors
+## 8. IMU
+**Model:** Adafruit BNO080 (9-DoF orientation fusion, STEMMA QT)
+
+| Parameter | Value |
+|------------|--------|
+| Interface | I2C (STEMMA QT/Qwiic compatible) |
+| Supply Voltage | 3.3 V (check board regulator if powering from 5 V) |
+| Outputs | Orientation (quaternion), angular velocity, linear acceleration |
+| Mounting | Rigidly mounted near base center; minimize vibration |
+| Notes | Connect to Jetson I2C at 3.3 V logic. Keep leads short and share ground with Jetson. |
+
+---
+
+## 9. Current Sensors
 **Model:** Allegro ACS758LCB-050B (+/-50 A bidirectional)
 
 | Parameter | Value |
@@ -143,7 +156,7 @@ Notes
 
 ---
 
-## 9. Microcontroller
+## 10. Microcontroller
 **Model:** STM32F401RE (Nucleo-F401RE board)
 
 | Parameter | Value |
@@ -159,7 +172,7 @@ Notes
 
 ---
 
-## 10. Battery Pack
+## 11. Battery Pack
 **Model/Chemistry:** 12.8 V LiFePO4, 4S, 18 Ah (18,000 mAh)
 
 | Parameter | Value |
@@ -175,7 +188,7 @@ Notes
 
 ---
 
-## 11. Battery Management System (BMS)
+## 12. Battery Management System (BMS)
 **Model:** Built-in pack BMS (basic protection, limited telemetry)
 
 | Parameter | Value |
@@ -186,7 +199,7 @@ Notes
 | Balance Method | Passive (typical for pack-integrated BMS) |
 | Notes | Pack exposes only P+/P-; no cell-level telemetry. Add pack-voltage sensing if host needs charge status. |
 
-## 12. Charger
+## 13. Charger
 **Model:** Pro Range 4S LiFePO4 14.6 V 7 A with nylon T male
 
 | Parameter | Value |

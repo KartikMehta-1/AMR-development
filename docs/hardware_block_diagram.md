@@ -54,6 +54,7 @@ graph TD
     ENC_R[Right Encoder 600 PPR<br/>5V NPN OC]
     LIDAR[YDLidar G4<br/>USB, 5V from hub]
     DEPTH[RealSense D455<br/>USB 3, 5V from hub]
+    IMU[BNO080 IMU<br/>I2C, 3.3V]
     PROX[Proximity x4<br/>HC-SR04 ultrasonic 5V trig/echo]
   end
 
@@ -81,11 +82,12 @@ graph TD
   DEPTH --> USBHUB
   USBHUB --> JET
   STM <-.-> JET
+  IMU -.-> JET
   PWRBTN -.-> JET
 
   %% Styles: power vs data
   linkStyle 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22 stroke:#e67e22,stroke-width:3px;
-  linkStyle 23,24,25,26,27,28,29,30,31,32,33 stroke:#1f78b4,stroke-width:1.5px;
+  linkStyle 23,24,25,26,27,28,29,30,31,32,33,34,35 stroke:#1f78b4,stroke-width:1.5px;
 ```
 
 - Encoders are powered from the 5 V logic rail and feed open-collector signals to the STM32 with pull-ups.
@@ -94,4 +96,5 @@ graph TD
 - Main power switch sits at pack output ahead of fuse and E-Stop for full isolation during service/storage.
 - Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off.
 - Proximity sensors: 4x HC-SR04 ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; stagger triggers to avoid crosstalk.
+- IMU: BNO080 on Jetson I2C (3.3 V). Power from Jetson 3.3 V rail; keep cable short and avoid vibration.
 - Jetson soft power button: momentary N.O. switch across JET PWR_BTN to GND for graceful shutdown/start (no power cut).

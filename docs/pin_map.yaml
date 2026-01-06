@@ -115,6 +115,12 @@ sensors:
     interface: usb3
     power_rail: 5v
     notes: USB 3 bandwidth required; prefer powered hub if multiple devices
+  imu:
+    model: adafruit_bno080
+    interface: i2c
+    host: jetson_nano
+    power_rail: 3v3
+    notes: Connect to Jetson I2C (3.3 V logic). Use STEMMA QT/Qwiic cable if available; keep leads short.
   proximity:
     quantity: 4
     model: hc_sr04_ultrasonic

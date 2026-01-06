@@ -1,18 +1,18 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-01-02  
+**Last Updated:** 2026-01-04  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
 - Overall: On track with mechanical changes and tooling in progress
-- Progress: 12/42 weeks complete (~29%)
-- Recent: Dual-wheel speed PI with duty ramp and target toggling; current telemetry calibrated and used for logging/protection; encoder polarity corrected; proximity sensor enclosure prep completed.
-- micro-ROS: STM32 bring-up on USART2 with `/cmd_vel` subscription, RPM + fault mask publishers, and UART telemetry disabled to avoid contention.
-- Safety: Hardware e-stop GPIO integrated with debounce and fault latch (clear path pending).
-- Current Focus: Structural changes + proximity sensor enclosure work; dev PC environment setup.
+- Progress: 13/42 weeks complete (~31%)
+- Recent: Foxy driver + devpc Docker images built; micro-ROS agent and YDLidar running in containers; `/scan` visualized in RViz2 (best_effort QoS); workspace build verified; fault clear behavior verified and fault mask documented.
+- micro-ROS: STM32 bring-up on USART2 with full AMR topic set live; UART telemetry disabled to avoid contention.
+- Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
+- Current Focus: Structural changes + proximity sensor enclosure work; dev PC container environment (micro-ROS + LiDAR + RViz) and ROS2 workspace bring-up.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 17-18): Finish enclosure build/install + mechanical assembly; complete dev PC tooling stack.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
@@ -43,16 +43,16 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: green">Done</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); hardware e-stop GPIO input + debounce wired into ControlState (latched fault); step/ramp plots + docs (docs/pid.md); gains/feedforward tuned. | 2026-01-15 | 2025-12-07 |
 | 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. | 2026-01-22 | TBD |
 | 13 | Firmware v2: Differential Drive | <span style="color: green">Done</span> | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. | 2026-01-29 | 2025-12-09 |
-| 14 | Firmware v2: Proximity Sensors (HW) | Planned | Select 4x proximity sensors (GPIO/ADC/I2C TBD); mounts, wiring, pull-ups/protection; update pin map; bench power budget. | 2026-02-05 | TBD |
+| 14 | Firmware v2: Proximity Sensors HW | Planned | Select 4x proximity sensors (GPIO/ADC/I2C TBD); mounts, wiring, pull-ups/protection; update pin map; bench power budget. | 2026-02-05 | TBD |
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 4 sensors; debouncing/filtering; fault detection; add to telemetry. | 2026-02-12 | TBD |
-| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: goldenrod">In Progress</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/fault_mask` pubs at 20 Hz; legacy UART telemetry disabled. Planned: `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; add clear path for latched e-stop; `/amr/wheel_state`, `/amr/safety_state`; document fault mask; add voltage faults when available. | 2026-02-19 | TBD |
+| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: green">Done</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/fault_mask`, `/amr/wheel_state`, `/amr/safety_state` pubs; `/amr/enable`, `/amr/estop`, `/amr/clear_fault` wired; fault clear verified; fault mask documented; legacy UART telemetry disabled. | 2026-02-19 | 2026-01-04 |
 | 17 | Mechanical Assembly + Enclosure | <span style="color: goldenrod">In Progress</span> | Structural changes in progress; proximity sensor enclosure prep completed. Remaining: finish enclosure build/install, wiring, battery integration, height mods, sensor installs, AMR cover, perfboard/shield; CAD tasks: survey/measurements (envelope, keep-outs, bend radii); base plate + mounts (Nucleo, Cytron, Jetson, hub, battery/BMS, DC-DC); sensor mounts; cable routing/strain relief; outputs (STEP/IGES, DXF, fastener BOM, assembly guide); include arm mounting provisions for Week 27 integration. | 2026-02-26 | TBD |
-| 18 | Dev PC Env & Tooling | <span style="color: goldenrod">In Progress</span> | Dev PC setup underway (ROS2 desktop + colcon, VS Code/devcontainer, CLI tools). Remaining: micro-ROS agent loopback, cross-build toolchain, base Docker/compose aligned with Jetson; SSH keys + dotfiles for reproducible setup. | 2026-03-05 | TBD |
-| 19 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware; bring up LiDAR + depth camera drivers, USB power/bandwidth, udev rules, and topic sanity (`/scan`, `/camera/*`). | 2026-03-12 | TBD |
+| 18 | Dev PC Env & Tooling | <span style="color: goldenrod">In Progress</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified. Remaining: cross-build toolchain, compose alignment with Jetson, SSH keys + dotfiles. | 2026-03-05 | TBD |
+| 19 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware; bring up LiDAR + depth camera drivers, USB power/bandwidth, udev rules, and topic sanity (`/scan`, `/camera/*`); bring up BNO080 IMU over Jetson I2C and publish `/imu`. | 2026-03-12 | TBD |
 | 20 | Wireless PC<->Nano | Planned | Add Wi-Fi module/antennas; configure NetworkManager/wpa_supplicant; set static/reserved IP + SSH keys (no passwords); ping/iperf latency check; NTP sync; optional VPN (WireGuard/Tailscale). | 2026-03-19 | TBD |
-| 21 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, and sensor frames (LiDAR + depth cam); TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. | 2026-03-26 | TBD |
-| 22 | Navigation & Mapping Bring-up | Planned | Mapping: slam_toolbox (2D LiDAR) or depth->scan pipeline if needed; record/validate maps. Localization: AMCL with wheel odom + LiDAR; set static transforms. Nav2: planner/controller/server bring-up; tune costmaps (obstacle/voxel + inflation), footprint, and velocity limits; first go-to-pose. | 2026-04-02 | TBD |
-| 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms. | 2026-04-09 | TBD |
+| 21 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, and sensor frames (LiDAR + depth cam + IMU); TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. | 2026-03-26 | TBD |
+| 22 | Navigation & Mapping Bring-up | Planned | Mapping: slam_toolbox (2D LiDAR) or depth->scan pipeline if needed; record/validate maps. Localization: AMCL with wheel odom + LiDAR; set static transforms; fuse IMU + wheel odom with robot_localization if needed. Nav2: planner/controller/server bring-up; tune costmaps (obstacle/voxel + inflation), footprint, and velocity limits; first go-to-pose. | 2026-04-02 | TBD |
+| 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms; battery-powered Jetson running Nav2 path planning and driving the AMR; validate IMU stability and drift. | 2026-04-09 | TBD |
 | 24 | Task Executive & Sequencing (v1) | Planned | Choose BT/PlanSys2; define action interfaces (Navigate/Detect/Pick/Drop/Dock); implement mission executor; add retries/timeouts, status reporting, and logging. | 2026-04-16 | TBD |
 | 25 | Mission Actions + Task Graph | Planned | Implement skill actions (stubs OK) and wire to Nav2/perception/manipulation; add world-state/blackboard; validate scripted sequences in sim. | 2026-04-23 | TBD |
 | 26 | Voice Command MVP | Planned | Offline ASR (Vosk/Whisper) + intent parsing; confirmation prompts and safety gating; map intents to mission goals; log transcripts and outcomes. | 2026-04-30 | TBD |
@@ -77,6 +77,20 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 
 ---
 
+## Simulation & Navigation Breakdown - Foxy, Gazebo Classic
+This section expands Weeks 18-23 with explicit simulation tasks using Gazebo Classic, ros2_control, slam_toolbox, and Nav2.
+
+| Week | Simulation / Gazebo | ros2_control | slam_toolbox | Nav2 | Output |
+|---:|---|---|---|---|---|
+| 18 | Verify Gazebo Classic + RViz2 in devpc; create `amr_description`, `amr_gazebo`, `amr_bringup` packages; load a simple world | Stub diff_drive_controller config + controller_manager launch | N/A | N/A | Workspace scaffolding + Gazebo launches |
+| 19 | Keep sim on dev PC; document Jetson limitations for sim | N/A | N/A | N/A | Jetson stays headless; sim remains on PC |
+| 20 | Validate ROS graph over Wi-Fi between dev PC and Jetson; remote RViz2 from PC | N/A | N/A | N/A | Networked ROS2 verified |
+| 21 | Build base URDF/Xacro with lidar and IMU frames; spawn robot in Gazebo Classic; verify TF tree | Add ros2_control tags + transmissions; bring up diff_drive_controller; verify `/joint_states` and `/cmd_vel` | N/A | N/A | Robot spawns in Gazebo and drives via /cmd_vel |
+| 22 | Add lidar plugin; verify `/scan`; add static transforms and base_link alignment | Tune wheel separation/radius, update controller params | Run slam_toolbox in sim; save map | Bring up Nav2 in sim; set params and run go-to-pose; test IMU fusion if simulated | Map saved; Nav2 go-to-pose works in sim |
+| 23 | Run same pipeline on real sensors (or bag playback); compare sim vs real frames | Switch to real odom source; validate wheel_state->odom | Run slam_toolbox on real LiDAR; save a real map | Tune costmaps/footprint, recovery behaviors, and velocity limits; verify IMU fusion | Stable nav on real robot for 10-15 min |
+
+---
+
 ## Detailed Tasks
 Firmware tasks have been consolidated into the weekly tracker above. Use the Week-by-Week Plan as the single source of truth.
 
@@ -91,6 +105,7 @@ Firmware tasks have been consolidated into the weekly tracker above. Use the Wee
 - FreeRTOS (W13): Tasks meet deadlines under load; CPU < 70%; no missed watchdog
 - Validation (W16): E-stop latency <= 50 ms; current-limit interaction stable under step loads
 - SLAM demo (W19): Successful nav in mapped area for ~15 min without collision or watchdog resets
+- Battery-powered Jetson Nav2: Jetson runs Nav2 path planning on battery power; AMR drives to at least 3 waypoints without tether
 
 ---
 
@@ -112,7 +127,7 @@ Firmware tasks have been consolidated into the weekly tracker above. Use the Wee
 
 ---
 
-## Repo Structure (suggested)
+## Repo Structure
 ```
 /docs
   AMR_project.md               # this file
@@ -126,24 +141,30 @@ Firmware tasks have been consolidated into the weekly tracker above. Use the Wee
 
 ---
 
-## ROS2 Architecture (Draft)
+## ROS2 Architecture
 - Nodes
-  - `mc_interface` (micro-ROS on STM32): subscribes `/cmd_vel`; publishes `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/fault_mask` (current implementation). Planned: `/amr/wheel_state`, `/amr/estop`, `/amr/enable`, `/amr/clear_fault`
-  - `odometry`: subscribes `/amr/wheel_state`; publishes `/odom`, `/tf`
+  - `mc_interface` (micro-ROS on STM32): subscribes `/cmd_vel`, `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; publishes `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/fault_mask`, `/amr/wheel_state`, `/amr/safety_state`
+  - `imu_driver` (Jetson): publishes `/imu` from the BNO080 over I2C
+  - `odometry`: subscribes `/amr/wheel_state`; publishes wheel odom (input to robot_localization or directly to `/odom`)
+  - `robot_localization` (optional): fuses wheel odom + IMU and publishes `/odom`, `/tf`
   - `safety_monitor`: subscribes `/amr/obstacles`, `/amr/estop`; publishes `/amr/safety_state`
-  - `sensor_fusion`: fuses proximity/LiDAR/depth; publishes `/amr/obstacles`
+  - `sensor_fusion`: fuses proximity/LiDAR/depth (and optionally IMU for health checks); publishes `/amr/obstacles`
   - `teleop` or higher-level commander: publishes `/cmd_vel` or `/amr/wheel_cmd`
   - `sim_bridge`: interfaces Gazebo topics with AMR topics
 - Topics (current firmware)
   - `/cmd_vel` (geometry_msgs/Twist)
-  - `/amr/wheel_rpm_left` (std_msgs/Int32, RPM x10)
-  - `/amr/wheel_rpm_right` (std_msgs/Int32, RPM x10)
+  - `/amr/enable` (std_msgs/Bool), `/amr/estop` (std_msgs/Bool), `/amr/clear_fault` (std_msgs/Empty)
+  - `/amr/wheel_rpm_left` (std_msgs/Float32, RPM)
+  - `/amr/wheel_rpm_right` (std_msgs/Float32, RPM)
+  - `/amr/duty_cmd_left` (std_msgs/Float32, duty percent)
+  - `/amr/duty_cmd_right` (std_msgs/Float32, duty percent)
   - `/amr/fault_mask` (std_msgs/Int32)
+  - `/amr/wheel_state` (sensor_msgs/JointState)
+  - `/amr/safety_state` (std_msgs/UInt32)
+  - `/imu` (sensor_msgs/Imu)
 - Topics (planned)
   - `/amr/wheel_cmd` (geometry_msgs/Twist or custom wheel velocities)
-  - `/amr/wheel_state` (sensor_msgs/JointState)
   - `/amr/obstacles` (sensor_msgs/Range[] or custom)
-  - `/amr/estop` (std_msgs/Bool), `/amr/safety_state` (std_msgs/UInt32)
   - `/odom` (nav_msgs/Odometry), `/tf`, `/tf_static`
 
 ---

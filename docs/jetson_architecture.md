@@ -1,8 +1,8 @@
 # Jetson Nano Architecture (Compute + ROS 2 Runtime)
 
 Owner: Kartik Mehta  
-Status: Draft — containerized ROS 2 Humble runtime on L4T 32.7.x with micro-ROS agent.  
-Last Updated: 2025-12-22
+Status: Draft — containerized ROS 2 runtime on L4T 32.7.x with micro-ROS agent.  
+Last Updated: 2026-01-04
 
 ## Goals
 - Run ROS 2 Humble on Jetson Nano despite Ubuntu 18.04 base by using L4T containers.
@@ -23,11 +23,14 @@ Last Updated: 2025-12-22
 ## Hardware Interfaces
 - LiDAR: USB via powered hub.
 - Depth camera: RealSense D455 via USB 3.
+- IMU: Adafruit BNO080 via Jetson I2C (3.3 V logic).
 - Proximity sensors: routed through STM32 (micro-ROS client publishes ranges).
 - Motor control: STM32 over micro-ROS (XRCE-DDS) via serial transport to agent.
 
 ## ROS 2 Graph Responsibilities
 - micro-ROS agent (XRCE-DDS) bridging MCU topics into the ROS 2 graph.
+- IMU driver publishing `/imu` from BNO080.
+- Optional robot_localization node to fuse wheel odom + IMU.
 - odometry, safety_monitor, sensor_fusion, and navigation nodes.
 - rosbag recording and diagnostics for field tests.
 
@@ -44,3 +47,4 @@ Last Updated: 2025-12-22
 - ros2 topic list works in container.
 - micro-ROS agent accepts STM32 connection and relays /cmd_vel and wheel RPM topics.
 - LiDAR scan and depth camera topics visible; RViz visualization on PC.
+- IMU publishes /imu with stable orientation and gyro data.
