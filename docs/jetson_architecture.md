@@ -15,7 +15,7 @@ Last Updated: 2026-01-04
 - Container runtime: Docker + NVIDIA container runtime.
 
 ## Runtime Stack (Containerized)
-- Base image: L4T Humble ROS 2 image (e.g., dustynv/ros:humble-ros-base-l4t-r32.7.1).
+- Base image: L4T Foxy ROS 2 image (e.g., dustynv/ros:foxy-ros-base-l4t-r32.7.6).
 - micro-ROS agent runs in the same container or a separate agent container.
 - Host networking enabled for DDS and XRCE-DDS discovery.
 - Volumes for logs, rosbags, and configs mounted from the host.

@@ -206,6 +206,7 @@ ROS topic exchange
 - LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
 - Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
 - IMU (Adafruit BNO080): I2C to Jetson (3.3 V logic, STEMMA QT/Qwiic). Power from Jetson 3.3 V; ensure common ground and keep cable short.
+  - Jetson J41 pins: 3.3 V = pin 1, GND = pin 6, SDA (I2C1) = pin 3, SCL (I2C1) = pin 5.
 - Proximity Sensors: 4x HC-SR04 ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; level-shift echo to 3.3 V (HC-SR04 echo is 5 V). Use a simple divider (10 kOhm top / 20 kOhm bottom) or a BSS138 level shifter.
 
 Notes
@@ -213,6 +214,18 @@ Notes
 - Keep sensor grounds tied to the logic ground.
 
 ---
+
+## 6a) IMU Wiring Diagram (Jetson I2C)
+
+```mermaid
+graph LR
+  JET[Jetson Nano J41]
+  IMU[BNO080 IMU]
+  JET -- "Pin 1 (3.3V)" --> IMU
+  JET -- "Pin 6 (GND)" --> IMU
+  JET -- "Pin 3 (SDA, I2C1)" --> IMU
+  JET -- "Pin 5 (SCL, I2C1)" --> IMU
+```
 
 ## 7) Proximity Sensors + STM32 (4x HC-SR04 Ultrasonic)
 

@@ -119,6 +119,11 @@ sensors:
     model: adafruit_bno080
     interface: i2c
     host: jetson_nano
+    bus: /dev/i2c-1
+    sda_pin: J41-3
+    scl_pin: J41-5
+    power_pin: J41-1_3v3
+    gnd_pin: J41-6
     power_rail: 3v3
     notes: Connect to Jetson I2C (3.3 V logic). Use STEMMA QT/Qwiic cable if available; keep leads short.
   proximity:
@@ -154,9 +159,11 @@ sensors:
 
 buses:
   i2c1:
-    scl: TBD
-    sda: TBD
-    pullups: external_3v3
+    host: jetson_nano
+    bus: /dev/i2c-1
+    scl: J41-5
+    sda: J41-3
+    pullups: onboard_3v3
   i2c2:
     scl: TBD
     sda: TBD

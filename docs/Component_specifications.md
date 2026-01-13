@@ -135,7 +135,7 @@ Mounting and effective resolution
 ---
 
 ## 9. Current Sensors
-**Model:** Allegro ACS758LCB-050B (+/-50 A bidirectional)
+**Model:** a (+/-50 A bidirectional)
 
 | Parameter | Value |
 |------------|--------|

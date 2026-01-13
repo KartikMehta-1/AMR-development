@@ -24,7 +24,7 @@ Jetson Nano (arm64): replace the base image tag with your JetPack/L4T version.
 ```bash
 docker buildx build -f docker/foxy/Dockerfile \
   --platform linux/arm64 \
-  --build-arg BASE_IMAGE=dustynv/ros:foxy-ros-base-l4t-r32.7.1 \
+  --build-arg BASE_IMAGE=dustynv/ros:foxy-ros-base-l4t-r32.7.6 \
   -t amr/ros2-foxy-drivers:arm64 \
   --load .
 ```
@@ -75,3 +75,7 @@ docker run -it --rm --net=host \
   -v /home/kartik/AMR-development/ros_ws:/workspaces/ros_ws \
   amr/ros2-foxy-jetson:arm64
 ```
+
+Notes (Jetson / L4T):
+- ROS2 debs like `ros-foxy-cv-bridge` and `ros-foxy-nav2-*` are not available on Ubuntu 18.04 (L4T). The Dockerfile skips them on bionic.
+- RealSense build is auto-disabled on bionic; set `--build-arg BUILD_REALSENSE=1` only if you plan to build it from source.
