@@ -1,18 +1,18 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-01-04  
+**Last Updated:** 2026-01-18  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
 - Overall: On track with mechanical changes and tooling in progress
-- Progress: 13/42 weeks complete (~31%)
-- Recent: Foxy driver + devpc Docker images built; micro-ROS agent and YDLidar running in containers; `/scan` visualized in RViz2 (best_effort QoS); workspace build verified; fault clear behavior verified and fault mask documented.
+- Progress: 14/42 weeks complete (~33%)
+- Recent: Foxy driver + devpc Docker images built; micro-ROS agent and YDLidar running in containers; `/scan` visualized in RViz2 (best_effort QoS); workspace build verified; fault clear behavior verified and fault mask documented; Jetson container running micro-ROS + teleop + LiDAR with `/amr/*` and `/scan` confirmed; passwordless SSH to Jetson set up.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live; UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
-- Current Focus: Structural changes + proximity sensor enclosure work; dev PC container environment (micro-ROS + LiDAR + RViz) and ROS2 workspace bring-up.
+- Current Focus: Structural changes + proximity sensor enclosure work; Jetson wireless bring-up and runtime reliability.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 17-18): Finish enclosure build/install + mechanical assembly; complete dev PC tooling stack.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
@@ -47,9 +47,9 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 4 sensors; debouncing/filtering; fault detection; add to telemetry. | 2026-02-12 | TBD |
 | 16 | Firmware v2: micro-ROS Bring-up | <span style="color: green">Done</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/fault_mask`, `/amr/wheel_state`, `/amr/safety_state` pubs; `/amr/enable`, `/amr/estop`, `/amr/clear_fault` wired; fault clear verified; fault mask documented; legacy UART telemetry disabled. | 2026-02-19 | 2026-01-04 |
 | 17 | Mechanical Assembly + Enclosure | <span style="color: goldenrod">In Progress</span> | Structural changes in progress; proximity sensor enclosure prep completed. Remaining: finish enclosure build/install, wiring, battery integration, height mods, sensor installs, AMR cover, perfboard/shield; CAD tasks: survey/measurements (envelope, keep-outs, bend radii); base plate + mounts (Nucleo, Cytron, Jetson, hub, battery/BMS, DC-DC); sensor mounts; cable routing/strain relief; outputs (STEP/IGES, DXF, fastener BOM, assembly guide); include arm mounting provisions for Week 27 integration. | 2026-02-26 | TBD |
-| 18 | Dev PC Env & Tooling | <span style="color: goldenrod">In Progress</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified. Remaining: cross-build toolchain, compose alignment with Jetson, SSH keys + dotfiles. | 2026-03-05 | TBD |
-| 19 | Jetson Nano ROS2/JetPack | Planned | Flash JetPack (Ubuntu matching dev PC); install ROS2 + micro-ROS agent; enable CUDA; configure services on boot; verify `ros2 topic list` and talker/listener on hardware; bring up LiDAR + depth camera drivers, USB power/bandwidth, udev rules, and topic sanity (`/scan`, `/camera/*`); bring up BNO080 IMU over Jetson I2C and publish `/imu`. | 2026-03-12 | TBD |
-| 20 | Wireless PC<->Nano | Planned | Add Wi-Fi module/antennas; configure NetworkManager/wpa_supplicant; set static/reserved IP + SSH keys (no passwords); ping/iperf latency check; NTP sync; optional VPN (WireGuard/Tailscale). | 2026-03-19 | TBD |
+| 18 | Dev PC Env & Tooling | <span style="color: green">Done</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified; Docker buildx workflow and Jetson builds validated; passwordless SSH to Jetson set up. | 2026-03-05 | 2026-01-18 |
+| 19 | Jetson Nano ROS2/JetPack | <span style="color: goldenrod">In Progress</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified. Remaining: depth camera drivers, USB power/bandwidth checks, udev rules, `/camera/*` sanity, BNO080 IMU over I2C publishing `/imu`, and boot-time services. | 2026-03-12 | TBD |
+| 20 | Wireless PC<->Nano | <span style="color: goldenrod">In Progress</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working. Remaining: static/reserved IP, ping/iperf latency check, NTP sync, optional VPN (WireGuard/Tailscale). | 2026-03-19 | TBD |
 | 21 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, and sensor frames (LiDAR + depth cam + IMU); TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. | 2026-03-26 | TBD |
 | 22 | Navigation & Mapping Bring-up | Planned | Mapping: slam_toolbox (2D LiDAR) or depth->scan pipeline if needed; record/validate maps. Localization: AMCL with wheel odom + LiDAR; set static transforms; fuse IMU + wheel odom with robot_localization if needed. Nav2: planner/controller/server bring-up; tune costmaps (obstacle/voxel + inflation), footprint, and velocity limits; first go-to-pose. | 2026-04-02 | TBD |
 | 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms; battery-powered Jetson running Nav2 path planning and driving the AMR; validate IMU stability and drift. | 2026-04-09 | TBD |

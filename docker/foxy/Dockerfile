@@ -166,7 +166,22 @@ RUN if ! getent group ${GID} >/dev/null; then groupadd -g ${GID} ${USERNAME}; fi
     && groupadd -f dialout \
     && usermod -a -G dialout ${USERNAME}
 
-RUN printf '\nsource /opt/ros/%s/setup.bash\nsource /opt/ros/driver_ws/install/setup.bash\n' "${ROS_DISTRO}" >> /etc/bash.bashrc
+RUN sed -i '\#^source /opt/ros/.*/setup.bash$#d; \#^source /opt/ros/driver_ws/install/setup.bash$#d' /etc/bash.bashrc \
+    && cat <<'EOS' >> /etc/bash.bashrc
+# ros env
+if [ -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]; then
+  source "/opt/ros/${ROS_DISTRO}/setup.bash"
+elif [ -f "/opt/ros/${ROS_DISTRO}/setup.sh" ]; then
+  source "/opt/ros/${ROS_DISTRO}/setup.sh"
+elif [ -f "/opt/ros/${ROS_DISTRO}/install/setup.bash" ]; then
+  source "/opt/ros/${ROS_DISTRO}/install/setup.bash"
+elif [ -f "/opt/ros/${ROS_DISTRO}/install/setup.sh" ]; then
+  source "/opt/ros/${ROS_DISTRO}/install/setup.sh"
+fi
+if [ -f "/opt/ros/driver_ws/install/setup.bash" ]; then
+  source "/opt/ros/driver_ws/install/setup.bash"
+fi
+EOS
 
 WORKDIR /workspaces/ros_ws
 
