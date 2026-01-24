@@ -67,6 +67,27 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 460800
 ros2 launch ydlidar_ros2_driver ydlidar_launch.py
 ```
 
+## Jetson depth camera (RealSense D455)
+```bash
+ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true align_depth.enable:=true
+ros2 topic list | grep camera
+ros2 topic list | grep points
+ros2 topic hz /camera/camera/depth/image_rect_raw
+ros2 topic hz /camera/camera/depth/color/points
+```
+
+### Light pointcloud profile (lower bandwidth)
+```bash
+ros2 launch realsense2_camera rs_launch.py \
+  depth_module.depth_profile:=424x240x15 \
+  rgb_camera.color_profile:=424x240x15 \
+  enable_infra1:=false enable_infra2:=false \
+  enable_gyro:=false enable_accel:=false \
+  pointcloud.enable:=true pointcloud.ordered_pc:=false \
+  filters:=decimation decimation_filter_magnitude:=2 \
+  align_depth.enable:=false
+```
+
 ## Enable drive and clear faults
 ```bash
 ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty "{}"
@@ -78,6 +99,11 @@ ros2 topic pub --once /amr/enable std_msgs/msg/Bool "{data: true}"
 docker run -it --rm --name ros2_dev --net=host --privileged -v /dev:/dev amr/ros2-foxy-devpc:amd64
 apt-get update && apt-get install -y ros-foxy-teleop-twist-keyboard
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
+```
+
+## Exec into Dev PC container
+```bash
+docker exec -it ros2_dev /entrypoint.sh bash
 ```
 
 ## Stop Jetson container

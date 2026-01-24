@@ -11,6 +11,10 @@ ARG YDLIDAR_ROS_BRANCH=master
 ARG YDLIDAR_SDK_BRANCH=master
 ARG MICROROS_AGENT_BRANCH=foxy
 ARG MICROROS_MSGS_BRANCH=foxy
+ARG IMAGE_COMMON_BRANCH=foxy
+ARG VISION_OPENCV_BRANCH=foxy
+ARG DIAGNOSTICS_BRANCH=ros2
+ARG PYTHON_CMAKE_MODULE_BRANCH=foxy
 ARG INSTALL_ROS_DEBS=auto
 ARG BUILD_REALSENSE=auto
 
@@ -34,10 +38,20 @@ RUN set -eux; \
     OS_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
     ROS_DEBS=""; \
     OPENCV_DEB="libopencv-dev"; \
+    BUILD_RS="${BUILD_REALSENSE}"; \
     if [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; then \
       ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-xacro"; \
     fi; \
-    if [ "${OS_CODENAME}" = "bionic" ]; then \
+    if [ "${BUILD_RS}" = "auto" ]; then \
+      if [ "${OS_CODENAME}" = "bionic" ] && [ "${TARGETARCH}" = "arm64" ]; then BUILD_RS=1; \
+      elif [ "${OS_CODENAME}" = "bionic" ]; then BUILD_RS=0; \
+      else BUILD_RS=1; fi; \
+    fi; \
+    EXTRA_REALSENSE_DEBS=""; \
+    if [ "${BUILD_RS}" = "1" ] && [ "${OS_CODENAME}" = "bionic" ]; then \
+      OPENCV_DEB=""; \
+      EXTRA_REALSENSE_DEBS="libboost-dev libboost-python-dev python3-numpy python3-opencv"; \
+    elif [ "${OS_CODENAME}" = "bionic" ]; then \
       OPENCV_DEB=""; \
     fi; \
     apt-get update; \
@@ -48,11 +62,13 @@ RUN set -eux; \
       curl \
       wget \
       pkg-config \
+      iproute2 \
       python3-colcon-common-extensions \
       python3-rosdep \
       python3-vcstool \
       python3-argcomplete \
       libssl-dev \
+      libcurl4-openssl-dev \
       libusb-1.0-0-dev \
       libudev-dev \
       libgtk-3-dev \
@@ -62,8 +78,10 @@ RUN set -eux; \
       libxinerama-dev \
       libxcursor-dev \
       libxi-dev \
+      libeigen3-dev \
       libfmt-dev \
       ${OPENCV_DEB} \
+      ${EXTRA_REALSENSE_DEBS} \
       udev \
       ${ROS_DEBS} \
     && rm -rf /var/lib/apt/lists/*
@@ -74,7 +92,9 @@ RUN set -eux; \
     OS_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
     BUILD_RS="${BUILD_REALSENSE}"; \
     if [ "${BUILD_RS}" = "auto" ]; then \
-      if [ "${OS_CODENAME}" = "bionic" ]; then BUILD_RS=0; else BUILD_RS=1; fi; \
+      if [ "${OS_CODENAME}" = "bionic" ] && [ "${TARGETARCH}" = "arm64" ]; then BUILD_RS=1; \
+      elif [ "${OS_CODENAME}" = "bionic" ]; then BUILD_RS=0; \
+      else BUILD_RS=1; fi; \
     fi; \
     if [ "${BUILD_RS}" = "1" ]; then \
       git clone --branch ${LIBREALSENSE_TAG} --depth 1 \
@@ -109,7 +129,22 @@ RUN set -eux; \
     OS_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
     BUILD_RS="${BUILD_REALSENSE}"; \
     if [ "${BUILD_RS}" = "auto" ]; then \
-      if [ "${OS_CODENAME}" = "bionic" ]; then BUILD_RS=0; else BUILD_RS=1; fi; \
+      if [ "${OS_CODENAME}" = "bionic" ] && [ "${TARGETARCH}" = "arm64" ]; then BUILD_RS=1; \
+      elif [ "${OS_CODENAME}" = "bionic" ]; then BUILD_RS=0; \
+      else BUILD_RS=1; fi; \
+    fi; \
+    if [ "${BUILD_RS}" = "1" ] && [ "${OS_CODENAME}" = "bionic" ]; then \
+      git clone --branch ${IMAGE_COMMON_BRANCH} --depth 1 \
+        https://github.com/ros-perception/image_common.git; \
+      git clone --branch ${VISION_OPENCV_BRANCH} --depth 1 \
+        https://github.com/ros-perception/vision_opencv.git; \
+      git clone --branch ${DIAGNOSTICS_BRANCH} --depth 1 \
+        https://github.com/ros/diagnostics.git; \
+      git clone --branch ${PYTHON_CMAKE_MODULE_BRANCH} --depth 1 \
+        https://github.com/ros2/python_cmake_module.git; \
+      if [ -d diagnostics/diagnostic_remote_logging ]; then \
+        touch diagnostics/diagnostic_remote_logging/COLCON_IGNORE; \
+      fi; \
     fi; \
     if [ "${BUILD_RS}" = "1" ]; then \
       git clone --branch ${REALSENSE_ROS_BRANCH} --depth 1 \
