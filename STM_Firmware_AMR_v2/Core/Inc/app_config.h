@@ -83,7 +83,7 @@
 #define W_CMD_RAMP_RATE_RAD   2.0f    // max change in angular velocity per second
 #define MOTOR_DUTY_MAX        0.70f    // absolute duty limit for scaling/clamp
 
-// Open-loop motor test (bypass PID/control loop; fixed duty regardless of cmd_vel)
+// Open-loop motor test (bypass PID/control loop; fixed duty regardless of wheel_cmd)
 #define MOTOR_OPEN_LOOP_TEST        0
 #define MOTOR_OPEN_LOOP_DUTY_LEFT   0.0f
 #define MOTOR_OPEN_LOOP_DUTY_RIGHT  0.20f
@@ -99,11 +99,11 @@
 // RPM filtering before PID (simple exponential filter)
 #define RPM_LPF_ALPHA 0.1f   // higher = less smoothing (faster response)
 #define RPM_SPIKE_LIMIT_RPM 500.0f  // reject raw RPM magnitudes beyond this (likely noise/wrap)
-#define CMD_TIMEOUT_MS 500U          // zero commands if no cmd_vel within this timeout
 #define CMD_STOP_EPS_MPS 0.01f        // treat linear cmd below this as zero (m/s)
 #define CMD_STOP_EPS_RPS 0.01f        // treat angular cmd below this as zero (rad/s)
-#define CMD_V_POLARITY 1.0f          // flip linear velocity sign if forward/back is inverted
-#define CMD_W_POLARITY 1.0f          // flip angular velocity sign if turning direction is inverted
+#define WHEEL_CMD_TIMEOUT_MS 500U    // zero wheel commands if no wheel_cmd within this timeout
+#define WHEEL_CMD_L_POLARITY 1.0f    // flip left wheel command sign if needed
+#define WHEEL_CMD_R_POLARITY 1.0f    // flip right wheel command sign if needed
 
 // Fault thresholds
 #define FAULT_OC_THRESH_MA        1500   // overcurrent threshold (mA)
