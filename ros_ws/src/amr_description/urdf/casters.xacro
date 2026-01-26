@@ -64,17 +64,13 @@
     </joint>
 
     <gazebo reference="front_caster_link">
-      <mu1>0.001</mu1>
-      <mu2>0.001</mu2>
-      <kp>10000.0</kp>
-      <kd>5.0</kd>
+      <mu1>${caster_mu1}</mu1>
+      <mu2>${caster_mu2}</mu2>
     </gazebo>
 
     <gazebo reference="rear_caster_link">
-      <mu1>0.001</mu1>
-      <mu2>0.001</mu2>
-      <kp>10000.0</kp>
-      <kd>5.0</kd>
+      <mu1>${caster_mu1}</mu1>
+      <mu2>${caster_mu2}</mu2>
     </gazebo>
   </xacro:macro>
 </robot>

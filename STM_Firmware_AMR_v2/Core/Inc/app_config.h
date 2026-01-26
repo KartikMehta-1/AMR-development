@@ -46,19 +46,19 @@
 #define CURR_LPF_ALPHA        0.1f     // low-pass filter alpha (0..1), higher = less smoothing
 
 // Duty/rpm ramping (units are 0..1 duty fraction per second)
-#define DUTY_RAMP_RATE_PER_SEC 2.0f    // slew limit for motor duty (e.g., 20% per second)
+#define DUTY_RAMP_RATE_PER_SEC 2.0f    // slew limit for motor duty (units/sec)
 
 // Encoder polarity (set to -1 to flip RPM sign for that wheel)
 #define LEFT_ENCODER_POLARITY  1
 #define RIGHT_ENCODER_POLARITY -1
 
 // Speed PID gains (per wheel). Output is duty 0..1 (clamped to 0..0.3)
-#define SPEED_PID_KP_L     0.4f
-#define SPEED_PID_KI_L     0.001f
-#define SPEED_PID_KD_L     0.01f
-#define SPEED_PID_KP_R     0.4f
-#define SPEED_PID_KI_R     0.001f
-#define SPEED_PID_KD_R     0.01f
+#define SPEED_PID_KP_L     0.03f
+#define SPEED_PID_KI_L     0.002f
+#define SPEED_PID_KD_L     0.0f
+#define SPEED_PID_KP_R     0.03f
+#define SPEED_PID_KI_R     0.002f
+#define SPEED_PID_KD_R     0.0f
 #define SPEED_PID_OUT_MIN -0.90f
 #define SPEED_PID_OUT_MAX  0.90f
 #define SPEED_PID_I_MIN   -2.0f

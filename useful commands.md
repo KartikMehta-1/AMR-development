@@ -14,7 +14,7 @@ rsync -av --delete --exclude .git /home/kartik/AMR-development/docker/ kartik@19
 
 ## Build Jetson images from dev PC
 ```bash
-ssh -t kartik@192.168.1.9 '
+ssh -t jetson '
 cd ~/AMR-development &&
 docker buildx build -f docker/foxy/Dockerfile \
   --platform linux/arm64 \

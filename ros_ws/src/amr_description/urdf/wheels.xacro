@@ -69,21 +69,19 @@
 
     <!-- Gazebo surface parameters for wheel traction -->
     <gazebo reference="left_wheel_link">
-      <mu1>1.0</mu1>
-      <mu2>0.05</mu2>
-      <slip1>0.02</slip1>
-      <slip2>0.02</slip2>
-      <kp>100000.0</kp>
-      <kd>1.0</kd>
+      <mu1>${wheel_mu1}</mu1>
+      <mu2>${wheel_mu2}</mu2>
+      <fdir1>${wheel_fdir1}</fdir1>
+      <slip1>${wheel_slip1}</slip1>
+      <slip2>${wheel_slip2}</slip2>
     </gazebo>
 
     <gazebo reference="right_wheel_link">
-      <mu1>1.0</mu1>
-      <mu2>0.05</mu2>
-      <slip1>0.02</slip1>
-      <slip2>0.02</slip2>
-      <kp>100000.0</kp>
-      <kd>1.0</kd>
+      <mu1>${wheel_mu1}</mu1>
+      <mu2>${wheel_mu2}</mu2>
+      <fdir1>${wheel_fdir1}</fdir1>
+      <slip1>${wheel_slip1}</slip1>
+      <slip2>${wheel_slip2}</slip2>
     </gazebo>
   </xacro:macro>
 </robot>

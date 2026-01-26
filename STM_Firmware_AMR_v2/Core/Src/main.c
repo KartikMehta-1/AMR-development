@@ -169,8 +169,6 @@ static rcl_allocator_t ros_allocator;
 static rclc_support_t ros_support;
 static rcl_node_t ros_node;
 static rclc_executor_t ros_executor;
-static rcl_publisher_t pub_rpm_left;
-static rcl_publisher_t pub_rpm_right;
 static rcl_publisher_t pub_fault_mask;
 static rcl_publisher_t pub_duty_left;
 static rcl_publisher_t pub_duty_right;
@@ -181,8 +179,6 @@ static rcl_subscription_t sub_wheel_cmd_right;
 static rcl_subscription_t sub_enable;
 static rcl_subscription_t sub_estop;
 static rcl_subscription_t sub_clear_fault;
-static std_msgs__msg__Float32 msg_rpm_left;
-static std_msgs__msg__Float32 msg_rpm_right;
 static std_msgs__msg__Int32 msg_fault_mask;
 static std_msgs__msg__Float32 msg_duty_left;
 static std_msgs__msg__Float32 msg_duty_right;
@@ -1084,24 +1080,6 @@ void StartRosPubTask(void *argument)
   }
 
   if (rclc_publisher_init_best_effort(
-          &pub_rpm_left,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/wheel_rpm_left") != RCL_RET_OK) {
-    ros_init_fail_stage = 3;
-    goto ros_init_fail;
-  }
-
-  if (rclc_publisher_init_best_effort(
-          &pub_rpm_right,
-          &ros_node,
-          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/wheel_rpm_right") != RCL_RET_OK) {
-    ros_init_fail_stage = 4;
-    goto ros_init_fail;
-  }
-
-  if (rclc_publisher_init_best_effort(
           &pub_fault_mask,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
@@ -1260,19 +1238,17 @@ void StartRosPubTask(void *argument)
     uint32_t now = HAL_GetTick();
     if ((last_pub_ms == 0U) || ((now - last_pub_ms) >= ROS_PUB_PERIOD_MS)) {
       last_pub_ms = now;
-      // Publish wheel RPM, wheel state, and safety status
+      // Publish wheel state and safety status
       uint32_t fault_mask = ControlState_GetFaultMask(&ctrl_state);
       // safety_state: upper 16 bits = ControlState, lower 16 bits = fault mask.
       uint32_t safety_state = ((uint32_t)ControlState_GetState(&ctrl_state) << 16) | (fault_mask & 0xFFFFu);
       const double two_pi = 6.28318530717958647692;
       const double rpm_to_rad_s = two_pi / 60.0;
       const double counts_to_rad = two_pi / (double)ENCODER_COUNTS_PER_REV;
-      msg_rpm_left.data = sense.rpm_l;
-      msg_rpm_right.data = sense.rpm_r;
       msg_fault_mask.data = (int32_t)fault_mask;
       msg_safety_state.data = safety_state;
-      msg_duty_left.data = duty_cmd_l_pub * 100.0f;
-      msg_duty_right.data = duty_cmd_r_pub * 100.0f;
+      msg_duty_left.data = duty_cmd_l_pub;
+      msg_duty_right.data = duty_cmd_r_pub;
       msg_wheel_state.header.stamp.sec = (int32_t)(now / 1000U);
       msg_wheel_state.header.stamp.nanosec = (uint32_t)((now % 1000U) * 1000000U);
       msg_wheel_state.position.data[0] = (double)sense.cnt_l * counts_to_rad;
@@ -1280,18 +1256,15 @@ void StartRosPubTask(void *argument)
       msg_wheel_state.velocity.data[0] = (double)sense.rpm_l * rpm_to_rad_s;
       msg_wheel_state.velocity.data[1] = (double)sense.rpm_r * rpm_to_rad_s;
 
-      rcl_ret_t rc1 = rcl_publish(&pub_rpm_left, &msg_rpm_left, NULL);
-      rcl_ret_t rc2 = rcl_publish(&pub_rpm_right, &msg_rpm_right, NULL);
-      rcl_ret_t rc3 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
-      rcl_ret_t rc4 = rcl_publish(&pub_duty_left, &msg_duty_left, NULL);
-      rcl_ret_t rc5 = rcl_publish(&pub_duty_right, &msg_duty_right, NULL);
-      rcl_ret_t rc6 = rcl_publish(&pub_wheel_state, &msg_wheel_state, NULL);
-      rcl_ret_t rc7 = rcl_publish(&pub_safety_state, &msg_safety_state, NULL);
+      rcl_ret_t rc1 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
+      rcl_ret_t rc2 = rcl_publish(&pub_duty_left, &msg_duty_left, NULL);
+      rcl_ret_t rc3 = rcl_publish(&pub_duty_right, &msg_duty_right, NULL);
+      rcl_ret_t rc4 = rcl_publish(&pub_wheel_state, &msg_wheel_state, NULL);
+      rcl_ret_t rc5 = rcl_publish(&pub_safety_state, &msg_safety_state, NULL);
 
       // Blink LED when publish succeeds; hold solid ON if any publish fails
       bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK) &&
-                    (rc4 == RCL_RET_OK) && (rc5 == RCL_RET_OK) && (rc6 == RCL_RET_OK) &&
-                    (rc7 == RCL_RET_OK);
+                    (rc4 == RCL_RET_OK) && (rc5 == RCL_RET_OK);
       if (pub_ok) {
         led_state = !led_state;
         HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);

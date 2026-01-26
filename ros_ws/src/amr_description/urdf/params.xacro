@@ -1,31 +1,33 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
   <!-- Basic geometry (meters) -->
-  <xacro:property name="plate_diameter" value="0.40"/>
+  <xacro:property name="plate_diameter" value="0.386"/>
   <xacro:property name="plate_radius" value="${plate_diameter * 0.5}"/>
   <xacro:property name="plate_thickness" value="0.01"/>
   <xacro:property name="base_clearance" value="0.02"/>
   <xacro:property name="base_collision_clearance" value="0.02"/>
+  <xacro:property name="enable_base_collision" value="true"/>
 
   <xacro:property name="pillar_size" value="0.025"/>
   <xacro:property name="pillar_height" value="0.15"/>
-  <xacro:property name="pillar_offset" value="0.1"/>
+  <xacro:property name="pillar_offset" value="${plate_radius * 0.5}"/>
 
   <xacro:property name="total_mass" value="12.0"/>
   <xacro:property name="base_height_total" value="${(plate_thickness * 2.0) + pillar_height}"/>
 
-  <xacro:property name="wheel_radius" value="0.05"/>
+  <xacro:property name="wheel_radius" value="0.0615"/>
   <xacro:property name="wheel_width" value="0.025"/>
   <xacro:property name="wheel_mass" value="0.10"/>
-  <xacro:property name="track_width" value="${plate_diameter + wheel_width}"/>
+  <xacro:property name="track_width" value="0.386"/>
   <xacro:property name="wheel_y_offset" value="${track_width * 0.5}"/>
-  <xacro:property name="wheel_z" value="${wheel_radius - (base_clearance + (plate_thickness * 0.5))}"/>
+  <xacro:property name="wheel_z" value="0.0"/>
+  <xacro:property name="chassis_z" value="${(base_clearance + (plate_thickness * 0.5)) - wheel_radius}"/>
   <xacro:property name="base_collision_radius" value="${wheel_y_offset - wheel_radius - base_collision_clearance}"/>
 
   <xacro:property name="caster_radius" value="0.0127"/>
   <xacro:property name="caster_mass" value="0.05"/>
   <xacro:property name="caster_x_offset" value="${plate_radius - 0.02}"/>
-  <xacro:property name="caster_clearance" value="0.003"/>
+  <xacro:property name="caster_clearance" value="0.0"/>
   <xacro:property name="caster_z" value="${wheel_z - wheel_radius + caster_radius + caster_clearance}"/>
 
   <xacro:property name="lidar_height" value="0.05"/>
@@ -43,4 +45,14 @@
   <xacro:property name="lidar_mass" value="0.20"/>
   <xacro:property name="camera_mass" value="0.10"/>
   <xacro:property name="base_mass" value="${total_mass - (2 * wheel_mass) - (2 * caster_mass) - lidar_mass - camera_mass}"/>
+
+  <!-- Gazebo friction tuning -->
+  <xacro:property name="wheel_mu1" value="1.0"/>
+  <xacro:property name="wheel_mu2" value="1.0"/>
+  <xacro:property name="wheel_slip1" value="0.0"/>
+  <xacro:property name="wheel_slip2" value="0.02"/>
+  <xacro:property name="wheel_fdir1" value="1 0 0"/>
+  <xacro:property name="caster_mu1" value="0.001"/>
+  <xacro:property name="caster_mu2" value="0.001"/>
+
 </robot>
