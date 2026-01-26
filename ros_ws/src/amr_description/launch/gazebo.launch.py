@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -22,13 +22,6 @@ def generate_launch_description():
         launch_arguments={"world": world}.items(),
     )
 
-    joint_state_publisher = Node(
-        package="joint_state_publisher",
-        executable="joint_state_publisher",
-        output="screen",
-        parameters=[{"use_sim_time": use_sim_time}],
-    )
-
     robot_state_publisher = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -45,12 +38,30 @@ def generate_launch_description():
         output="screen",
     )
 
+    joint_state_broadcaster_spawner = Node(
+        package="controller_manager",
+        executable="spawner.py",
+        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+        output="screen",
+    )
+
+    diff_drive_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner.py",
+        arguments=["diff_drive_controller", "--controller-manager", "/controller_manager"],
+        output="screen",
+    )
+
     default_world = PathJoinSubstitution(
         [FindPackageShare("gazebo_ros"), "worlds", "empty.world"]
     )
 
     return LaunchDescription(
         [
+            SetEnvironmentVariable(
+                name="AMR_DESCRIPTION_SHARE",
+                value=FindPackageShare("amr_description"),
+            ),
             DeclareLaunchArgument(
                 "use_sim_time",
                 default_value="true",
@@ -62,8 +73,9 @@ def generate_launch_description():
                 description="Full path to world file to load",
             ),
             gazebo,
-            joint_state_publisher,
             robot_state_publisher,
             spawn_entity,
+            joint_state_broadcaster_spawner,
+            diff_drive_controller_spawner,
         ]
     )

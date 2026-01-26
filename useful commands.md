@@ -101,6 +101,23 @@ apt-get update && apt-get install -y ros-foxy-teleop-twist-keyboard
 ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
+## Dev PC container for Gazebo
+```bash
+xhost +local:docker
+docker run -it --rm --name ros2_dev --net=host --privileged \
+  -e DISPLAY -e QT_X11_NO_MITSHM=1 \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v ~/AMR-development/ros_ws:/workspaces/ros_ws \
+  amr/ros2-foxy-devpc:amd64
+```
+```bash
+cd /workspaces/ros_ws
+colcon build --symlink-install
+source /opt/ros/foxy/setup.bash
+source install/setup.bash
+ros2 launch amr_description gazebo.launch.py
+```
+
 ## Exec into Dev PC container
 ```bash
 docker exec -it ros2_dev /entrypoint.sh bash

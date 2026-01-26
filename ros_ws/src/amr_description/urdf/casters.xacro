@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="casters">
+    <link name="front_caster_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="${caster_radius}"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="${caster_radius}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${caster_mass}"/>
+        <inertia
+          ixx="${(2.0/5.0) * caster_mass * caster_radius * caster_radius}"
+          iyy="${(2.0/5.0) * caster_mass * caster_radius * caster_radius}"
+          izz="${(2.0/5.0) * caster_mass * caster_radius * caster_radius}"
+          ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+    </link>
+
+    <link name="rear_caster_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="${caster_radius}"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="${caster_radius}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${caster_mass}"/>
+        <inertia
+          ixx="${(2.0/5.0) * caster_mass * caster_radius * caster_radius}"
+          iyy="${(2.0/5.0) * caster_mass * caster_radius * caster_radius}"
+          izz="${(2.0/5.0) * caster_mass * caster_radius * caster_radius}"
+          ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+    </link>
+
+    <joint name="front_caster_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="front_caster_link"/>
+      <origin xyz="${caster_x_offset} 0 ${caster_z}" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="rear_caster_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="rear_caster_link"/>
+      <origin xyz="${-caster_x_offset} 0 ${caster_z}" rpy="0 0 0"/>
+    </joint>
+
+    <gazebo reference="front_caster_link">
+      <mu1>0.001</mu1>
+      <mu2>0.001</mu2>
+      <kp>10000.0</kp>
+      <kd>5.0</kd>
+    </gazebo>
+
+    <gazebo reference="rear_caster_link">
+      <mu1>0.001</mu1>
+      <mu2>0.001</mu2>
+      <kp>10000.0</kp>
+      <kd>5.0</kd>
+    </gazebo>
+  </xacro:macro>
+</robot>

@@ -1,20 +1,20 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-01-20  
+**Last Updated:** 2026-01-24  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
 - Overall: On track with mechanical changes and tooling in progress
-- Progress: 15/42 weeks complete (~36%)
+- Progress: 16/42 weeks complete (~38%)
 - Recent: Foxy driver + devpc Docker images built; micro-ROS agent and YDLidar running in containers; `/scan` visualized in RViz2 (best_effort QoS); workspace build verified; fault clear behavior verified and fault mask documented; Jetson container running micro-ROS + teleop + LiDAR; depth camera running on Jetson with `/camera/*` topics verified and RViz2 visualization on dev PC; DDS interface binding set to Wi-Fi; passwordless SSH + DHCP reservation set; Wi‑Fi latency (ping ~10 ms avg) and throughput (~15 Mbps) verified; NTP sync confirmed.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live; UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
-- Current Focus: Structural changes + proximity sensor enclosure work; Jetson runtime reliability (depth cam stability, boot-time services, IMU bring-up).
+- Current Focus: Structural changes + proximity sensor enclosure work; URDF + Gazebo/ros2_control sim bring-up.
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
-- Next Focus (Weeks 19-21): Stabilize depth stream + validate `/points`, bring up IMU over I2C, set boot-time services, start base URDF.
+- Next Focus (Weeks 21-22): Finalize base URDF + Gazebo sim + ros2_control bring-up; start slam_toolbox/Nav2 prep.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
 
 ## Calendar Baseline (Week Alignment)
@@ -48,9 +48,9 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 16 | Firmware v2: micro-ROS Bring-up | <span style="color: green">Done</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/fault_mask`, `/amr/wheel_state`, `/amr/safety_state` pubs; `/amr/enable`, `/amr/estop`, `/amr/clear_fault` wired; fault clear verified; fault mask documented; legacy UART telemetry disabled. | 2026-02-19 | 2026-01-04 |
 | 17 | Mechanical Assembly + Enclosure | <span style="color: goldenrod">In Progress</span> | Structural changes in progress; proximity sensor enclosure prep completed. Remaining: finish enclosure build/install, wiring, battery integration, height mods, sensor installs, AMR cover, perfboard/shield; CAD tasks: survey/measurements (envelope, keep-outs, bend radii); base plate + mounts (Nucleo, Cytron, Jetson, hub, battery/BMS, DC-DC); sensor mounts; cable routing/strain relief; outputs (STEP/IGES, DXF, fastener BOM, assembly guide); include arm mounting provisions for Week 27 integration. | 2026-02-26 | TBD |
 | 18 | Dev PC Env & Tooling | <span style="color: green">Done</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified; Docker buildx workflow and Jetson builds validated; passwordless SSH to Jetson set up. | 2026-03-05 | 2026-01-18 |
-| 19 | Jetson Nano ROS2/JetPack | <span style="color: goldenrod">In Progress</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified; depth camera running with `/camera/*` topics visible; RViz2 visualization from dev PC confirmed. Remaining: depth stream stability/USB power checks, `/points` validation, BNO080 IMU over I2C publishing `/imu`, and boot-time services. | 2026-03-12 | TBD |
+| 19 | Jetson Nano ROS2/JetPack | <span style="color: green">Done</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified; depth camera running with `/camera/*` and `/points` validated; RViz2 visualization from dev PC confirmed; DDS interface bound to Wi-Fi; depth stream stabilized with lower profiles. | 2026-03-12 | 2026-01-24 |
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
-| 21 | URDF Modeling (Base AMR) | Planned | Build base URDF/Xacro with chassis, wheels, and sensor frames (LiDAR + depth cam + IMU); TF tree aligned to CAD; validate visuals/collisions and params used by Nav2. | 2026-03-26 | TBD |
+| 21 | URDF Modeling (Base AMR) | <span style="color: goldenrod">In Progress</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); inertials + collisions added; track width aligned to ros2_control config; Gazebo launch + ros2_control config added. Remaining: verify Gazebo spawn and controllers, validate TF tree and visuals/collisions, refine footprint/height. | 2026-03-26 | TBD |
 | 22 | Navigation & Mapping Bring-up | Planned | Mapping: slam_toolbox (2D LiDAR) or depth->scan pipeline if needed; record/validate maps. Localization: AMCL with wheel odom + LiDAR; set static transforms; fuse IMU + wheel odom with robot_localization if needed. Nav2: planner/controller/server bring-up; tune costmaps (obstacle/voxel + inflation), footprint, and velocity limits; first go-to-pose. | 2026-04-02 | TBD |
 | 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms; battery-powered Jetson running Nav2 path planning and driving the AMR; validate IMU stability and drift. | 2026-04-09 | TBD |
 | 24 | Task Executive & Sequencing (v1) | Planned | Choose BT/PlanSys2; define action interfaces (Navigate/Detect/Pick/Drop/Dock); implement mission executor; add retries/timeouts, status reporting, and logging. | 2026-04-16 | TBD |
@@ -77,6 +77,43 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 
 ---
 
+## ROS2 Control + Nav2 Roadmap (Phased)
+- Phase 1 - Lock robot description
+  - Finalize frames and geometry: base_footprint, base_link, left_wheel_joint, right_wheel_joint, lidar_link, camera_link.
+  - Verify wheel positions, wheel radius, ground contact height, and total mass 12 kg.
+  - Keep inertial and collision on all links; add gazebo tags when sim starts.
+  - Goal: `ros2 launch amr_description view_urdf.launch.py` renders correctly.
+- Phase 2 - Gazebo simulation
+  - Add gazebo_ros2_control plugin block in URDF and transmissions for both wheel joints.
+  - Create controller config YAML: joint_state_broadcaster and diff_drive_controller with wheel radius and separation.
+  - Launch Gazebo, spawn robot, start controllers.
+  - Goal: `/cmd_vel` moves robot in Gazebo and odom is produced.
+- Phase 3 - ROS2 control hardware interface
+  - Create package `amr_hardware` implementing hardware_interface::SystemInterface.
+  - write publishes `/amr/wheel_cmd_left` and `/amr/wheel_cmd_right` in rad/s.
+  - read consumes `/amr/wheel_state` for position and velocity.
+  - Optional: handle `/amr/enable`, `/amr/estop`, `/amr/clear_fault`.
+  - Goal: diff_drive_controller commands drive STM wheels.
+- Phase 4 - Odometry and state estimation
+  - Use diff_drive_controller odom first, then fuse IMU with robot_localization.
+  - Ensure TF chain map -> odom -> base_link -> sensors.
+  - Goal: stable odom and consistent TF.
+- Phase 5 - Sensor bring-up
+  - Lidar driver publishing /scan.
+  - Depth camera topics and pointcloud.
+  - Static transforms for lidar and camera relative to base.
+  - Goal: stable sensor data in RViz with correct frames.
+- Phase 6 - SLAM and Nav2 on dev PC
+  - Run slam_toolbox to build map.
+  - Configure Nav2 for footprint, inflation, costmaps.
+  - Goal: teleop to map to Nav2 goal.
+- Phase 7 - Split compute
+  - Jetson runs drivers and micro-ROS agent.
+  - Dev PC runs Nav2, slam_toolbox, and RViz.
+  - Ensure network config and time sync are stable.
+
+---
+
 ## Simulation & Navigation Breakdown - Foxy, Gazebo Classic
 This section expands Weeks 18-23 with explicit simulation tasks using Gazebo Classic, ros2_control, slam_toolbox, and Nav2.
 
@@ -85,7 +122,7 @@ This section expands Weeks 18-23 with explicit simulation tasks using Gazebo Cla
 | 18 | Verify Gazebo Classic + RViz2 in devpc; create `amr_description`, `amr_gazebo`, `amr_bringup` packages; load a simple world | Stub diff_drive_controller config + controller_manager launch | N/A | N/A | Workspace scaffolding + Gazebo launches |
 | 19 | Keep sim on dev PC; document Jetson limitations for sim | N/A | N/A | N/A | Jetson stays headless; sim remains on PC |
 | 20 | Validate ROS graph over Wi-Fi between dev PC and Jetson; remote RViz2 from PC | N/A | N/A | N/A | Networked ROS2 verified (RViz on PC with Jetson sensors) |
-| 21 | Build base URDF/Xacro with lidar and IMU frames; spawn robot in Gazebo Classic; verify TF tree | Add ros2_control tags + transmissions; bring up diff_drive_controller; verify `/joint_states` and `/cmd_vel` | N/A | N/A | Robot spawns in Gazebo and drives via /cmd_vel |
+| 21 | Base URDF/Xacro with LiDAR + depth frames and inertials added; Gazebo launch + spawn added (verification pending) | ros2_control tags + controller YAML added; controller bring-up pending | N/A | N/A | Spawn + `/cmd_vel` drive pending verification |
 | 22 | Add lidar plugin; verify `/scan`; add static transforms and base_link alignment | Tune wheel separation/radius, update controller params | Run slam_toolbox in sim; save map | Bring up Nav2 in sim; set params and run go-to-pose; test IMU fusion if simulated | Map saved; Nav2 go-to-pose works in sim |
 | 23 | Run same pipeline on real sensors (or bag playback); compare sim vs real frames | Switch to real odom source; validate wheel_state->odom | Run slam_toolbox on real LiDAR; save a real map | Tune costmaps/footprint, recovery behaviors, and velocity limits; verify IMU fusion | Stable nav on real robot for 10-15 min |
 

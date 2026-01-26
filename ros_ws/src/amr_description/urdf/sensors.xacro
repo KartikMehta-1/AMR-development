@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="sensors">
+    <link name="lidar_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="${lidar_height}" radius="0.04"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="${lidar_height}" radius="0.04"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${lidar_mass}"/>
+        <inertia
+          ixx="${(1.0/12.0) * lidar_mass * (3 * 0.04 * 0.04 + lidar_height * lidar_height)}"
+          iyy="${(1.0/12.0) * lidar_mass * (3 * 0.04 * 0.04 + lidar_height * lidar_height)}"
+          izz="${0.5 * lidar_mass * 0.04 * 0.04}"
+          ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+    </link>
+
+    <joint name="lidar_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="lidar_link"/>
+      <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="3.14159 0 0"/>
+    </joint>
+
+    <link name="camera_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${camera_length} ${camera_width} ${camera_height}"/>
+        </geometry>
+        <material name="blue">
+          <color rgba="0.2 0.2 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${camera_length} ${camera_width} ${camera_height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${camera_mass}"/>
+        <inertia
+          ixx="${(1.0/12.0) * camera_mass * (camera_width * camera_width + camera_height * camera_height)}"
+          iyy="${(1.0/12.0) * camera_mass * (camera_length * camera_length + camera_height * camera_height)}"
+          izz="${(1.0/12.0) * camera_mass * (camera_length * camera_length + camera_width * camera_width)}"
+          ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+    </link>
+
+    <joint name="camera_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="camera_link"/>
+      <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>
