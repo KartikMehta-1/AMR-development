@@ -12,9 +12,12 @@ ARG YDLIDAR_SDK_BRANCH=master
 ARG MICROROS_AGENT_BRANCH=foxy
 ARG MICROROS_MSGS_BRANCH=foxy
 ARG IMAGE_COMMON_BRANCH=foxy
+ARG IMAGE_TRANSPORT_PLUGINS_BRANCH=ros2
 ARG VISION_OPENCV_BRANCH=foxy
 ARG DIAGNOSTICS_BRANCH=ros2
 ARG PYTHON_CMAKE_MODULE_BRANCH=foxy
+ARG ROS2_CONTROL_BRANCH=foxy
+ARG ROS2_CONTROLLERS_BRANCH=foxy
 ARG INSTALL_ROS_DEBS=auto
 ARG BUILD_REALSENSE=auto
 
@@ -40,7 +43,7 @@ RUN set -eux; \
     OPENCV_DEB="libopencv-dev"; \
     BUILD_RS="${BUILD_REALSENSE}"; \
     if [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; then \
-      ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-xacro"; \
+      ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-image-transport-plugins ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-xacro"; \
     fi; \
     if [ "${BUILD_RS}" = "auto" ]; then \
       if [ "${OS_CODENAME}" = "bionic" ] && [ "${TARGETARCH}" = "arm64" ]; then BUILD_RS=1; \
@@ -50,7 +53,7 @@ RUN set -eux; \
     EXTRA_REALSENSE_DEBS=""; \
     if [ "${BUILD_RS}" = "1" ] && [ "${OS_CODENAME}" = "bionic" ]; then \
       OPENCV_DEB=""; \
-      EXTRA_REALSENSE_DEBS="libboost-dev libboost-python-dev python3-numpy python3-opencv"; \
+      EXTRA_REALSENSE_DEBS="libboost-dev libboost-python-dev python3-numpy python3-opencv libjpeg-dev libpng-dev libtiff-dev libtheora-dev liblz4-dev"; \
     elif [ "${OS_CODENAME}" = "bionic" ]; then \
       OPENCV_DEB=""; \
     fi; \
@@ -136,8 +139,14 @@ RUN set -eux; \
     if [ "${BUILD_RS}" = "1" ] && [ "${OS_CODENAME}" = "bionic" ]; then \
       git clone --branch ${IMAGE_COMMON_BRANCH} --depth 1 \
         https://github.com/ros-perception/image_common.git; \
+      git clone --branch ${IMAGE_TRANSPORT_PLUGINS_BRANCH} --depth 1 \
+        https://github.com/ros-perception/image_transport_plugins.git; \
       git clone --branch ${VISION_OPENCV_BRANCH} --depth 1 \
         https://github.com/ros-perception/vision_opencv.git; \
+      git clone --branch ${ROS2_CONTROL_BRANCH} --depth 1 \
+        https://github.com/ros-controls/ros2_control.git; \
+      git clone --branch ${ROS2_CONTROLLERS_BRANCH} --depth 1 \
+        https://github.com/ros-controls/ros2_controllers.git; \
       git clone --branch ${DIAGNOSTICS_BRANCH} --depth 1 \
         https://github.com/ros/diagnostics.git; \
       git clone --branch ${PYTHON_CMAKE_MODULE_BRANCH} --depth 1 \

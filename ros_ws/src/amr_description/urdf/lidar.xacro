@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-  <xacro:macro name="sensors">
+  <xacro:macro name="lidar_sensor">
     <link name="lidar_link">
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -67,38 +67,5 @@
         </plugin>
       </sensor>
     </gazebo>
-
-    <link name="camera_link">
-      <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <box size="${camera_length} ${camera_width} ${camera_height}"/>
-        </geometry>
-        <material name="blue">
-          <color rgba="0.2 0.2 0.8 1.0"/>
-        </material>
-      </visual>
-      <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <box size="${camera_length} ${camera_width} ${camera_height}"/>
-        </geometry>
-      </collision>
-      <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <mass value="${camera_mass}"/>
-        <inertia
-          ixx="${(1.0/12.0) * camera_mass * (camera_width * camera_width + camera_height * camera_height)}"
-          iyy="${(1.0/12.0) * camera_mass * (camera_length * camera_length + camera_height * camera_height)}"
-          izz="${(1.0/12.0) * camera_mass * (camera_length * camera_length + camera_width * camera_width)}"
-          ixy="0.0" ixz="0.0" iyz="0.0"/>
-      </inertial>
-    </link>
-
-    <joint name="camera_joint" type="fixed">
-      <parent link="base_link"/>
-      <child link="camera_link"/>
-      <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
-    </joint>
   </xacro:macro>
 </robot>

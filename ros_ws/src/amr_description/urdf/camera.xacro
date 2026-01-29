@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="camera_sensor">
+    <link name="camera_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${camera_length} ${camera_width} ${camera_height}"/>
+        </geometry>
+        <material name="blue">
+          <color rgba="0.2 0.2 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${camera_length} ${camera_width} ${camera_height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="${camera_mass}"/>
+        <inertia
+          ixx="${(1.0/12.0) * camera_mass * (camera_width * camera_width + camera_height * camera_height)}"
+          iyy="${(1.0/12.0) * camera_mass * (camera_length * camera_length + camera_height * camera_height)}"
+          izz="${(1.0/12.0) * camera_mass * (camera_length * camera_length + camera_width * camera_width)}"
+          ixy="0.0" ixz="0.0" iyz="0.0"/>
+      </inertial>
+    </link>
+
+    <joint name="camera_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="camera_link"/>
+      <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Optical frame for correct image orientation (REP-103) -->
+    <link name="camera_optical_link"/>
+    <joint name="camera_optical_joint" type="fixed">
+      <parent link="camera_link"/>
+      <child link="camera_optical_link"/>
+      <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+    </joint>
+
+    <!-- Gazebo camera sensors (approximate RealSense D455) -->
+    <gazebo reference="camera_link">
+      <sensor name="camera_color" type="camera">
+        <pose>0 0 0 0 0 0</pose>
+        <visualize>true</visualize>
+        <update_rate>30</update_rate>
+        <camera>
+          <horizontal_fov>1.50</horizontal_fov>
+          <image>
+            <width>1280</width>
+            <height>720</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>20.0</far>
+          </clip>
+        </camera>
+        <plugin name="gazebo_ros_camera" filename="libgazebo_ros_camera.so">
+          <ros>
+            <namespace>/</namespace>
+            <remapping>image_raw:=/camera/color/image_raw</remapping>
+            <remapping>camera_info:=/camera/color/camera_info</remapping>
+          </ros>
+          <frame_name>camera_optical_link</frame_name>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <gazebo reference="camera_link">
+      <sensor name="camera_depth" type="depth">
+        <pose>0 0 0 0 0 0</pose>
+        <visualize>false</visualize>
+        <update_rate>30</update_rate>
+        <camera>
+          <horizontal_fov>1.50</horizontal_fov>
+          <image>
+            <width>848</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>12.0</far>
+          </clip>
+        </camera>
+        <plugin name="gazebo_ros_depth_camera" filename="libgazebo_ros_depth_camera.so">
+          <ros>
+            <namespace>/</namespace>
+            <remapping>image_raw:=/camera/depth/image_rect_raw</remapping>
+            <remapping>camera_info:=/camera/depth/camera_info</remapping>
+          </ros>
+          <frame_name>camera_optical_link</frame_name>
+        </plugin>
+      </sensor>
+    </gazebo>
+  </xacro:macro>
+</robot>

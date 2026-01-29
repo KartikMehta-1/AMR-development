@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<library path="amr_hardware">
+  <class
+      name="amr_hardware/AMRHardware"
+      type="amr_hardware::AMRHardware"
+      base_class_type="hardware_interface::SystemInterface">
+    <description>AMR hardware interface using micro-ROS topics.</description>
+  </class>
+</library>

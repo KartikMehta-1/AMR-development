@@ -13,6 +13,14 @@
   </xacro:macro>
 
   <xacro:macro name="base_link">
+    <link name="base_footprint"/>
+
+    <joint name="base_footprint_joint" type="fixed">
+      <parent link="base_footprint"/>
+      <child link="base_link"/>
+      <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+    </joint>
+
     <link name="base_link"/>
 
     <joint name="chassis_joint" type="fixed">
@@ -45,9 +53,9 @@
       </visual>
       <xacro:if value="${enable_base_collision}">
         <collision>
-          <origin xyz="0 0 ${plate_thickness * 0.5 + pillar_height * 0.5}" rpy="0 0 0"/>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
           <geometry>
-            <box size="${plate_diameter} ${plate_diameter} ${base_height_total}"/>
+            <cylinder length="${plate_thickness}" radius="${plate_radius}"/>
           </geometry>
         </collision>
       </xacro:if>

@@ -4,12 +4,14 @@
   <xacro:include filename="base.xacro"/>
   <xacro:include filename="casters.xacro"/>
   <xacro:include filename="wheels.xacro"/>
-  <xacro:include filename="sensors.xacro"/>
+  <xacro:include filename="lidar.xacro"/>
+  <xacro:include filename="camera.xacro"/>
   <xacro:include filename="ros2_control.xacro"/>
 
   <xacro:base_link/>
   <xacro:casters/>
   <xacro:wheels/>
-  <xacro:sensors/>
+  <xacro:lidar_sensor/>
+  <xacro:camera_sensor/>
   <xacro:ros2_control_block/>
 </robot>

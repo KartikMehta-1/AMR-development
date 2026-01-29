@@ -71,17 +71,11 @@
     <gazebo reference="left_wheel_link">
       <mu1>${wheel_mu1}</mu1>
       <mu2>${wheel_mu2}</mu2>
-      <fdir1>${wheel_fdir1}</fdir1>
-      <slip1>${wheel_slip1}</slip1>
-      <slip2>${wheel_slip2}</slip2>
     </gazebo>
 
     <gazebo reference="right_wheel_link">
       <mu1>${wheel_mu1}</mu1>
       <mu2>${wheel_mu2}</mu2>
-      <fdir1>${wheel_fdir1}</fdir1>
-      <slip1>${wheel_slip1}</slip1>
-      <slip2>${wheel_slip2}</slip2>
     </gazebo>
   </xacro:macro>
 </robot>

@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -31,29 +32,44 @@ def generate_launch_description():
         ],
     )
 
-    spawn_entity = Node(
-        package="gazebo_ros",
-        executable="spawn_entity.py",
-        arguments=["-topic", "robot_description", "-entity", "amr"],
-        output="screen",
+    spawn_entity = TimerAction(
+        period=2.0,
+        actions=[
+            Node(
+                package="gazebo_ros",
+                executable="spawn_entity.py",
+                arguments=["-topic", "robot_description", "-entity", "amr"],
+                output="screen",
+            )
+        ],
     )
 
-    joint_state_broadcaster_spawner = Node(
-        package="controller_manager",
-        executable="spawner.py",
-        arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
-        output="screen",
+    joint_state_broadcaster_spawner = TimerAction(
+        period=4.0,
+        actions=[
+            Node(
+                package="controller_manager",
+                executable="spawner.py",
+                arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+                output="screen",
+            )
+        ],
     )
 
-    diff_drive_controller_spawner = Node(
-        package="controller_manager",
-        executable="spawner.py",
-        arguments=["diff_drive_controller", "--controller-manager", "/controller_manager"],
-        output="screen",
+    diff_drive_controller_spawner = TimerAction(
+        period=5.0,
+        actions=[
+            Node(
+                package="controller_manager",
+                executable="spawner.py",
+                arguments=["diff_drive_controller", "--controller-manager", "/controller_manager"],
+                output="screen",
+            )
+        ],
     )
 
     default_world = PathJoinSubstitution(
-        [FindPackageShare("gazebo_ros"), "worlds", "empty.world"]
+        [FindPackageShare("amr_description"), "worlds", "obstacles.world"]
     )
 
     return LaunchDescription(

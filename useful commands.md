@@ -115,12 +115,24 @@ cd /workspaces/ros_ws
 colcon build --symlink-install
 source /opt/ros/foxy/setup.bash
 source install/setup.bash
+pkill -f gzserver; pkill -f gzclient
 ros2 launch amr_description gazebo.launch.py
+
 ```
 
 ## Exec into Dev PC container
 ```bash
 docker exec -it ros2_dev /entrypoint.sh bash
+```
+
+## Run teleop for gazebo model
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \ --ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel_unstamped
+```
+
+## Run Rviz
+```bash
+rviz2 -d /opt/ros/rviz/amr_lidar.rviz
 ```
 
 ## Stop Jetson container
