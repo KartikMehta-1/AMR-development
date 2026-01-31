@@ -1,6 +1,7 @@
 ARG BASE_IMAGE=ros:foxy-ros-base
-# Jetson Nano (JetPack 4.6.5 / L4T r32.7.6): use
-# --build-arg BASE_IMAGE=dustynv/ros:foxy-ros-base-l4t-r32.7.6
+# Jetson Nano (JetPack 4.6.5 / L4T r32.7.6): dustynv doesn't publish r32.7.6 tags.
+# Use the latest available JetPack 4 tag instead:
+# --build-arg BASE_IMAGE=dustynv/ros:foxy-ros-base-l4t-r32.7.1
 FROM ${BASE_IMAGE}
 
 ARG ROS_DISTRO=foxy
@@ -12,12 +13,17 @@ ARG YDLIDAR_SDK_BRANCH=master
 ARG MICROROS_AGENT_BRANCH=foxy
 ARG MICROROS_MSGS_BRANCH=foxy
 ARG IMAGE_COMMON_BRANCH=foxy
-ARG IMAGE_TRANSPORT_PLUGINS_BRANCH=ros2
 ARG VISION_OPENCV_BRANCH=foxy
+ARG XACRO_BRANCH=2.0.7
+ARG CONTROL_MSGS_BRANCH=foxy-devel
 ARG DIAGNOSTICS_BRANCH=ros2
 ARG PYTHON_CMAKE_MODULE_BRANCH=foxy
+ARG ANGLES_BRANCH=foxy-devel
+ARG ACKERMANN_MSGS_BRANCH=ros2
 ARG ROS2_CONTROL_BRANCH=foxy
 ARG ROS2_CONTROLLERS_BRANCH=foxy
+ARG REALTIME_TOOLS_BRANCH=foxy-devel
+ARG CONTROL_TOOLBOX_BRANCH=foxy
 ARG INSTALL_ROS_DEBS=auto
 ARG BUILD_REALSENSE=auto
 
@@ -26,16 +32,21 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-RUN rm -f /etc/apt/sources.list.d/ros2.list /etc/apt/sources.list.d/ros2-latest.list \
-    && apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    gnupg \
-    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-      | gpg --dearmor --yes --batch --no-tty -o /usr/share/keyrings/ros-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu bionic main" \
-      > /etc/apt/sources.list.d/ros2.list \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    rm -f /etc/apt/sources.list.d/ros2.list /etc/apt/sources.list.d/ros2-latest.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      gnupg; \
+    OS_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
+    if [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; then \
+      curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+        | gpg --dearmor --yes --batch --no-tty -o /usr/share/keyrings/ros-archive-keyring.gpg; \
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] https://packages.ros.org/ros2/ubuntu ${OS_CODENAME} main" \
+        > /etc/apt/sources.list.d/ros2.list; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
     OS_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
@@ -43,7 +54,7 @@ RUN set -eux; \
     OPENCV_DEB="libopencv-dev"; \
     BUILD_RS="${BUILD_REALSENSE}"; \
     if [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; then \
-      ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-image-transport-plugins ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-xacro"; \
+      ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-xacro"; \
     fi; \
     if [ "${BUILD_RS}" = "auto" ]; then \
       if [ "${OS_CODENAME}" = "bionic" ] && [ "${TARGETARCH}" = "arm64" ]; then BUILD_RS=1; \
@@ -53,7 +64,7 @@ RUN set -eux; \
     EXTRA_REALSENSE_DEBS=""; \
     if [ "${BUILD_RS}" = "1" ] && [ "${OS_CODENAME}" = "bionic" ]; then \
       OPENCV_DEB=""; \
-      EXTRA_REALSENSE_DEBS="libboost-dev libboost-python-dev python3-numpy python3-opencv libjpeg-dev libpng-dev libtiff-dev libtheora-dev liblz4-dev"; \
+      EXTRA_REALSENSE_DEBS="libboost-dev libboost-python-dev python3-numpy python3-opencv"; \
     elif [ "${OS_CODENAME}" = "bionic" ]; then \
       OPENCV_DEB=""; \
     fi; \
@@ -81,6 +92,7 @@ RUN set -eux; \
       libxinerama-dev \
       libxcursor-dev \
       libxi-dev \
+      libcap-dev \
       libeigen3-dev \
       libfmt-dev \
       ${OPENCV_DEB} \
@@ -136,19 +148,33 @@ RUN set -eux; \
       elif [ "${OS_CODENAME}" = "bionic" ]; then BUILD_RS=0; \
       else BUILD_RS=1; fi; \
     fi; \
+    if [ "${OS_CODENAME}" = "bionic" ]; then \
+      git clone --branch ${XACRO_BRANCH} --depth 1 \
+        https://github.com/ros/xacro.git; \
+    fi; \
     if [ "${BUILD_RS}" = "1" ] && [ "${OS_CODENAME}" = "bionic" ]; then \
       git clone --branch ${IMAGE_COMMON_BRANCH} --depth 1 \
         https://github.com/ros-perception/image_common.git; \
-      git clone --branch ${IMAGE_TRANSPORT_PLUGINS_BRANCH} --depth 1 \
-        https://github.com/ros-perception/image_transport_plugins.git; \
       git clone --branch ${VISION_OPENCV_BRANCH} --depth 1 \
         https://github.com/ros-perception/vision_opencv.git; \
+      git clone --branch ${CONTROL_MSGS_BRANCH} --depth 1 \
+        https://github.com/ros-controls/control_msgs.git; \
       git clone --branch ${ROS2_CONTROL_BRANCH} --depth 1 \
         https://github.com/ros-controls/ros2_control.git; \
       git clone --branch ${ROS2_CONTROLLERS_BRANCH} --depth 1 \
         https://github.com/ros-controls/ros2_controllers.git; \
+      git clone --branch ${CONTROL_TOOLBOX_BRANCH} --depth 1 \
+        https://github.com/ros-controls/control_toolbox.git; \
+      git clone --depth 1 \
+        https://github.com/ros-controls/ros2_control_cmake.git; \
+      git clone --branch ${REALTIME_TOOLS_BRANCH} --depth 1 \
+        https://github.com/ros-controls/realtime_tools.git; \
       git clone --branch ${DIAGNOSTICS_BRANCH} --depth 1 \
         https://github.com/ros/diagnostics.git; \
+      git clone --branch ${ANGLES_BRANCH} --depth 1 \
+        https://github.com/ros/angles.git; \
+      git clone --branch ${ACKERMANN_MSGS_BRANCH} --depth 1 \
+        https://github.com/ros-drivers/ackermann_msgs.git; \
       git clone --branch ${PYTHON_CMAKE_MODULE_BRANCH} --depth 1 \
         https://github.com/ros2/python_cmake_module.git; \
       if [ -d diagnostics/diagnostic_remote_logging ]; then \
@@ -159,6 +185,41 @@ RUN set -eux; \
       git clone --branch ${REALSENSE_ROS_BRANCH} --depth 1 \
         https://github.com/IntelRealSense/realsense-ros.git; \
     fi
+RUN set -eux; \
+    hdr_dir="/opt/ros/driver_ws/src/realtime_tools/realtime_tools/include/realtime_tools"; \
+    if [ ! -d "${hdr_dir}" ] && [ -d "/opt/ros/driver_ws/src/realtime_tools/include/realtime_tools" ]; then \
+      hdr_dir="/opt/ros/driver_ws/src/realtime_tools/include/realtime_tools"; \
+    fi; \
+    if [ -d "${hdr_dir}" ] && [ -f "${hdr_dir}/realtime_publisher.hpp" ] && [ ! -f "${hdr_dir}/realtime_publisher.h" ]; then \
+      ln -s realtime_publisher.hpp "${hdr_dir}/realtime_publisher.h"; \
+    fi; \
+    if [ -d "${hdr_dir}" ] && [ -f "${hdr_dir}/realtime_buffer.hpp" ] && [ ! -f "${hdr_dir}/realtime_buffer.h" ]; then \
+      ln -s realtime_buffer.hpp "${hdr_dir}/realtime_buffer.h"; \
+    fi; \
+    if [ -d "${hdr_dir}" ] && [ -f "${hdr_dir}/realtime_box.hpp" ] && [ ! -f "${hdr_dir}/realtime_box.h" ]; then \
+      ln -s realtime_box.hpp "${hdr_dir}/realtime_box.h"; \
+    fi; \
+    if [ -d "${hdr_dir}" ] && [ ! -f "${hdr_dir}/realtime_box.h" ] && [ -f "${hdr_dir}/realtime_box.hpp" ]; then \
+      printf '%s\n' \
+        '#pragma once' \
+        '#if __has_include("realtime_tools/realtime_box.hpp")' \
+        '#include "realtime_tools/realtime_box.hpp"' \
+        '#endif' \
+        > "${hdr_dir}/realtime_box.h"; \
+    fi
+RUN set -eux; \
+    for hdr in /opt/ros/driver_ws/src/realtime_tools/**/include/realtime_tools/realtime_box.hpp; do \
+      [ -f "$hdr" ] || continue; \
+      dir="$(dirname "$hdr")"; \
+      if [ ! -f "${dir}/realtime_box.h" ]; then \
+        printf '%s\n' \
+          '#pragma once' \
+          '#if __has_include("realtime_tools/realtime_box.hpp")' \
+          '#include "realtime_tools/realtime_box.hpp"' \
+          '#endif' \
+          > "${dir}/realtime_box.h"; \
+      fi; \
+    done
 RUN git clone --branch ${YDLIDAR_ROS_BRANCH} --depth 1 \
     https://github.com/YDLIDAR/ydlidar_ros2_driver.git
 RUN git clone --branch ${MICROROS_AGENT_BRANCH} --depth 1 \
@@ -196,11 +257,234 @@ RUN /bin/bash -lc 'set -ex; \
       exit 1; \
     fi; \
     source "$setup"; \
-    colcon build --merge-install --cmake-args \
+    colcon build --merge-install --packages-select \
+      ros2_control_cmake \
+      realtime_tools \
+      control_msgs \
+      controller_manager_msgs \
+      ros2_control_test_assets \
+      hardware_interface \
+      controller_interface \
+      transmission_interface \
+      controller_manager \
+      --cmake-args \
       -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF \
       -DCMAKE_EXE_LINKER_FLAGS=-lfmt \
-      -DCMAKE_SHARED_LINKER_FLAGS=-lfmt; \
-    rm -rf build log'
+      -DCMAKE_SHARED_LINKER_FLAGS=-lfmt'
+
+RUN python3 - <<'PY'
+from pathlib import Path
+import shutil
+
+install_inc = Path("/opt/ros/driver_ws/install/include/realtime_tools")
+foxy_inc = Path("/opt/ros/foxy/install/include/realtime_tools")
+src_candidates = [
+    Path("/opt/ros/driver_ws/src/realtime_tools/realtime_tools/include/realtime_tools"),
+    Path("/opt/ros/driver_ws/src/realtime_tools/include/realtime_tools"),
+]
+
+src_dir = next((p for p in src_candidates if p.is_dir()), None)
+compat = """#pragma once
+#include <mutex>
+#include <utility>
+
+namespace realtime_tools {
+template <class T>
+class RealtimeBox {
+ public:
+  RealtimeBox() = default;
+  explicit RealtimeBox(const T & value) : value_(value) {}
+  explicit RealtimeBox(T && value) : value_(std::move(value)) {}
+
+  bool set(const T & value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    value_ = value;
+    return true;
+  }
+  bool set(T && value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    value_ = std::move(value);
+    return true;
+  }
+  T get() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return value_;
+  }
+  bool try_get(T & out) const {
+    if (!mutex_.try_lock()) {
+      return false;
+    }
+    out = value_;
+    mutex_.unlock();
+    return true;
+  }
+
+  void writeFromNonRT(const T & value) { set(value); }
+  void writeFromNonRT(T && value) { set(std::move(value)); }
+  const T * readFromRT() const { return &value_; }
+  T * readFromNonRT() { return &value_; }
+
+ private:
+  mutable std::mutex mutex_;
+  T value_{};
+};
+}  // namespace realtime_tools
+"""
+for target in (install_inc, foxy_inc):
+    if not src_dir:
+        continue
+    target.mkdir(parents=True, exist_ok=True)
+    for p in src_dir.glob("*"):
+        if p.is_file() and p.suffix in {".hpp", ".h"}:
+            shutil.copy2(p, target / p.name)
+
+for d in [p for p in [install_inc, foxy_inc, src_dir] if p and p.is_dir()]:
+    box_hpp = d / "realtime_box.hpp"
+    if not box_hpp.exists():
+        box_hpp.write_text(compat)
+    for name in ("realtime_box", "realtime_buffer", "realtime_publisher"):
+        h = d / f"{name}.h"
+        hpp = d / f"{name}.hpp"
+        if not h.exists() and hpp.exists():
+            h.write_text(
+                "#pragma once\n"
+                f"#if __has_include(\"realtime_tools/{name}.hpp\")\n"
+                f"#include \"realtime_tools/{name}.hpp\"\n"
+                "#endif\n"
+            )
+PY
+
+RUN cat <<'EOS' >/tmp/build_ros2_control_controllers.sh
+#!/bin/bash
+set -ex
+setup=""
+for s in \
+  /opt/ros/${ROS_DISTRO}/setup.sh \
+  /opt/ros/${ROS_DISTRO}/setup.bash \
+  /opt/ros/${ROS_DISTRO}/install/setup.sh \
+  /opt/ros/${ROS_DISTRO}/install/setup.bash; do
+  if [ -f "$s" ]; then setup="$s"; break; fi
+done
+if [ -z "$setup" ]; then
+  echo "ROS setup not found under /opt/ros/${ROS_DISTRO}" >&2
+  ls -la /opt/ros/${ROS_DISTRO} || true
+  ls -la /opt/ros/${ROS_DISTRO}/install || true
+  exit 1
+fi
+source "$setup"
+if [ -f /opt/ros/driver_ws/install/setup.bash ]; then
+  source /opt/ros/driver_ws/install/setup.bash
+elif [ -f /opt/ros/driver_ws/install/setup.sh ]; then
+  source /opt/ros/driver_ws/install/setup.sh
+fi
+src_dir=""
+for cand in \
+  /opt/ros/driver_ws/src/realtime_tools/realtime_tools/include/realtime_tools \
+  /opt/ros/driver_ws/src/realtime_tools/include/realtime_tools; do
+  if [ -d "$cand" ]; then
+    src_dir="$cand"
+    break
+  fi
+done
+if [ -n "$src_dir" ]; then
+  if [ ! -f "$src_dir/realtime_box.hpp" ]; then
+    cat > "$src_dir/realtime_box.hpp" <<'EOF'
+#pragma once
+#include <mutex>
+#include <utility>
+
+namespace realtime_tools {
+template <class T>
+class RealtimeBox {
+ public:
+  RealtimeBox() = default;
+  explicit RealtimeBox(const T & value) : value_(value) {}
+  explicit RealtimeBox(T && value) : value_(std::move(value)) {}
+
+  bool set(const T & value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    value_ = value;
+    return true;
+  }
+  bool set(T && value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    value_ = std::move(value);
+    return true;
+  }
+  T get() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return value_;
+  }
+  bool try_get(T & out) const {
+    if (!mutex_.try_lock()) {
+      return false;
+    }
+    out = value_;
+    mutex_.unlock();
+    return true;
+  }
+
+  void writeFromNonRT(const T & value) { set(value); }
+  void writeFromNonRT(T && value) { set(std::move(value)); }
+  const T * readFromRT() const { return &value_; }
+  T * readFromNonRT() { return &value_; }
+
+ private:
+  mutable std::mutex mutex_;
+  T value_{};
+};
+}  // namespace realtime_tools
+EOF
+  fi
+  for target in /opt/ros/driver_ws/install/include/realtime_tools /opt/ros/foxy/install/include/realtime_tools; do
+    mkdir -p "$target"
+    cp -a "$src_dir/"*.hpp "$target/" 2>/dev/null || true
+    cp -a "$src_dir/"*.h "$target/" 2>/dev/null || true
+  done
+fi
+rt_dirs=(
+  /opt/ros/driver_ws/install/include/realtime_tools
+  /opt/ros/driver_ws/src/realtime_tools/include/realtime_tools
+  /opt/ros/driver_ws/src/realtime_tools/realtime_tools/include/realtime_tools
+  /opt/ros/foxy/install/include/realtime_tools
+)
+for dir in "${rt_dirs[@]}"; do
+  if [ -d "$dir" ]; then
+    for h in realtime_box realtime_buffer realtime_publisher; do
+      if [ ! -f "$dir/${h}.h" ] && [ -f "$dir/${h}.hpp" ]; then
+        cat >"$dir/${h}.h" <<EOF
+#pragma once
+#if __has_include("realtime_tools/${h}.hpp")
+#include "realtime_tools/${h}.hpp"
+#endif
+EOF
+      fi
+    done
+  fi
+done
+echo "realtime_tools headers (driver_ws install):"
+ls -la /opt/ros/driver_ws/install/include/realtime_tools || true
+echo "realtime_tools headers (foxy install):"
+ls -la /opt/ros/foxy/install/include/realtime_tools || true
+colcon build --merge-install --packages-select \
+  diff_drive_controller \
+  joint_state_broadcaster \
+  forward_command_controller \
+  force_torque_sensor_broadcaster \
+  --cmake-args \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTING=OFF \
+  -DCMAKE_EXE_LINKER_FLAGS=-lfmt \
+  -DCMAKE_SHARED_LINKER_FLAGS=-lfmt
+colcon build --merge-install --cmake-args \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTING=OFF \
+  -DCMAKE_EXE_LINKER_FLAGS=-lfmt \
+  -DCMAKE_SHARED_LINKER_FLAGS=-lfmt
+rm -rf build log
+EOS
+RUN /bin/bash /tmp/build_ros2_control_controllers.sh && rm /tmp/build_ros2_control_controllers.sh
 
 ARG USERNAME=dev
 ARG UID=1000

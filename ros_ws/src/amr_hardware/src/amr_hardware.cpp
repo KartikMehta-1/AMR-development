@@ -8,17 +8,15 @@
 
 namespace amr_hardware {
 
-hardware_interface::CallbackReturn AMRHardware::on_init(
+hardware_interface::return_type AMRHardware::configure(
     const hardware_interface::HardwareInfo & info) {
-  if (hardware_interface::SystemInterface::on_init(info) !=
-      hardware_interface::CallbackReturn::SUCCESS) {
-    return hardware_interface::CallbackReturn::ERROR;
-  }
+  info_ = info;
 
   if (info_.joints.size() != 2) {
     RCLCPP_ERROR(rclcpp::get_logger("amr_hardware"),
                  "Expected 2 joints, got %zu", info_.joints.size());
-    return hardware_interface::CallbackReturn::ERROR;
+    status_ = hardware_interface::status::UNKNOWN;
+    return hardware_interface::return_type::ERROR;
   }
 
   left_joint_ = info_.joints[0].name;
@@ -50,7 +48,8 @@ hardware_interface::CallbackReturn AMRHardware::on_init(
   executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   executor_->add_node(node_);
 
-  return hardware_interface::CallbackReturn::SUCCESS;
+  status_ = hardware_interface::status::CONFIGURED;
+  return hardware_interface::return_type::OK;
 }
 
 std::vector<hardware_interface::StateInterface> AMRHardware::export_state_interfaces() {
@@ -75,8 +74,7 @@ std::vector<hardware_interface::CommandInterface> AMRHardware::export_command_in
   return command_interfaces;
 }
 
-hardware_interface::CallbackReturn AMRHardware::on_activate(
-    const rclcpp_lifecycle::State & /*previous_state*/) {
+hardware_interface::return_type AMRHardware::start() {
   hw_positions_[0] = 0.0;
   hw_positions_[1] = 0.0;
   hw_velocities_[0] = 0.0;
@@ -85,22 +83,21 @@ hardware_interface::CallbackReturn AMRHardware::on_activate(
   hw_commands_[1] = 0.0;
 
   start_spinning();
-  return hardware_interface::CallbackReturn::SUCCESS;
-}
-
-hardware_interface::CallbackReturn AMRHardware::on_deactivate(
-    const rclcpp_lifecycle::State & /*previous_state*/) {
-  stop_spinning();
-  return hardware_interface::CallbackReturn::SUCCESS;
-}
-
-hardware_interface::return_type AMRHardware::read(
-    const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+  status_ = hardware_interface::status::STARTED;
   return hardware_interface::return_type::OK;
 }
 
-hardware_interface::return_type AMRHardware::write(
-    const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+hardware_interface::return_type AMRHardware::stop() {
+  stop_spinning();
+  status_ = hardware_interface::status::STOPPED;
+  return hardware_interface::return_type::OK;
+}
+
+hardware_interface::return_type AMRHardware::read() {
+  return hardware_interface::return_type::OK;
+}
+
+hardware_interface::return_type AMRHardware::write() {
   if (!left_cmd_pub_ || !right_cmd_pub_) {
     return hardware_interface::return_type::ERROR;
   }
@@ -114,6 +111,14 @@ hardware_interface::return_type AMRHardware::write(
   right_cmd_pub_->publish(right_msg);
 
   return hardware_interface::return_type::OK;
+}
+
+std::string AMRHardware::get_name() const {
+  return info_.name.empty() ? std::string("amr_hardware") : info_.name;
+}
+
+hardware_interface::status AMRHardware::get_status() const {
+  return status_;
 }
 
 void AMRHardware::handle_joint_state(const sensor_msgs::msg::JointState::SharedPtr msg) {

@@ -52,6 +52,21 @@ docker run -it --rm \
 '
 ```
 
+## Launch AMR hardware bringup (Jetson)
+```bash
+docker run --rm -it --net=host --privileged --runtime nvidia \
+  -e ROS_DOMAIN_ID=0 \
+  -v ~/AMR-development/ros_ws:/workspaces/ros_ws \
+  --name amr_foxy \
+  amr/ros2-foxy-jetson:arm64 \
+  ros2 launch amr_description hardware.launch.py \
+    use_sim_time:=false \
+    agent_dev:=/dev/ttyACM0 \
+    agent_baud:=460800 \
+    start_lidar:=false \
+    start_camera:=false
+```
+
 ## Exec into Jetson container
 ```bash
 ssh -t kartik@192.168.1.9 'docker exec -it ros2_jetson /entrypoint.sh bash'

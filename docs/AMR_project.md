@@ -1,7 +1,7 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-01-24  
+**Last Updated:** 2026-01-30  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
@@ -9,10 +9,10 @@
 ## Status Summary
 - Overall: On track with mechanical changes and tooling in progress
 - Progress: 16/42 weeks complete (~38%)
-- Recent: Foxy driver + devpc Docker images built; micro-ROS agent and YDLidar running in containers; `/scan` visualized in RViz2 (best_effort QoS); workspace build verified; fault clear behavior verified and fault mask documented; Jetson container running micro-ROS + teleop + LiDAR; depth camera running on Jetson with `/camera/*` topics verified and RViz2 visualization on dev PC; DDS interface binding set to Wi-Fi; passwordless SSH + DHCP reservation set; Wi‑Fi latency (ping ~10 ms avg) and throughput (~15 Mbps) verified; NTP sync confirmed.
+- Recent: Gazebo model stabilized (base_footprint restored, wheel offsets corrected, caster contact/clearance tuned, friction updates); LiDAR + camera split into Xacro modules; D455 camera plugin added; `/scan` and camera topics verified in sim; Gazebo now defaults to `obstacles.world`; URDF model validated in sim; hardware launch extended for micro-ROS agent + sensor drivers; `amr_hardware` ros2_control interface scaffolded; Jetson Docker build reordered to surface ros2_control/controller failures early, realtime_tools header compatibility shim attempts in progress.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live; UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
-- Current Focus: Structural changes + proximity sensor enclosure work; URDF + Gazebo/ros2_control sim bring-up.
+- Current Focus: Structural changes + proximity sensor enclosure work; tune URDF to match physical AMR by driving sim+real side-by-side and aligning motion; complete Jetson ros2_control Docker build and hardware bring-up (realtime_tools header compatibility).
 - Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
 - Next Focus (Weeks 21-22): Finalize base URDF + Gazebo sim + ros2_control bring-up; start slam_toolbox/Nav2 prep.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
@@ -50,7 +50,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 18 | Dev PC Env & Tooling | <span style="color: green">Done</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified; Docker buildx workflow and Jetson builds validated; passwordless SSH to Jetson set up. | 2026-03-05 | 2026-01-18 |
 | 19 | Jetson Nano ROS2/JetPack | <span style="color: green">Done</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified; depth camera running with `/camera/*` and `/points` validated; RViz2 visualization from dev PC confirmed; DDS interface bound to Wi-Fi; depth stream stabilized with lower profiles. | 2026-03-12 | 2026-01-24 |
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
-| 21 | URDF Modeling (Base AMR) | <span style="color: goldenrod">In Progress</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); inertials + collisions added; track width aligned to ros2_control config; Gazebo launch + ros2_control config added. Remaining: verify Gazebo spawn and controllers, validate TF tree and visuals/collisions, refine footprint/height. | 2026-03-26 | TBD |
+| 21 | URDF Modeling (Base AMR) | <span style="color: goldenrod">In Progress</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); LiDAR/camera split into `lidar.xacro` + `camera.xacro`; D455 camera plugin added; base_footprint restored; wheel offsets corrected; caster clearance tuned; Gazebo launch defaults to `obstacles.world`; ros2_control config added; URDF validated in sim. Remaining: tune model to match physical AMR by driving sim+real side-by-side and aligning motion/pose. | 2026-03-26 | TBD |
 | 22 | Navigation & Mapping Bring-up | Planned | Mapping: slam_toolbox (2D LiDAR) or depth->scan pipeline if needed; record/validate maps. Localization: AMCL with wheel odom + LiDAR; set static transforms; fuse IMU + wheel odom with robot_localization if needed. Nav2: planner/controller/server bring-up; tune costmaps (obstacle/voxel + inflation), footprint, and velocity limits; first go-to-pose. | 2026-04-02 | TBD |
 | 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms; battery-powered Jetson running Nav2 path planning and driving the AMR; validate IMU stability and drift. | 2026-04-09 | TBD |
 | 24 | Task Executive & Sequencing (v1) | Planned | Choose BT/PlanSys2; define action interfaces (Navigate/Detect/Pick/Drop/Dock); implement mission executor; add retries/timeouts, status reporting, and logging. | 2026-04-16 | TBD |
@@ -261,6 +261,7 @@ Consequences: Redesign mount; add airflow
 ## Change Log
 - 2026-01-02: Added LiDAR/depth camera bring-up tasks; expanded navigation/mapping breakdown.
 - 2026-01-02: Marked Weeks 17-18 in progress; noted enclosure prep completion and structural changes underway.
+- 2026-01-30: URDF validated in sim; updated Week 21 to focus on sim-vs-real motion alignment; noted ros2_control Docker build reorder + realtime_tools header compatibility work.
 - 2026-01-01: Added functional hardware e-stop input with debounce + fault latch; tracker updated to reflect current clear-path gap.
 - 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/STM_architecture.md`; removed merged task/architecture files.
 - 2025-12-22: Consolidated firmware tasks into weekly tracker; merged STM32 architecture docs; added Jetson Nano architecture doc.
