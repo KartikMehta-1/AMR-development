@@ -36,6 +36,9 @@
   <xacro:property name="lidar_gap" value="0.002"/>
   <xacro:property name="lidar_raise" value="0.01"/>
   <xacro:property name="lidar_z" value="${chassis_z + pillar_height + (plate_thickness * 0.5) - (lidar_height * 0.5) - lidar_gap + lidar_raise}"/>
+  <xacro:property name="lidar_roll" value="0.0"/>
+  <xacro:property name="lidar_pitch" value="0.0"/>
+  <xacro:property name="lidar_yaw" value="2"/>
 
   <xacro:property name="camera_length" value="0.03"/>
   <xacro:property name="camera_width" value="0.09"/>

@@ -182,7 +182,8 @@ Cytron MDD20A dual channel driver is the active configuration. Connections are s
   - Common ground between encoders and STM32.
 - Filtering: Enable digital filters on TIM2/TIM3 inputs (CubeMX IC filter <= 10) to reject noise.
 - Mounting: Post-gearbox (wheel/output shaft) — confirmed.
-- COUNTS_PER_REV: 600 PPR * 4 = 2400 counts per wheel revolution.
+- COUNTS_PER_REV: 600 PPR * 4 = 2400 counts per wheel revolution when using TIM encoder mode TI12 (quadrature x4).
+  - After changing timer mode or filtering, re-validate with the manual wheel-rotation bench test and update firmware if needed.
   - If remounted pre-gearbox (motor shaft) with 30:1 ratio: 2400 * 30 = 72,000 counts per wheel rev (update firmware accordingly).
 
 ---

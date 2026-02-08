@@ -39,7 +39,7 @@
 | Parameter | Value |
 |------------|--------|
 | Pulses per Revolution | 600 PPR |
-| Quadrature Output | A/B (up to 2400 counts/rev) |
+| Quadrature Output | A/B (up to 2400 counts/rev with x4 decode) |
 | Supply Voltage | 5 - 24 V DC |
 | Output Type | NPN Open-Collector |
 | Shaft Diameter | 6 mm |
@@ -49,7 +49,8 @@
 
 Mounting and effective resolution
 - Mount Location: Post-gearbox (wheel/output shaft) — confirmed
-- Effective Counts/Rev (quadrature): 600 PPR * 4 = 2400 counts/rev
+- Effective Counts/Rev with TIM encoder mode TI12 (target firmware setting): 2400 counts/rev
+- Always verify effective counts/rev with a manual wheel-rotation bench test after timer/config changes.
 
 ---
 

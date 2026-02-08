@@ -78,6 +78,18 @@ void ControlLoop_Update(ControlLoop *cl,
     // PID speed control -> duty targets
     float pid_out_l = PID_Update(&cl->pid_l, cl->rpm_target_l, rpm_l, dt_s);
     float pid_out_r = PID_Update(&cl->pid_r, cl->rpm_target_r, rpm_r, dt_s);
+#if SPEED_FF_ENABLE
+    float ff_l = SPEED_FF_K_DUTY_PER_RPM * cl->rpm_target_l;
+    float ff_r = SPEED_FF_K_DUTY_PER_RPM * cl->rpm_target_r;
+    if (fabsf(cl->rpm_target_l) > SPEED_FF_STATIC_RPM) {
+      ff_l += (cl->rpm_target_l >= 0.0f ? 1.0f : -1.0f) * SPEED_FF_STATIC_DUTY;
+    }
+    if (fabsf(cl->rpm_target_r) > SPEED_FF_STATIC_RPM) {
+      ff_r += (cl->rpm_target_r >= 0.0f ? 1.0f : -1.0f) * SPEED_FF_STATIC_DUTY;
+    }
+    pid_out_l += ff_l;
+    pid_out_r += ff_r;
+#endif
 
 #if RAMPING_ENABLE
     // Ramp duties toward PID outputs for smooth actuation

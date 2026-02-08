@@ -1,20 +1,29 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-01-30  
+**Last Updated:** 2026-02-08  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
-- Overall: On track with mechanical changes and tooling in progress
-- Progress: 16/42 weeks complete (~38%)
-- Recent: Gazebo model stabilized (base_footprint restored, wheel offsets corrected, caster contact/clearance tuned, friction updates); LiDAR + camera split into Xacro modules; D455 camera plugin added; `/scan` and camera topics verified in sim; Gazebo now defaults to `obstacles.world`; URDF model validated in sim; hardware launch extended for micro-ROS agent + sensor drivers; `amr_hardware` ros2_control interface scaffolded; Jetson Docker build reordered to surface ros2_control/controller failures early, realtime_tools header compatibility shim attempts in progress.
-- micro-ROS: STM32 bring-up on USART2 with full AMR topic set live; UART telemetry disabled to avoid contention.
+- Overall: SLAM pipeline is working on real hardware; low-level control/odometry calibration is in active tuning.
+- Progress: 16/42 weeks complete (~38%) (plan is now being executed iteratively vs. strictly week-by-week).
+- Recent:
+  - slam_toolbox bring-up working with real LiDAR (`/scan` -> `/map`) and RViz config saved.
+  - Resolved TF bring-up issues by ensuring ros2_control/controller_manager + `/joint_states` are alive before SLAM.
+  - LiDAR alignment parameterized in URDF (yaw adjust) and rebuilt into runtime container workflow.
+  - Encoder pipeline validated on bench (manual rotations), moved to higher-resolution timer mode (TI12), and began closing the loop on wheel kinematics (track width / wheel separation) using 360-degree tests.
+  - Added firmware tuning profiles for controlled A/B testing (launch guard, feedforward/static FF, etc.) to avoid “many knobs at once”.
+- micro-ROS: STM32 bring-up on USART2 with full AMR topic set live (wheel_state + duty topics visible); UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
-- Current Focus: Structural changes + proximity sensor enclosure work; tune URDF to match physical AMR by driving sim+real side-by-side and aligning motion; complete Jetson ros2_control Docker build and hardware bring-up (realtime_tools header compatibility).
-- Cascaded current loop: Deferred until higher-accuracy current sensor is integrated.
-- Next Focus (Weeks 21-22): Finalize base URDF + Gazebo sim + ros2_control bring-up; start slam_toolbox/Nav2 prep.
+- Current Focus (next sprint):
+  - Resume current sensing (ACS758): validate ADC counts, zero tracking, scaling, filtering; make current readings trustworthy under real load.
+  - Use current as a first-class signal for protection and control: current limiting/derating, stall detection improvements, and groundwork for cascaded control.
+- Control Architecture Direction:
+  - Yes, moving toward cascaded control makes sense: inner current/torque limiting (or current loop if feasible) + outer speed loop is the standard industrial structure and will reduce slip/launch transients once current sensing is reliable.
+- Next Focus:
+  - EKF fusion (wheel odom + IMU) and Nav2 bring-up once low-level control + current sensing are stable enough for repeatable mapping runs.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
 
 ## Calendar Baseline (Week Alignment)
@@ -51,12 +60,12 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 19 | Jetson Nano ROS2/JetPack | <span style="color: green">Done</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified; depth camera running with `/camera/*` and `/points` validated; RViz2 visualization from dev PC confirmed; DDS interface bound to Wi-Fi; depth stream stabilized with lower profiles. | 2026-03-12 | 2026-01-24 |
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
 | 21 | URDF Modeling (Base AMR) | <span style="color: goldenrod">In Progress</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); LiDAR/camera split into `lidar.xacro` + `camera.xacro`; D455 camera plugin added; base_footprint restored; wheel offsets corrected; caster clearance tuned; Gazebo launch defaults to `obstacles.world`; ros2_control config added; URDF validated in sim. Remaining: tune model to match physical AMR by driving sim+real side-by-side and aligning motion/pose. | 2026-03-26 | TBD |
-| 22 | Navigation & Mapping Bring-up | Planned | Mapping: slam_toolbox (2D LiDAR) or depth->scan pipeline if needed; record/validate maps. Localization: AMCL with wheel odom + LiDAR; set static transforms; fuse IMU + wheel odom with robot_localization if needed. Nav2: planner/controller/server bring-up; tune costmaps (obstacle/voxel + inflation), footprint, and velocity limits; first go-to-pose. | 2026-04-02 | TBD |
+| 22 | Navigation & Mapping Bring-up | Partial | Mapping: slam_toolbox (2D LiDAR) running on real LiDAR; RViz config saved; map topic verified. Remaining: stabilize odom (slip + wheel geometry), add EKF fusion, then start Nav2 bring-up (costmaps + go-to-pose). | 2026-04-02 | 2026-02-08 (mapping bring-up) |
 | 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms; battery-powered Jetson running Nav2 path planning and driving the AMR; validate IMU stability and drift. | 2026-04-09 | TBD |
 | 24 | Task Executive & Sequencing (v1) | Planned | Choose BT/PlanSys2; define action interfaces (Navigate/Detect/Pick/Drop/Dock); implement mission executor; add retries/timeouts, status reporting, and logging. | 2026-04-16 | TBD |
 | 25 | Mission Actions + Task Graph | Planned | Implement skill actions (stubs OK) and wire to Nav2/perception/manipulation; add world-state/blackboard; validate scripted sequences in sim. | 2026-04-23 | TBD |
 | 26 | Voice Command MVP | Planned | Offline ASR (Vosk/Whisper) + intent parsing; confirmation prompts and safety gating; map intents to mission goals; log transcripts and outcomes. | 2026-04-30 | TBD |
-| 27 | Mechanical Integration: Dual SO-101 Arms | Planned | Mount both arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. | 2026-05-07 | TBD |
+| 27 | Mechanical Integration: Dual SO-101 Arms | <span style="color: green">Done</span> | Assembled dual SO-101 arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. | 2026-05-07 | 2026-02-08 |
 | 28 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. | 2026-05-14 | TBD |
 | 29 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. | 2026-05-21 | TBD |
 | 30 | Calibration & Perception Baseline | Planned | Hand-eye and base-to-arm extrinsics; AprilTag validation; RGB-D grasp perception baseline (segmentation/keypoints); log pipeline for RGB-D+joints. | 2026-05-28 | TBD |
@@ -254,6 +263,15 @@ Context: L298N thermal + dropout issues
 Options: L298N, MD10C, MD30C
 Decision: MD30C for current headroom
 Consequences: Redesign mount; add airflow
+
+2026-02-08 - Shifted to controlled A/B tuning + resume current sensing
+Context: Early mapping worked but map noise and pose corrections highlighted slip/odom/control transients.
+Decisions:
+- Introduce firmware tuning profiles to isolate impact of launch guard and feedforward/static FF changes.
+- Prioritize ACS758 current sensor validation next to enable current limiting and cascaded control.
+Consequences:
+- Faster iteration with fewer confounding variables.
+- Clear path to industrial-style cascaded control once current sensing is trusted.
 ```
 
 ---
@@ -262,6 +280,8 @@ Consequences: Redesign mount; add airflow
 - 2026-01-02: Added LiDAR/depth camera bring-up tasks; expanded navigation/mapping breakdown.
 - 2026-01-02: Marked Weeks 17-18 in progress; noted enclosure prep completion and structural changes underway.
 - 2026-01-30: URDF validated in sim; updated Week 21 to focus on sim-vs-real motion alignment; noted ros2_control Docker build reorder + realtime_tools header compatibility work.
+- 2026-02-08: slam_toolbox mapping bring-up verified on real LiDAR; RViz config saved; created controlled firmware tuning profiles; encoder resolution/CPR validated on bench; began track width/wheel separation calibration; focus shifted back to current sensing to enable cascaded control.
+- 2026-02-08: Assembled dual SO-101 arms (Week 27 marked done); mechanical integration ahead of schedule.
 - 2026-01-01: Added functional hardware e-stop input with debounce + fault latch; tracker updated to reflect current clear-path gap.
 - 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/STM_architecture.md`; removed merged task/architecture files.
 - 2025-12-22: Consolidated firmware tasks into weekly tracker; merged STM32 architecture docs; added Jetson Nano architecture doc.

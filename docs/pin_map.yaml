@@ -62,7 +62,7 @@ encoders:
       pin: PA6
     ch2:
       pin: PA7
-    counts_per_rev: 2400        # post-gearbox: 600 PPR * 4
+    counts_per_rev: 2400        # TI12 quadrature decode target (x4)
     input_type: open_collector
     pullup: external_3v3        # use 4.7-10k to 3.3 V
     max_signal_freq_hz: 30000

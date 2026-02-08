@@ -1,0 +1,39 @@
+version: "3.8"
+
+services:
+  amr_rsp:
+    image: amr/ros2-foxy-devpc:amd64
+    container_name: amr_rsp
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: "0"
+      ROS_LOCALHOST_ONLY: "0"
+      RMW_IMPLEMENTATION: "${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
+      CYCLONEDDS_URI: "${CYCLONEDDS_URI:-}"
+    volumes:
+      - ~/AMR-development:/workspaces/AMR-development
+    command: >
+      bash -lc 'source /opt/ros/foxy/setup.bash;
+      ros2 run robot_state_publisher robot_state_publisher
+      --ros-args -p use_sim_time:=false
+      -p robot_description:="$(xacro /workspaces/AMR-development/ros_ws/src/amr_description/urdf/amr.urdf.xacro use_sim:=false)"'
+    restart: unless-stopped
+
+  slam_toolbox:
+    image: amr/ros2-foxy-devpc:amd64
+    container_name: slam_toolbox
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: "0"
+      ROS_LOCALHOST_ONLY: "0"
+      RMW_IMPLEMENTATION: "${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
+      CYCLONEDDS_URI: "${CYCLONEDDS_URI:-}"
+    volumes:
+      - ~/AMR-development:/workspaces/AMR-development
+    command: >
+      ros2 launch slam_toolbox online_async_launch.py
+      use_sim_time:=false
+      slam_params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
+    depends_on:
+      - amr_rsp
+    restart: unless-stopped
