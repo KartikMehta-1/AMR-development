@@ -2,6 +2,11 @@
 ros_ws/build/
 ros_ws/install/
 ros_ws/log/
+ros_ws/maps/
+
+# Python bytecode (e.g. from running `python -m py_compile` on launch files)
+__pycache__/
+*.pyc
 
 # STM32CubeIDE project metadata and build outputs
 .settings/

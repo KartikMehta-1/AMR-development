@@ -33,7 +33,7 @@ services:
     command: >
       ros2 launch slam_toolbox online_async_launch.py
       use_sim_time:=false
-      slam_params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
+      params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
     depends_on:
       - amr_rsp
     restart: unless-stopped
