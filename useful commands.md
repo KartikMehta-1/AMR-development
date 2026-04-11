@@ -1,18 +1,112 @@
 # Useful Commands
 
-## SSH to Jetson
+## Quick Start (Top 4)
+### 1) Jetson: AMR hardware bringup (motors + lidar)
 ```bash
-ssh kartik@192.168.1.9
-# alias (after adding ~/.ssh/config entry below)
-ssh jetson
+docker run -d --name amr_foxy --net=host --privileged --runtime nvidia \
+  -e ROS_DOMAIN_ID=0 -e ROS_LOCALHOST_ONLY=0 \
+  -v ~/AMR-development/ros_ws:/workspaces/ros_ws \
+  amr/ros2-foxy-jetson:arm64 \
+  bash -lc "ros2 launch amr_description hardware.launch.py \
+    use_sim_time:=false \
+    agent_dev:=/dev/ttyACM0 \
+    agent_baud:=460800 \
+    start_lidar:=true \
+    start_camera:=false"
 ```
 
-## Sync docker folder to Jetson
+### 2) Dev PC: Start single container (for SLAM/NAV2 + RViz + Teleop)
+```bash
+pkill -f rviz2 || true
+xhost +local:root
+docker rm amr_devpc
+
+docker run -it --name amr_devpc --net=host \
+  -e ROS_DOMAIN_ID=0 -e ROS_LOCALHOST_ONLY=0 \
+  -e DISPLAY -e QT_X11_NO_MITSHM=1 \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v ~/AMR-development:/workspaces/AMR-development \
+  amr/ros2-foxy-devpc:amd64 \
+  bash
+```
+
+### 3) Dev PC: Launch/Run robot state publisher, SLAM toolbox, RVIZ, Teleop, AMCL, Nav2 (inside amr_devpc container)
+
+```bash
+docker exec -it amr_devpc bash
+source /opt/ros/foxy/setup.bash
+
+# RViz (software rendering fallback)
+source /opt/ros/foxy/setup.bash
+LIBGL_ALWAYS_SOFTWARE=1 rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
+
+# Teleop (slow)
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+  --ros-args -r cmd_vel:=/diff_drive_controller/cmd_vel_unstamped \
+  -p speed:=0.03 -p turn:=0.3
+
+# SLAM Toolbox
+source /opt/ros/foxy/setup.bash
+ros2 launch slam_toolbox online_async_launch.py \
+  use_sim_time:=false \
+  params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
+
+#Robot State Publisher
+source /opt/ros/foxy/setup.bash; \
+    ros2 run robot_state_publisher robot_state_publisher \
+      --ros-args -p use_sim_time:=false \
+      -p robot_description:="$(xacro /workspaces/AMR-development/ros_ws/src/amr_description/urdf/amr.urdf.xacro use_sim:=false)"
+```
+
+
+
+### 4) Load saved map (Nav2 AMCL localization)
+Use this after you already have a saved `*.yaml` + `*.pgm` in `ros_ws/maps/`.
+
+Important: don't run AMCL at the same time as slam_toolbox mapping/localization (both publish `map->odom`).
+
+```bash
+source /opt/ros/foxy/setup.bash
+
+# Start map_server + AMCL (publishes /map and the map->odom TF once localized)
+ros2 launch nav2_bringup localization_launch.py \
+  use_sim_time:=false \
+  map:=/workspaces/AMR-development/ros_ws/maps/my_hall_save.yaml \
+  params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/nav2_params_amr.yaml
+
+# In RViz: use "2D Pose Estimate" to set the initial pose on the map.
+```
+
+### 5) Nav2 navigation (Map + AMCL + Planner/Controller)
+This is the full navigation stack (AMCL localization + global planner + local controller).
+
+Important: don't run slam_toolbox while running Nav2 localization/navigation (both publish `map->odom`).
+
+```bash
+source /opt/ros/foxy/setup.bash
+
+# Option A (recommended): launch everything (map_server + AMCL + navigation + RViz)
+# (launch by file path so you don't need to rebuild the workspace just to pick up the new launch file)
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py \
+  use_sim_time:=false \
+  map:=/workspaces/AMR-development/ros_ws/maps/my_hall_save.yaml
+
+# Option B: if AMCL is already running, start only the navigation servers (planner/controller)
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/nav2_navigation.launch.py \
+  use_sim_time:=false
+
+# In RViz:
+# - Set initial pose ("2D Pose Estimate")
+# - Send goal using the Nav2 Goal tool / Navigation2 panel
+```
+
+## Build & Sync
+### Sync docker folder to Jetson
 ```bash
 rsync -av --delete --exclude .git /home/kartik/AMR-development/docker/ kartik@192.168.1.9:~/AMR-development/docker/
 ```
 
-## Build Jetson images from dev PC
+### Build Jetson images from dev PC
 ```bash
 ssh -t jetson '
 cd ~/AMR-development &&
@@ -26,33 +120,38 @@ docker buildx build -f docker/foxy/Dockerfile.jetson \
 '
 ```
 
-## Add SSH config alias (dev PC)
+### Build Dev PC image
+```bash
+cd ~/AMR-development
+
+docker build -f docker/foxy/Dockerfile.devpc \
+  -t amr/ros2-foxy-devpc:amd64 .
+```
+
+## Networking & SSH
+### Add SSH config alias (dev PC)
 ```bash
 mkdir -p ~/.ssh
-cat <<'EOF' >> ~/.ssh/config
+cat <<'SSHCONF' >> ~/.ssh/config
 
 Host jetson
   HostName 192.168.1.9
   User kartik
   IdentitiesOnly yes
   IdentityFile ~/.ssh/id_ed25519
-EOF
+SSHCONF
 chmod 600 ~/.ssh/config
 ```
 
-## Run Jetson container
+### SSH to Jetson
 ```bash
-ssh -t kartik@192.168.1.9 '
-docker run -it --rm \
-  --name ros2_jetson \
-  --net=host \
-  --privileged \
-  -v /dev:/dev \
-  amr/ros2-foxy-jetson:arm64
-'
+ssh kartik@192.168.1.9
+# alias (after adding ~/.ssh/config entry)
+ssh jetson
 ```
 
-## Launch AMR hardware bringup (Jetson)
+## Jetson Runtime (on Jetson)
+### Launch AMR hardware bringup
 ```bash
 docker run --rm -it --net=host --privileged --runtime nvidia \
   -e ROS_DOMAIN_ID=0 \
@@ -63,113 +162,41 @@ docker run --rm -it --net=host --privileged --runtime nvidia \
     use_sim_time:=false \
     agent_dev:=/dev/ttyACM0 \
     agent_baud:=460800 \
-    start_lidar:=false \
+    start_lidar:=true \
     start_camera:=false
 ```
 
-## Exec into Jetson container
+### Exec into running Jetson container
 ```bash
-ssh -t kartik@192.168.1.9 'docker exec -it ros2_jetson /entrypoint.sh bash'
+docker exec -it amr_foxy /entrypoint.sh bash
 ```
 
-## Start micro-ROS agent in Jetson container
+### Rebuild `amr_description` in running Jetson container
 ```bash
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 460800
-```
-
-## Start lidar in Jetson container
-```bash
-ros2 launch ydlidar_ros2_driver ydlidar_launch.py
-```
-
-## Jetson depth camera (RealSense D455)
-```bash
-ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true align_depth.enable:=true
-ros2 topic list | grep camera
-ros2 topic list | grep points
-ros2 topic hz /camera/camera/depth/image_rect_raw
-ros2 topic hz /camera/camera/depth/color/points
-```
-
-### Light pointcloud profile (lower bandwidth)
-```bash
-ros2 launch realsense2_camera rs_launch.py \
-  depth_module.depth_profile:=424x240x15 \
-  rgb_camera.color_profile:=424x240x15 \
-  enable_infra1:=false enable_infra2:=false \
-  enable_gyro:=false enable_accel:=false \
-  pointcloud.enable:=true pointcloud.ordered_pc:=false \
-  filters:=decimation decimation_filter_magnitude:=2 \
-  align_depth.enable:=false
-```
-
-## Enable drive and clear faults
-```bash
-ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty "{}"
-ros2 topic pub --once /amr/enable std_msgs/msg/Bool "{data: true}"
-```
-
-## Dev PC container for teleop
-```bash
-docker run -it --rm --name ros2_dev --net=host --privileged -v /dev:/dev amr/ros2-foxy-devpc:amd64
-apt-get update && apt-get install -y ros-foxy-teleop-twist-keyboard
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
-```
-
-## Dev PC container for Gazebo
-```bash
-xhost +local:docker
-docker run -it --rm --name ros2_dev --net=host --privileged \
-  -e DISPLAY -e QT_X11_NO_MITSHM=1 \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -v ~/AMR-development/ros_ws:/workspaces/ros_ws \
-  amr/ros2-foxy-devpc:amd64
-```
-```bash
+docker exec -it amr_foxy bash -lc '
+source /opt/ros/foxy/install/setup.bash
+[ -f /opt/ros/driver_ws/install/setup.bash ] && source /opt/ros/driver_ws/install/setup.bash
 cd /workspaces/ros_ws
-colcon build --symlink-install
-source /opt/ros/foxy/setup.bash
+colcon build --merge-install --symlink-install --packages-select amr_description
 source install/setup.bash
-pkill -f gzserver; pkill -f gzclient
-ros2 launch amr_description gazebo.launch.py
-
+'
 ```
 
-## Exec into Dev PC container
-```bash
-docker exec -it ros2_dev /entrypoint.sh bash
-```
 
-## Run teleop for gazebo model
-```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard \ --ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel_unstamped
-```
-
-## Run Rviz
-```bash
-rviz2 -d /opt/ros/rviz/amr_lidar.rviz
-```
-
-## Stop Jetson container
-```bash
-ssh -t kartik@192.168.1.9 'docker stop ros2_jetson'
-```
-
-## Dev PC container for RViz
-```bash
-xhost +local:
-docker run -it --rm --name ros2_dev --net=host \
-  -e DISPLAY \
-  -e QT_X11_NO_MITSHM=1 \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  amr/ros2-foxy-devpc:amd64
-rviz2 -d /opt/ros/rviz/amr_lidar.rviz
-```
-
-## Quick checks
+## Diagnostics
 ```bash
 ros2 daemon stop && ros2 daemon start
-ros2 topic list
 ros2 node list
-ls -l /dev/ttyACM* /dev/ttyUSB*
+ros2 topic list
+ros2 topic hz /scan
+ros2 topic list | grep map
+ros2 control list_controllers
+ros2 control list_hardware_interfaces
+```
+
+### TF checks (best effort)
+```bash
+timeout 2s ros2 topic echo /tf --qos-reliability best_effort --qos-durability volatile
+
+timeout 2s ros2 topic echo /tf_static --qos-reliability reliable --qos-durability transient_local
 ```

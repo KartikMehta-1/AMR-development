@@ -42,7 +42,7 @@ hardware_interface::return_type AMRHardware::configure(
   left_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(left_cmd_topic_, 10);
   right_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(right_cmd_topic_, 10);
   state_sub_ = node_->create_subscription<sensor_msgs::msg::JointState>(
-      state_topic_, 10,
+      state_topic_, rclcpp::QoS(10).best_effort(),
       std::bind(&AMRHardware::handle_joint_state, this, std::placeholders::_1));
 
   executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();

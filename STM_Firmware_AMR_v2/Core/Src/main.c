@@ -331,8 +331,10 @@ int main(void)
   ControlLoop_Init(&control_loop);
 
   // Initialize and start encoders (Left: TIM3 16-bit, Right: TIM2 32-bit)
-  Encoder_Init(&enc_left,  &htim3, ENCODER_COUNTS_PER_REV, 0xFFFFU, LEFT_ENCODER_POLARITY);
-  Encoder_Init(&enc_right, &htim2, ENCODER_COUNTS_PER_REV, 0xFFFFFFFFU, RIGHT_ENCODER_POLARITY);
+  Encoder_Init(&enc_left,  &htim3, ENCODER_COUNTS_PER_REV,
+               __HAL_TIM_GET_AUTORELOAD(&htim3), LEFT_ENCODER_POLARITY);
+  Encoder_Init(&enc_right, &htim2, ENCODER_COUNTS_PER_REV,
+               __HAL_TIM_GET_AUTORELOAD(&htim2), RIGHT_ENCODER_POLARITY);
   Encoder_Start(&enc_left);
   Encoder_Start(&enc_right);
   HAL_TIM_Base_Start_IT(&htim4);
@@ -595,7 +597,7 @@ static void MX_TIM2_Init(void)
   htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI2;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
@@ -603,7 +605,7 @@ static void MX_TIM2_Init(void)
   sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
+  sConfig.IC2Filter = 10;
   if (HAL_TIM_Encoder_Init(&htim2, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -644,7 +646,7 @@ static void MX_TIM3_Init(void)
   htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI2;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
@@ -969,6 +971,33 @@ void StartControlTask(void *argument)
     }
 #endif
     static bool cmd_stopped_prev = false;
+    static uint32_t launch_start_ms = 0U;
+
+#if LAUNCH_GUARD_ENABLE
+    if (!cmd_stopped && cmd_stopped_prev) {
+      launch_start_ms = now;
+    }
+    if (!cmd_stopped) {
+      uint32_t launch_age_ms = now - launch_start_ms;
+      if (launch_age_ms < LAUNCH_GUARD_MS) {
+        float launch_scale = (float)launch_age_ms / (float)LAUNCH_GUARD_MS;
+        if (launch_scale < LAUNCH_MIN_SCALE) {
+          launch_scale = LAUNCH_MIN_SCALE;
+        }
+
+        if (fabsf(v_cmd) > LAUNCH_MAX_V_MPS) {
+          v_cmd = (v_cmd >= 0.0f) ? LAUNCH_MAX_V_MPS : -LAUNCH_MAX_V_MPS;
+        }
+        if (fabsf(w_cmd) > LAUNCH_MAX_W_RPS) {
+          w_cmd = (w_cmd >= 0.0f) ? LAUNCH_MAX_W_RPS : -LAUNCH_MAX_W_RPS;
+        }
+
+        v_cmd *= launch_scale;
+        w_cmd *= launch_scale;
+      }
+    }
+#endif
+
     if (cmd_stopped && !cmd_stopped_prev) {
       PID_Reset(&control_loop.pid_l, sense.rpm_l);
       PID_Reset(&control_loop.pid_r, sense.rpm_r);
@@ -1251,8 +1280,9 @@ void StartRosPubTask(void *argument)
       msg_duty_right.data = duty_cmd_r_pub;
       msg_wheel_state.header.stamp.sec = (int32_t)(now / 1000U);
       msg_wheel_state.header.stamp.nanosec = (uint32_t)((now % 1000U) * 1000000U);
-      msg_wheel_state.position.data[0] = (double)sense.cnt_l * counts_to_rad;
-      msg_wheel_state.position.data[1] = (double)sense.cnt_r * counts_to_rad;
+      // Use signed encoder position (includes polarity) for wheel_state
+      msg_wheel_state.position.data[0] = (double)Encoder_GetPosition(&enc_left) * counts_to_rad;
+      msg_wheel_state.position.data[1] = (double)Encoder_GetPosition(&enc_right) * counts_to_rad;
       msg_wheel_state.velocity.data[0] = (double)sense.rpm_l * rpm_to_rad_s;
       msg_wheel_state.velocity.data[1] = (double)sense.rpm_r * rpm_to_rad_s;
 

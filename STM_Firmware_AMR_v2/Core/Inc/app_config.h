@@ -11,7 +11,7 @@
 #define ESTOP_DEBOUNCE_MS 10U
 
 // Encoder/rate reporting configuration
-#define ENCODER_COUNTS_PER_REV  2400U   // 600 PPR A-4 quadrature
+#define ENCODER_COUNTS_PER_REV  2400U   // TI12 quadrature decode target; verify with bench rotation test
 #define CONTROL_LOOP_HZ         100U    // fixed-rate control loop (Hz)
 #define CONTROL_LOOP_DT_MS      (1000U / CONTROL_LOOP_HZ)
 #define CONTROL_LOOP_DT_S       (1.0f / (float)CONTROL_LOOP_HZ)
@@ -22,7 +22,7 @@
 #define SERIAL_TELEMETRY_ENABLE 0       // set to 1 to disable ROS pub task and stream UART telemetry
 #define SERIAL_TELEMETRY_PERIOD_MS SAMPLE_INTERVAL_MS // UART telemetry period (ms)
 #define SERIAL_TELEMETRY_HEADER_PERIOD_MS 1000U       // resend header so plotter can sync (ms)
-#define TRACK_WIDTH_M           0.386f  // wheel-to-wheel track width (meters)
+#define TRACK_WIDTH_M           0.381f  // calibrated effective track width from 360-degree spin test
 #define WHEEL_RADIUS_M          0.0615f // wheel radius (meters)
 
 // Current sensor scaling (ACS758 50B @5 V; divider 10k top / 20k bottom)
@@ -46,24 +46,30 @@
 #define CURR_LPF_ALPHA        0.1f     // low-pass filter alpha (0..1), higher = less smoothing
 
 // Duty/rpm ramping (units are 0..1 duty fraction per second)
-#define DUTY_RAMP_RATE_PER_SEC 2.0f    // slew limit for motor duty (units/sec)
+#define DUTY_RAMP_RATE_PER_SEC 1.0f    // smoother duty slew to reduce jerk
 
 // Encoder polarity (set to -1 to flip RPM sign for that wheel)
 #define LEFT_ENCODER_POLARITY  1
 #define RIGHT_ENCODER_POLARITY -1
 
 // Speed PID gains (per wheel). Output is duty 0..1 (clamped to 0..0.3)
-#define SPEED_PID_KP_L     0.03f
-#define SPEED_PID_KI_L     0.002f
+#define SPEED_PID_KP_L     0.020f
+#define SPEED_PID_KI_L     0.008f
 #define SPEED_PID_KD_L     0.0f
-#define SPEED_PID_KP_R     0.03f
-#define SPEED_PID_KI_R     0.002f
+#define SPEED_PID_KP_R     0.020f
+#define SPEED_PID_KI_R     0.008f
 #define SPEED_PID_KD_R     0.0f
 #define SPEED_PID_OUT_MIN -0.90f
 #define SPEED_PID_OUT_MAX  0.90f
 #define SPEED_PID_I_MIN   -2.0f
 #define SPEED_PID_I_MAX    2.0f
-#define SPEED_PID_DEADBAND_RPM 0.20f   // do not integrate when error magnitude is below this
+#define SPEED_PID_DEADBAND_RPM 0.05f   // suppress low-speed dithering
+
+// Speed feed-forward (duty bias) to reduce steady-state error without high Kp
+#define SPEED_FF_ENABLE          1
+#define SPEED_FF_K_DUTY_PER_RPM  0.003f  // reduced feed-forward for smoother starts
+#define SPEED_FF_STATIC_DUTY     0.015f  // reduced stiction kick to avoid snap
+#define SPEED_FF_STATIC_RPM      2.0f    // apply static bias only above this RPM
 
 // Test setpoints (RPM) and toggle interval
 #define SPEED_TEST_RPM_LOW   2.0f
@@ -79,8 +85,8 @@
 
 // Ramp rates for command slewing (applied to v, w) and duty limit
 #define RAMPING_ENABLE        1        // set to 0 to disable v/w and duty ramping
-#define V_CMD_RAMP_RATE_MPS   2.0f    // max change in linear velocity per second
-#define W_CMD_RAMP_RATE_RAD   2.0f    // max change in angular velocity per second
+#define V_CMD_RAMP_RATE_MPS   0.8f    // slower linear ramp for smoother response
+#define W_CMD_RAMP_RATE_RAD   0.8f    // slower angular ramp to reduce spin jerk
 #define MOTOR_DUTY_MAX        0.70f    // absolute duty limit for scaling/clamp
 
 // Open-loop motor test (bypass PID/control loop; fixed duty regardless of wheel_cmd)
@@ -97,13 +103,20 @@
 #define DIFF_TEST_W3_RPS   0.50f
 
 // RPM filtering before PID (simple exponential filter)
-#define RPM_LPF_ALPHA 0.1f   // higher = less smoothing (faster response)
+#define RPM_LPF_ALPHA 0.05f   // more smoothing to reduce velocity jitter
 #define RPM_SPIKE_LIMIT_RPM 500.0f  // reject raw RPM magnitudes beyond this (likely noise/wrap)
 #define CMD_STOP_EPS_MPS 0.01f        // treat linear cmd below this as zero (m/s)
 #define CMD_STOP_EPS_RPS 0.01f        // treat angular cmd below this as zero (rad/s)
 #define WHEEL_CMD_TIMEOUT_MS 500U    // zero wheel commands if no wheel_cmd within this timeout
 #define WHEEL_CMD_L_POLARITY 1.0f    // flip left wheel command sign if needed
 #define WHEEL_CMD_R_POLARITY 1.0f    // flip right wheel command sign if needed
+
+// Launch traction guard: soften initial command to avoid wheel slip on startup.
+#define LAUNCH_GUARD_ENABLE 0
+#define LAUNCH_GUARD_MS 1200U
+#define LAUNCH_MIN_SCALE 0.20f
+#define LAUNCH_MAX_V_MPS 0.05f
+#define LAUNCH_MAX_W_RPS 0.25f
 
 // Fault thresholds
 #define FAULT_OC_THRESH_MA        1500   // overcurrent threshold (mA)
@@ -117,5 +130,25 @@
 #define FAULT_ADC_STUCK_SAMPLES   30     // consecutive identical/rail samples to declare ADC stuck
 #define FAULT_ADC_RAIL_THRESH     5      // counts from rail to consider as rail (0 or max)
 #define FAULT_ADC_STUCK_MIN_DUTY  2.0f   // only check ADC stuck when |duty| >= this percent on either wheel
+
+#include "tuning_profiles.h"
+
+// Apply profile overrides (A/B testing).
+#if (TUNING_PROFILE == TUNING_PROFILE_NO_GUARD)
+#undef LAUNCH_GUARD_ENABLE
+#define LAUNCH_GUARD_ENABLE 0
+
+#elif (TUNING_PROFILE == TUNING_PROFILE_NO_STATIC_FF)
+#undef SPEED_FF_STATIC_DUTY
+#define SPEED_FF_STATIC_DUTY 0.0f
+
+#elif (TUNING_PROFILE == TUNING_PROFILE_NO_FF)
+#undef SPEED_FF_ENABLE
+#define SPEED_FF_ENABLE 0
+#undef SPEED_FF_STATIC_DUTY
+#define SPEED_FF_STATIC_DUTY 0.0f
+#undef SPEED_FF_K_DUTY_PER_RPM
+#define SPEED_FF_K_DUTY_PER_RPM 0.0f
+#endif
 
 #endif // APP_CONFIG_H

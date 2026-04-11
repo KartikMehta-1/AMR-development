@@ -1,8 +1,8 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, TimerAction, ExecuteProcess, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
-from launch.actions import ExecuteProcess
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -13,6 +13,7 @@ def generate_launch_description():
     agent_baud = LaunchConfiguration("agent_baud")
     start_lidar = LaunchConfiguration("start_lidar")
     start_camera = LaunchConfiguration("start_camera")
+    lidar_params = LaunchConfiguration("lidar_params")
 
     model_path = PathJoinSubstitution(
         [FindPackageShare("amr_description"), "urdf", "amr.urdf.xacro"]
@@ -67,6 +68,16 @@ def generate_launch_description():
         ],
     )
 
+    ydlidar_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("ydlidar_ros2_driver"), "launch", "ydlidar_launch.py"]
+            )
+        ),
+        launch_arguments={"params_file": lidar_params}.items(),
+        condition=IfCondition(start_lidar),
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -94,6 +105,13 @@ def generate_launch_description():
                 default_value="false",
                 description="Start RealSense camera driver",
             ),
+            DeclareLaunchArgument(
+                "lidar_params",
+                default_value=PathJoinSubstitution(
+                    [FindPackageShare("amr_description"), "config", "ydlidar.yaml"]
+                ),
+                description="YDLidar params file path",
+            ),
             ExecuteProcess(
                 cmd=[
                     "ros2",
@@ -108,16 +126,7 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
-            ExecuteProcess(
-                condition=IfCondition(start_lidar),
-                cmd=[
-                    "ros2",
-                    "launch",
-                    "ydlidar_ros2_driver",
-                    "ydlidar_launch.py",
-                ],
-                output="screen",
-            ),
+            ydlidar_launch,
             ExecuteProcess(
                 condition=IfCondition(start_camera),
                 cmd=[
