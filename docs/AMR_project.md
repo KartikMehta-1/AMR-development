@@ -1,14 +1,14 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-02-11  
+**Last Updated:** 2026-04-17  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
-- Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); low-level control/odometry calibration is still in active tuning.
-- Progress: 19/42 weeks complete (~45%) (plan is now being executed iteratively vs. strictly week-by-week).
+- Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
+- Progress: 20/42 weeks complete (~48%) (plan is now being executed iteratively vs. strictly week-by-week).
 - Recent:
   - slam_toolbox bring-up working with real LiDAR (`/scan` -> `/map`) and RViz config saved.
   - Saved a real map and validated map_server + AMCL localization; Nav2 navigation (planner/controller) working with RViz goal tool.
@@ -19,13 +19,16 @@
   - LiDAR alignment parameterized in URDF (yaw adjust) and rebuilt into runtime container workflow.
   - Encoder pipeline validated on bench (manual rotations), moved to higher-resolution timer mode (TI12), and began closing the loop on wheel kinematics (track width / wheel separation) using 360-degree tests.
   - Added firmware tuning profiles for controlled A/B testing (launch guard, feedforward/static FF, etc.) to avoid “many knobs at once”.
+  - Integrated SO-101 into the active project stack and completed the main AMR mechanical assembly.
+  - Ran an ACT policy that successfully picked up an object and placed it into a bag.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live (wheel_state + duty topics visible); UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
 - Current Focus (next sprint):
-  - Resume current sensing (ACS758): validate ADC counts, zero tracking, scaling, filtering; make current readings trustworthy under real load.
-  - Use current as a first-class signal for protection and control: current limiting/derating, stall detection improvements, and groundwork for cascaded control.
-  - EKF fusion (wheel odom + IMU) to improve `odom` stability and reduce map/pose corrections during long runs.
-  - Harden Nav2: tune footprint/costmaps, velocity limits, obstacle handling, and recovery behaviors; run repeatable test routes (Nav2 runs on dev PC/NUC, Jetson runs drivers only).
+  - Integrate proximity sensors on the AMR: finish mounts/wiring and complete bring-up in the sensing stack.
+  - Integrate a higher-accuracy current sensor and develop the associated safety/protection algorithm.
+  - Mount the camera on SO-101 and refine the AMR-mounted camera/depth-sensor placement for better gripping and bagging viewpoints.
+  - Recalibrate camera-to-arm / camera-to-base extrinsics after the sensor moves and revalidate grasp alignment.
+  - Continue ACT manipulation iteration while the sensing and safety integrations are in progress.
 - Control Architecture Direction:
   - Yes, moving toward cascaded control makes sense: inner current/torque limiting (or current loop if feasible) + outer speed loop is the standard industrial structure and will reduce slip/launch transients once current sensing is reliable.
 - Next Focus:
@@ -56,12 +59,12 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 9 | Firmware v2: Encoder Integration | <span style="color: green">Done</span> | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; TODO: add external 3.3 V pull-ups or software invert flag. | 2026-01-01 | 2025-11-16 |
 | 10 | Firmware v2: Current Telemetry + Calibration | <span style="color: green">Done</span> | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). | 2026-01-08 | 2025-11-25 |
 | 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: green">Done</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); hardware e-stop GPIO input + debounce wired into ControlState (latched fault); step/ramp plots + docs (docs/pid.md); gains/feedforward tuned. | 2026-01-15 | 2025-12-07 |
-| 12 | Firmware v2: Cascaded Control + Comparison | Blocked | Deferred until higher-accuracy current sensor; stay on single-loop speed control for now. | 2026-01-22 | TBD |
+| 12 | Firmware v2: Cascaded Control + Comparison | <span style="color: goldenrod">In Progress</span> | Higher-accuracy current sensor integration is now active together with development of a safety/protection algorithm. Stay on single-loop speed control until the new sensing path is validated; then resume cascaded-control comparison work. | 2026-01-22 | TBD |
 | 13 | Firmware v2: Differential Drive | <span style="color: green">Done</span> | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. | 2026-01-29 | 2025-12-09 |
-| 14 | Firmware v2: Proximity Sensors HW | Planned | Select 4x proximity sensors (GPIO/ADC/I2C TBD); mounts, wiring, pull-ups/protection; update pin map; bench power budget. | 2026-02-05 | TBD |
-| 15 | Firmware v2: Proximity Drivers | Planned | Implement drivers and sampling scheduler for 4 sensors; debouncing/filtering; fault detection; add to telemetry. | 2026-02-12 | TBD |
+| 14 | Firmware v2: Proximity Sensors HW | <span style="color: goldenrod">In Progress</span> | Proximity sensor integration is now active: mounts, wiring, pull-ups/protection, pin-map updates, and bench power-budget checks are being worked through on the AMR. | 2026-02-05 | TBD |
+| 15 | Firmware v2: Proximity Drivers | <span style="color: goldenrod">In Progress</span> | Driver bring-up and integration are now active: implement sampling scheduler, debouncing/filtering, fault detection, and telemetry exposure for the proximity sensors. | 2026-02-12 | TBD |
 | 16 | Firmware v2: micro-ROS Bring-up | <span style="color: green">Done</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/fault_mask`, `/amr/wheel_state`, `/amr/safety_state` pubs; `/amr/enable`, `/amr/estop`, `/amr/clear_fault` wired; fault clear verified; fault mask documented; legacy UART telemetry disabled. | 2026-02-19 | 2026-01-04 |
-| 17 | Mechanical Assembly + Enclosure | <span style="color: goldenrod">In Progress</span> | Structural changes in progress; proximity sensor enclosure prep completed. Remaining: finish enclosure build/install, wiring, battery integration, height mods, sensor installs, AMR cover, perfboard/shield; CAD tasks: survey/measurements (envelope, keep-outs, bend radii); base plate + mounts (Nucleo, Cytron, Jetson, hub, battery/BMS, DC-DC); sensor mounts; cable routing/strain relief; outputs (STEP/IGES, DXF, fastener BOM, assembly guide); include arm mounting provisions for Week 27 integration. | 2026-02-26 | TBD |
+| 17 | Mechanical Assembly + Enclosure | <span style="color: green">Done</span> | Main AMR mechanical assembly completed, including SO-101 integration provisions. Follow-on hardware refinements now move into manipulation/perception work: wrist camera mount on SO-101, AMR depth sensor repositioning for better gripping, and any final cable routing/strain relief cleanup. | 2026-02-26 | 2026-04-17 |
 | 18 | Dev PC Env & Tooling | <span style="color: green">Done</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified; Docker buildx workflow and Jetson builds validated; passwordless SSH to Jetson set up. | 2026-03-05 | 2026-01-18 |
 | 19 | Jetson Nano ROS2/JetPack | <span style="color: green">Done</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified; depth camera running with `/camera/*` and `/points` validated; RViz2 visualization from dev PC confirmed; DDS interface bound to Wi-Fi; depth stream stabilized with lower profiles. | 2026-03-12 | 2026-01-24 |
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
@@ -74,7 +77,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 27 | Mechanical Integration: Dual SO-101 Arms | <span style="color: green">Done</span> | Assembled dual SO-101 arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. | 2026-05-07 | 2026-02-08 |
 | 28 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. | 2026-05-14 | TBD |
 | 29 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. | 2026-05-21 | TBD |
-| 30 | Calibration & Perception Baseline | Planned | Hand-eye and base-to-arm extrinsics; AprilTag validation; RGB-D grasp perception baseline (segmentation/keypoints); log pipeline for RGB-D+joints. | 2026-05-28 | TBD |
+| 30 | Calibration & Perception Baseline | <span style="color: goldenrod">In Progress</span> | Camera-mounting work is active on both SO-101 and the AMR-mounted camera/depth sensor. Follow with hand-eye and base-to-arm extrinsics, viewpoint validation for grasping/bagging, AprilTag validation, RGB-D grasp perception baseline (segmentation/keypoints), and the RGB-D+joints log pipeline. | 2026-05-28 | TBD |
 | 31 | Teleop + Dataset Collection | Planned | Teleop/teaching tools (SpaceMouse/joystick); record synchronized video/joints/gripper for pick/place tasks; label successes/failures. | 2026-06-04 | TBD |
 | 32 | Classical Grasp Pipeline | Planned | Perception -> grasp pose -> MoveIt planning/execution; guarded moves and retreat behaviors; bench metrics (success, cycle time, contact faults). | 2026-06-11 | TBD |
 | 33 | Base+Arm Integration (Classical) | Planned | Navigate to pickup pose, align with RGB-D, run classical grasp, place at drop zone; recovery behaviors (regrasp/replan base pose) and watchdogs. | 2026-06-18 | TBD |
@@ -249,6 +252,10 @@ Firmware tasks have been consolidated into the weekly tracker above. Use the Wee
 [P1] Plot script: generate step response graphs from CSV (rise time, overshoot, SSE)
 [P1] Telemetry v2: add fault flags + setpoint
 [P1] Mechanical CAD: full AMR layout (chassis, mounts, sensor brackets, harness routing); deliver STEP/DXF + assembly guide
+[P1] Proximity sensor integration on AMR: mounting, wiring, driver bring-up, and telemetry
+[P1] Integrate higher-accuracy current sensor and implement safety/protection algorithm
+[P1] SO-101 wrist camera mount + cable routing for close-range grasp perception
+[P1] AMR-mounted camera/depth-sensor placement update and transform refresh for better gripping/bagging coverage
 [P2] CLI: live Bode-like sweep tool using chirp
 ```
 
@@ -288,6 +295,26 @@ Decisions:
 Consequences:
 - Faster, repeatable localization + navigation bring-up.
 - Reduced “map not visible / missing map frame” confusion when RViz starts after map_server.
+
+2026-04-17 - Shifted immediate manipulation focus to sensor placement for grasping
+Context: SO-101 is now integrated, AMR mechanical assembly is complete, and an ACT policy has already demonstrated object pickup and placement into a bag.
+Decisions:
+- Mount a wrist/gripper camera on SO-101 for close-range manipulation views.
+- Refine the AMR-mounted camera/depth-sensor placement to improve grasp and bagging visibility.
+- Treat extrinsic recalibration as mandatory after both sensor changes before further ACT policy iteration.
+Consequences:
+- Better visual coverage near the gripper and target bag should improve grasp execution reliability.
+- Sensor placement work becomes the next critical hardware task before deeper manipulation tuning.
+
+2026-04-17 - Marked sensing and safety integration tracks as active work
+Context: The immediate execution priorities are now proximity sensing, higher-accuracy current sensing with protection logic, and camera mounting on SO-101 plus the AMR.
+Decisions:
+- Mark proximity sensor hardware and driver integration as in progress.
+- Mark higher-accuracy current sensor integration and safety algorithm development as in progress.
+- Mark SO-101 camera mounting and AMR-mounted camera/depth-sensor refinement as in progress.
+Consequences:
+- The tracker now reflects current hands-on work instead of leaving these items in planned/backlog state.
+- Near-term verification should focus on sensor bring-up quality, transform consistency, and safety behavior under real load.
 ```
 
 ---
@@ -299,6 +326,8 @@ Consequences:
 - 2026-02-08: slam_toolbox mapping bring-up verified on real LiDAR; RViz config saved; created controlled firmware tuning profiles; encoder resolution/CPR validated on bench; began track width/wheel separation calibration; focus shifted back to current sensing to enable cascaded control.
 - 2026-02-08: Assembled dual SO-101 arms (Week 27 marked done); mechanical integration ahead of schedule.
 - 2026-02-11: AMCL + Nav2 navigation validated on saved map; added Nav2 params + bring-up launch (topic remaps); RViz config updated (Nav2 panel, `/map` QoS); tuned local costmap size for navigation.
+- 2026-04-17: Marked Week 17 mechanical assembly complete; noted SO-101 integration, successful ACT pick-and-place-into-bag demo, and next focus on wrist camera mounting + AMR depth sensor repositioning.
+- 2026-04-17: Marked proximity sensor integration, higher-accuracy current sensor + safety algorithm work, and camera mounting on SO-101/AMR as in progress in the canonical tracker.
 - 2026-01-01: Added functional hardware e-stop input with debounce + fault latch; tracker updated to reflect current clear-path gap.
 - 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/STM_architecture.md`; removed merged task/architecture files.
 - 2025-12-22: Consolidated firmware tasks into weekly tracker; merged STM32 architecture docs; added Jetson Nano architecture doc.

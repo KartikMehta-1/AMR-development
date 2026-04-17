@@ -62,7 +62,7 @@ Legend: Done, In Progress, Planned, Not Started
 - Tasks
   - Planned â€” Add telemetry fields: i_cmd, i_meas, i_err, i_p, i_i, i_out, duty; w_cmd, w_meas, w_err, w_p, w_i, w_d
   - Planned â€” Run step/ramp/sine/load tests: single-loop vs cascaded; log CSVs
-  - Planned â€” Generate plots and metrics using `python_scripts/plot_step_compare.py`
+  - Planned â€” Generate plots and metrics using `Workspace/python_scripts/plot_step_compare.py`
   - Planned â€” Archive logs in `Workspace/logs/` and plots in `docs/figures/`
   - Planned â€” Summarize results (rise, overshoot, settling, SSE) in `docs/cascaded_pid.md` under a Results section
 
@@ -95,4 +95,3 @@ Notes
 - Hardware support (buck + perfboard) to unblock sensing:
   - Add regulated 5 V buck from 12 V bench/battery for sensors/encoders/ACS758; tie grounds common.
   - Build a small perfboard/shield for Nucleo: encoder 3.3 V pull-ups, ACS758 dividers + RC filters, decoupling caps, screw terminals/headers for clean wiring.
-

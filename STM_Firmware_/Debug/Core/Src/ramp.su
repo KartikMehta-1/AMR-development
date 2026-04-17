@@ -1,2 +1,0 @@
-../Core/Src/ramp.c:12:6:Ramp_Init	24	static
-../Core/Src/ramp.c:17:7:Ramp_Update	32	static

@@ -213,16 +213,16 @@ Current topics
 - Bit 15: CTRL_FAULT_GENERIC
 
 ## Implementation Mapping
-- Control loop + tasks: `STM_Firmware_AMR_v2/Core/Src/main.c` (control_task at 100 Hz, ros_pub_task executor + publish).
-- Control law + ramps: `STM_Firmware_AMR_v2/Core/Src/control_loop.c`.
-- Fault detection: `STM_Firmware_AMR_v2/Core/Src/fault_monitor.c`.
-- State machine and fault latch: `STM_Firmware_AMR_v2/Core/Src/control_state.c`.
-- Current sensing: `STM_Firmware_AMR_v2/Core/Src/current_sense.c`.
+- Control loop + tasks: `STM/STM_Firmware_AMR_v2/Core/Src/main.c` (control_task at 100 Hz, ros_pub_task executor + publish).
+- Control law + ramps: `STM/STM_Firmware_AMR_v2/Core/Src/control_loop.c`.
+- Fault detection: `STM/STM_Firmware_AMR_v2/Core/Src/fault_monitor.c`.
+- State machine and fault latch: `STM/STM_Firmware_AMR_v2/Core/Src/control_state.c`.
+- Current sensing: `STM/STM_Firmware_AMR_v2/Core/Src/current_sense.c`.
 
 ## Known Gaps
 - voltage faults pending ADC/BMS integration.
 
 ## Next Steps
 - Add voltage faults when available.
-- Optional: per-wheel feedforward to reduce duty skew; finalize PI gains and log overshoot with python_scripts/check_overshoot.py.
+- Optional: per-wheel feedforward to reduce duty skew; finalize PI gains and log overshoot with `Workspace/python_scripts/check_overshoot.py`.
 - Defer cascaded current control unless needed; keep current for protection/logging.
