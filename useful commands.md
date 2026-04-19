@@ -194,6 +194,33 @@ ros2 control list_controllers
 ros2 control list_hardware_interfaces
 ```
 
+### AMR micro-ROS topic monitors
+Use these during bench bring-up with only `micro_ros_agent` running.
+
+```bash
+# Wheel state
+ros2 topic echo /amr/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort
+
+# Safety / faults
+ros2 topic echo /amr/fault_mask std_msgs/msg/Int32 --qos-reliability best_effort
+ros2 topic echo /amr/safety_state std_msgs/msg/UInt32 --qos-reliability best_effort
+
+# Duty commands
+ros2 topic echo /amr/duty_cmd_left std_msgs/msg/Float32 --qos-reliability best_effort
+ros2 topic echo /amr/duty_cmd_right std_msgs/msg/Float32 --qos-reliability best_effort
+
+# Current (mA)
+ros2 topic echo /amr/current_left_ma std_msgs/msg/Int32 --qos-reliability best_effort
+ros2 topic echo /amr/current_right_ma std_msgs/msg/Int32 --qos-reliability best_effort
+```
+
+### AMR fault clear / safe state
+```bash
+ros2 topic pub --once /amr/enable std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /amr/estop std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty "{}"
+```
+
 ### TF checks (best effort)
 ```bash
 timeout 2s ros2 topic echo /tf --qos-reliability best_effort --qos-durability volatile

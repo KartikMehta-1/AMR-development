@@ -3,8 +3,8 @@
 #define APP_CONFIG_H
 
 // Direction polarity: set to 1 for forward, 0 to invert that wheel
-#define LEFT_DIR_POLARITY    1
-#define RIGHT_DIR_POLARITY   0
+#define LEFT_DIR_POLARITY    0
+#define RIGHT_DIR_POLARITY   1
 
 // E-stop input configuration
 #define ESTOP_ACTIVE_LOW 1
@@ -42,7 +42,7 @@
 #define CURR_ZERO_TRACK_MAX_DELTA_COUNTS 20U   // track only when delta is tiny (~<0.6 A)
 #define CURR_ZERO_TRACK_CURRENT_MA 200        // only track when measured current is near zero
 #define LEFT_CURR_POLARITY    1        // set -1 to flip left current sign
-#define RIGHT_CURR_POLARITY   1        // set -1 to flip right current sign
+#define RIGHT_CURR_POLARITY  -1        // flipped for current-sensor bring-up after rewiring/sensor swap
 #define CURR_LPF_ALPHA        0.1f     // low-pass filter alpha (0..1), higher = less smoothing
 
 // Duty/rpm ramping (units are 0..1 duty fraction per second)
@@ -119,7 +119,7 @@
 #define LAUNCH_MAX_W_RPS 0.25f
 
 // Fault thresholds
-#define FAULT_OC_THRESH_MA        1500   // overcurrent threshold (mA)
+#define FAULT_OC_THRESH_MA        5000   // temporary calibration threshold; reduce after current scaling is validated
 #define FAULT_OC_DWELL_MS         50     // overcurrent dwell to trip (ms)
 #define FAULT_STALL_DUTY_MIN      0.08f  // duty >= 8% considered driving
 #define FAULT_STALL_RPM_MAX       0.5f   // RPM below this while driving counts as stall
