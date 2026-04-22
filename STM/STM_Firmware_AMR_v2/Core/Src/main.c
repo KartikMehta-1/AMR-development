@@ -62,6 +62,15 @@ typedef StaticTask_t osStaticThreadDef_t;
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ROS_INIT_RETRY_DELAY_MS 2000U
+#define ROS_DIAG_BOOT_BLINK_COUNT 3U
+#define ROS_DIAG_BOOT_BLINK_ON_MS 120U
+#define ROS_DIAG_BOOT_BLINK_OFF_MS 120U
+#define ROS_DIAG_BOOT_SETTLE_MS 500U
+#define ROS_INIT_FAIL_BLINK_ON_MS 300U
+#define ROS_INIT_FAIL_BLINK_OFF_MS 300U
+#define ROS_INIT_FAIL_GAP_MS 1500U
+#define ROS_INIT_AUTO_RESET 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -249,6 +258,27 @@ void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element,
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 /* Current sensing moved to current_sense.c */
+
+static void StatusLed_Set(GPIO_PinState state)
+{
+  HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, state);
+}
+
+static void StatusLed_Blink(uint32_t on_ms, uint32_t off_ms)
+{
+  StatusLed_Set(GPIO_PIN_SET);
+  osDelay(on_ms);
+  StatusLed_Set(GPIO_PIN_RESET);
+  osDelay(off_ms);
+}
+
+static void StatusLed_BootSignature(void)
+{
+  for (uint32_t i = 0; i < ROS_DIAG_BOOT_BLINK_COUNT; ++i) {
+    StatusLed_Blink(ROS_DIAG_BOOT_BLINK_ON_MS, ROS_DIAG_BOOT_BLINK_OFF_MS);
+  }
+  osDelay(ROS_DIAG_BOOT_SETTLE_MS);
+}
 
 void WheelCmdLeftCallback(const void * msgin)
 {
@@ -1095,6 +1125,8 @@ void StartRosPubTask(void *argument)
 {
   /* USER CODE BEGIN StartRosPubTask */
   // micro-ROS init and publishers (single-threaded to avoid rcl concurrency)
+  StatusLed_BootSignature();
+
   rmw_uros_set_custom_transport(
       true,
       (void *)&huart2,
@@ -1378,9 +1410,9 @@ void StartRosPubTask(void *argument)
                     (rc10 == RCL_RET_OK) && (rc11 == RCL_RET_OK);
       if (pub_ok) {
         led_state = !led_state;
-        HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        StatusLed_Set(led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
       } else {
-        HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
+        StatusLed_Set(GPIO_PIN_SET);
       }
     }
 
@@ -1388,15 +1420,19 @@ void StartRosPubTask(void *argument)
   }
 
 ros_init_fail:
-  // Blink stage count to indicate where init failed (1-31)
+  ros_ready = false;
+  // Blink the failing init stage repeatedly so it is easy to identify on the
+  // bench. Auto-reset can be re-enabled after diagnosis.
   while (1) {
     for (int i = 0; i < ros_init_fail_stage; i++) {
-      HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
-      osDelay(150);
-      HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_RESET);
-      osDelay(150);
+      StatusLed_Blink(ROS_INIT_FAIL_BLINK_ON_MS, ROS_INIT_FAIL_BLINK_OFF_MS);
     }
-    osDelay(500);
+#if ROS_INIT_AUTO_RESET
+    osDelay(ROS_INIT_RETRY_DELAY_MS);
+    NVIC_SystemReset();
+#else
+    osDelay(ROS_INIT_FAIL_GAP_MS);
+#endif
   }
   /* USER CODE END StartRosPubTask */
 }

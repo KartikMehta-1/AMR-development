@@ -17,6 +17,10 @@ add_library(${PROJECT_NAME} SHARED
   src/amr_hardware.cpp
 )
 
+add_executable(amr_link_watchdog
+  src/amr_link_watchdog.cpp
+)
+
 target_include_directories(${PROJECT_NAME}
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -31,6 +35,12 @@ ament_target_dependencies(${PROJECT_NAME}
   std_msgs
 )
 
+ament_target_dependencies(amr_link_watchdog
+  rclcpp
+  sensor_msgs
+  std_msgs
+)
+
 pluginlib_export_plugin_description_file(hardware_interface amr_hardware_plugins.xml)
 
 install(
@@ -40,6 +50,7 @@ install(
 
 install(
   TARGETS ${PROJECT_NAME}
+  amr_link_watchdog
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin

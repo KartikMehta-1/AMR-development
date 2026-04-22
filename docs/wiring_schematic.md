@@ -191,7 +191,7 @@ Cytron MDD20A dual channel driver is the active configuration. Connections are s
 ## 5) STM32 + Jetson Nano
 
 Data link options
-- USB (recommended): Use the Nucleo ST-LINK Virtual COM Port. Jetson sees `/dev/ttyACM0` (typical). This is the simplest path for micro-ROS agent connectivity. If USB is only for data, ensure the Nucleo is not back-powered from USB 5 V.
+- USB (recommended): Use the Nucleo ST-LINK Virtual COM Port. Prefer the stable `/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*` path on Jetson, with `/dev/ttyACM0` only as a fallback. If USB is only for data, ensure the Nucleo is not back-powered from USB 5 V.
 - UART (3.3 V TTL): STM32 `USART2 TX (PA2)` + Jetson `UART RX` (J41 pin 10), STM32 `USART2 RX (PA3)` + Jetson `UART TX` (J41 pin 8). GND common. Disable the Jetson serial console when using `/dev/ttyTHS1`.
 
 Power (Jetson)

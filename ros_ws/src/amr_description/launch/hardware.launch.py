@@ -1,3 +1,5 @@
+import glob
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction, ExecuteProcess, IncludeLaunchDescription
 from launch.conditions import IfCondition
@@ -5,6 +7,13 @@ from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitut
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+
+
+def _default_agent_device():
+    matches = sorted(glob.glob("/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*"))
+    if matches:
+        return matches[0]
+    return "/dev/ttyACM0"
 
 
 def generate_launch_description():
@@ -29,6 +38,20 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {"robot_description": robot_description, "use_sim_time": use_sim_time},
+        ],
+    )
+
+    amr_link_watchdog = Node(
+        package="amr_hardware",
+        executable="amr_link_watchdog",
+        output="screen",
+        parameters=[
+            {
+                "wheel_state_topic": "/amr/wheel_state",
+                "startup_timeout_sec": 5.0,
+                "stale_timeout_sec": 1.0,
+                "publish_period_sec": 0.5,
+            }
         ],
     )
 
@@ -87,8 +110,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "agent_dev",
-                default_value="/dev/ttyACM0",
-                description="Serial device for micro-ROS agent",
+                default_value=_default_agent_device(),
+                description="Serial device for micro-ROS agent; prefers /dev/serial/by-id ST-LINK path",
             ),
             DeclareLaunchArgument(
                 "agent_baud",
@@ -124,6 +147,8 @@ def generate_launch_description():
                     "-b",
                     agent_baud,
                 ],
+                respawn=True,
+                respawn_delay=2.0,
                 output="screen",
             ),
             ydlidar_launch,
@@ -140,6 +165,7 @@ def generate_launch_description():
                 output="screen",
             ),
             robot_state_publisher,
+            amr_link_watchdog,
             ros2_control_node,
             joint_state_broadcaster_spawner,
             diff_drive_controller_spawner,

@@ -9,7 +9,6 @@ docker run -d --name amr_foxy --net=host --privileged --runtime nvidia \
   amr/ros2-foxy-jetson:arm64 \
   bash -lc "ros2 launch amr_description hardware.launch.py \
     use_sim_time:=false \
-    agent_dev:=/dev/ttyACM0 \
     agent_baud:=460800 \
     start_lidar:=true \
     start_camera:=false"
@@ -151,7 +150,7 @@ ssh jetson
 ```
 
 ### One-command AMR monitor (from dev PC)
-This SSHes to the Jetson, starts the `micro_ros_agent` container if needed, and opens a single-window bench monitor.
+This runs the bench monitor from the desktop over SSH. It opens a local tmux session when `tmux` is installed, otherwise it falls back to terminal tabs. On the Jetson side it reuses `amr_foxy` if it is already running, or starts an agent-only container if needed.
 
 Layout:
 - left column: launch status, safety/fault state, command shell
@@ -175,6 +174,20 @@ Verify only one micro-ROS agent is running:
 ssh -t jetson 'docker exec amr_foxy bash -lc "ps -ef | grep micro_ros_agent | grep -v grep | wc -l"'
 ```
 
+### Desktop: existing-container monitor during teleop
+Use this when the full hardware stack is already running on the same machine and you want the old multi-window topic view without creating or replacing containers.
+
+```bash
+cd ~/AMR-development
+./scripts/amr_existing_container_tmux.sh
+```
+
+If the container name is different:
+```bash
+cd ~/AMR-development
+AMR_CONTAINER_NAME=my_container ./scripts/amr_existing_container_tmux.sh
+```
+
 ## Jetson Runtime (on Jetson)
 ### Launch AMR hardware bringup
 ```bash
@@ -185,7 +198,6 @@ docker run --rm -it --net=host --privileged --runtime nvidia \
   amr/ros2-foxy-jetson:arm64 \
   ros2 launch amr_description hardware.launch.py \
     use_sim_time:=false \
-    agent_dev:=/dev/ttyACM0 \
     agent_baud:=460800 \
     start_lidar:=true \
     start_camera:=false
@@ -196,8 +208,16 @@ docker run --rm -it --net=host --privileged --runtime nvidia \
 docker exec -it amr_foxy /entrypoint.sh bash
 ```
 
-### One-command AMR monitor (on Jetson)
-This starts the `micro_ros_agent` container if needed, then opens the bench monitor locally on the Jetson.
+### Existing-container monitor (on Jetson)
+Use this while teleoperating or anytime `amr_foxy` is already running the full hardware launch. It does not create, restart, or replace containers.
+
+```bash
+cd ~/AMR-development
+./scripts/amr_existing_container_tmux.sh
+```
+
+### Agent-only monitor (on Jetson)
+Use this for bench bring-up when you want the older tmux monitor and are okay with the script creating an agent-only `amr_foxy` container if one is not already running.
 
 ```bash
 cd ~/AMR-development

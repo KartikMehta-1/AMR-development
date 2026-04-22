@@ -7,8 +7,20 @@ IMAGE_NAME="${AMR_IMAGE_NAME:-amr/ros2-foxy-jetson:arm64}"
 ROS_DOMAIN_ID_VALUE="${ROS_DOMAIN_ID:-0}"
 ROS_LOCALHOST_ONLY_VALUE="${ROS_LOCALHOST_ONLY:-0}"
 REMOTE_ROS_WS="${AMR_REMOTE_ROS_WS:-$HOME/AMR-development/ros_ws}"
-AGENT_DEV="${AMR_AGENT_DEV:-/dev/ttyACM0}"
 AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
+
+default_agent_dev() {
+  local dev
+  for dev in /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*; do
+    if [[ -e "${dev}" ]]; then
+      printf '%s\n' "${dev}"
+      return
+    fi
+  done
+  printf '%s\n' "/dev/ttyACM0"
+}
+
+AGENT_DEV="${AMR_AGENT_DEV:-$(default_agent_dev)}"
 
 ensure_container() {
   local running
