@@ -81,11 +81,25 @@ void ControlLoop_Update(ControlLoop *cl,
 #if SPEED_FF_ENABLE
     float ff_l = SPEED_FF_K_DUTY_PER_RPM * cl->rpm_target_l;
     float ff_r = SPEED_FF_K_DUTY_PER_RPM * cl->rpm_target_r;
-    if (fabsf(cl->rpm_target_l) > SPEED_FF_STATIC_RPM) {
-      ff_l += (cl->rpm_target_l >= 0.0f ? 1.0f : -1.0f) * SPEED_FF_STATIC_DUTY;
+    float tgt_abs_l = fabsf(cl->rpm_target_l);
+    float tgt_abs_r = fabsf(cl->rpm_target_r);
+    if (tgt_abs_l > SPEED_FF_STATIC_RPM) {
+      float static_ff_scale_l = 1.0f;
+      float static_ff_span = SPEED_FF_STATIC_RPM_FULL - SPEED_FF_STATIC_RPM;
+      if (static_ff_span > 0.0f && tgt_abs_l < SPEED_FF_STATIC_RPM_FULL) {
+        static_ff_scale_l = (tgt_abs_l - SPEED_FF_STATIC_RPM) / static_ff_span;
+      }
+      ff_l += (cl->rpm_target_l >= 0.0f ? 1.0f : -1.0f) *
+              (SPEED_FF_STATIC_DUTY * static_ff_scale_l);
     }
-    if (fabsf(cl->rpm_target_r) > SPEED_FF_STATIC_RPM) {
-      ff_r += (cl->rpm_target_r >= 0.0f ? 1.0f : -1.0f) * SPEED_FF_STATIC_DUTY;
+    if (tgt_abs_r > SPEED_FF_STATIC_RPM) {
+      float static_ff_scale_r = 1.0f;
+      float static_ff_span = SPEED_FF_STATIC_RPM_FULL - SPEED_FF_STATIC_RPM;
+      if (static_ff_span > 0.0f && tgt_abs_r < SPEED_FF_STATIC_RPM_FULL) {
+        static_ff_scale_r = (tgt_abs_r - SPEED_FF_STATIC_RPM) / static_ff_span;
+      }
+      ff_r += (cl->rpm_target_r >= 0.0f ? 1.0f : -1.0f) *
+              (SPEED_FF_STATIC_DUTY * static_ff_scale_r);
     }
     pid_out_l += ff_l;
     pid_out_r += ff_r;

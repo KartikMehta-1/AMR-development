@@ -3,12 +3,6 @@ set -euo pipefail
 
 SESSION_NAME="${AMR_TMUX_SESSION:-amr_bench}"
 CONTAINER_NAME="${AMR_CONTAINER_NAME:-amr_foxy}"
-IMAGE_NAME="${AMR_IMAGE_NAME:-amr/ros2-foxy-jetson:arm64}"
-ROS_DOMAIN_ID_VALUE="${ROS_DOMAIN_ID:-0}"
-ROS_LOCALHOST_ONLY_VALUE="${ROS_LOCALHOST_ONLY:-0}"
-ROS_WS_HOST_PATH="${AMR_ROS_WS_HOST_PATH:-$HOME/AMR-development/ros_ws}"
-AGENT_DEV="${AMR_AGENT_DEV:-/dev/ttyACM0}"
-AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -20,51 +14,35 @@ require_cmd() {
 require_cmd docker
 require_cmd tmux
 
-host_arch="$(uname -m)"
-
 fail_with_usage() {
   cat >&2 <<EOF
 ${1}
 
-This script is the Jetson-local monitor. It expects to run on the Jetson with:
-- container: ${CONTAINER_NAME}
-- image: ${IMAGE_NAME}
+This script only attaches monitoring panes to an already-running container.
+It does not create, restart, or replace Docker containers.
 
-If you are on the laptop/dev PC, use:
-  ./scripts/open_amr_monitor.sh
+Expected running container:
+  ${CONTAINER_NAME}
 
-If you intentionally want to override the image/container, set:
-  AMR_IMAGE_NAME=...
-  AMR_CONTAINER_NAME=...
+Typical flow:
+  1. Start the hardware stack first:
+     docker run --rm -it --net=host --privileged --runtime nvidia \\
+       --name ${CONTAINER_NAME} \\
+       amr/ros2-foxy-jetson:arm64 \\
+       ros2 launch amr_description hardware.launch.py ...
+
+  2. In another terminal on the same machine, run:
+     ./scripts/amr_existing_container_tmux.sh
 EOF
   exit 1
 }
 
-if [[ "${host_arch}" != "aarch64" && "${host_arch}" != "arm64" ]]; then
-  fail_with_usage "Unsupported host architecture '${host_arch}' for ${0}."
-fi
-
-ensure_container() {
+ensure_running_container() {
   local running
   running="$(docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}')"
-  if [[ "${running}" == "${CONTAINER_NAME}" ]]; then
-    return
+  if [[ "${running}" != "${CONTAINER_NAME}" ]]; then
+    fail_with_usage "Container '${CONTAINER_NAME}' is not currently running."
   fi
-
-  if docker ps -a --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
-    docker rm -f "${CONTAINER_NAME}" >/dev/null
-  fi
-
-  if ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-    fail_with_usage "Docker image '${IMAGE_NAME}' is not available locally."
-  fi
-
-  docker run -d --name "${CONTAINER_NAME}" --net=host --privileged --runtime nvidia \
-    -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID_VALUE}" \
-    -e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY_VALUE}" \
-    -v "${ROS_WS_HOST_PATH}:/workspaces/ros_ws" \
-    "${IMAGE_NAME}" \
-    bash -lc "ros2 run micro_ros_agent micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD} >/tmp/micro_ros_agent.log 2>&1 & while sleep 3600; do :; done" >/dev/null
 }
 
 pane_cmd() {
@@ -76,10 +54,10 @@ if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
   exec tmux attach -t "${SESSION_NAME}"
 fi
 
-ensure_container
+ensure_running_container
 
 tmux new-session -d -s "${SESSION_NAME}" -n overview
-tmux send-keys -t "${SESSION_NAME}:overview.0" "$(pane_cmd "tail -f /tmp/micro_ros_agent.log")" C-m
+tmux send-keys -t "${SESSION_NAME}:overview.0" "$(pane_cmd "while true; do printf '\033[2J\033[H'; printf '== launch_status ==\n\n'; printf 'container: ${CONTAINER_NAME} (existing)\n\n'; printf 'nodes:\n'; ros2 node list 2>/dev/null || true; printf '\nAMR topics:\n'; ros2 topic list 2>/dev/null | grep '^/amr/' || true; sleep 3; done")" C-m
 
 tmux split-window -h -t "${SESSION_NAME}:overview.0"
 tmux send-keys -t "${SESSION_NAME}:overview.1" "$(pane_cmd "ros2 topic echo /amr/safety_state std_msgs/msg/UInt32 --qos-reliability best_effort")" C-m
@@ -119,13 +97,11 @@ tmux split-window -h -t "${SESSION_NAME}:drive.0"
 tmux send-keys -t "${SESSION_NAME}:drive.1" "$(pane_cmd "ros2 topic echo /amr/duty_cmd_right std_msgs/msg/Float32 --qos-reliability best_effort")" C-m
 
 tmux split-window -v -t "${SESSION_NAME}:drive.0"
-tmux send-keys -t "${SESSION_NAME}:drive.2" "$(pane_cmd "printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+tmux send-keys -t "${SESSION_NAME}:drive.2" "$(pane_cmd "printf '%s\n%s\n%s\n%s\n' \
   'safe reset:' \
   'ros2 topic pub --once /amr/enable std_msgs/msg/Bool \"{data: false}\"' \
   'ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty \"{}\"' \
-  'left +0.5:' \
-  'ros2 topic pub --once /amr/wheel_cmd_right std_msgs/msg/Float32 \"{data: 0.0}\"' \
-  'ros2 topic pub -r 10 /amr/wheel_cmd_left std_msgs/msg/Float32 \"{data: 0.5}\"' ; bash")" C-m
+  'teleop monitor shell ready' ; bash")" C-m
 
 tmux split-window -v -t "${SESSION_NAME}:drive.1"
 tmux send-keys -t "${SESSION_NAME}:drive.3" "$(pane_cmd "bash")" C-m

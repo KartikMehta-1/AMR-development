@@ -231,6 +231,7 @@ Firmware tasks have been consolidated into the weekly tracker above. Use the Wee
 ---
 
 ## Architecture Docs
+- ROS stack diagrams: `docs/ros_stack_diagrams.md`
 - STM32 firmware architecture: `docs/STM_architecture.md`
 - Jetson Nano runtime architecture: `docs/jetson_architecture.md`
 

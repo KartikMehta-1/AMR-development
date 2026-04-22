@@ -69,7 +69,8 @@
 #define SPEED_FF_ENABLE          1
 #define SPEED_FF_K_DUTY_PER_RPM  0.003f  // reduced feed-forward for smoother starts
 #define SPEED_FF_STATIC_DUTY     0.015f  // reduced stiction kick to avoid snap
-#define SPEED_FF_STATIC_RPM      2.0f    // apply static bias only above this RPM
+#define SPEED_FF_STATIC_RPM      2.0f    // static bias starts blending in above this RPM
+#define SPEED_FF_STATIC_RPM_FULL 8.0f    // static bias reaches full strength at this RPM
 
 // Test setpoints (RPM) and toggle interval
 #define SPEED_TEST_RPM_LOW   2.0f
