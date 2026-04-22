@@ -53,7 +53,7 @@ void ControlLoop_Update(ControlLoop *cl,
   } else {
     cl->cmd_v_mps = v_cmd_mps;
     cl->cmd_w_rps = w_cmd_rps;
-#if RAMPING_ENABLE
+#if CMD_RAMP_ENABLE
     Ramp_SetTarget(&cl->ramp_v, cl->cmd_v_mps);
     Ramp_SetTarget(&cl->ramp_w, cl->cmd_w_rps);
 
@@ -105,7 +105,7 @@ void ControlLoop_Update(ControlLoop *cl,
     pid_out_r += ff_r;
 #endif
 
-#if RAMPING_ENABLE
+#if DUTY_RAMP_ENABLE
     // Ramp duties toward PID outputs for smooth actuation
     Ramp_SetTarget(&cl->ramp_l, pid_out_l);
     Ramp_SetTarget(&cl->ramp_r, pid_out_r);
@@ -115,7 +115,7 @@ void ControlLoop_Update(ControlLoop *cl,
 #endif
   }
 
-#if RAMPING_ENABLE
+#if DUTY_RAMP_ENABLE
   *duty_cmd_l = Ramp_Update(&cl->ramp_l, dt_s);
   *duty_cmd_r = Ramp_Update(&cl->ramp_r, dt_s);
 #else

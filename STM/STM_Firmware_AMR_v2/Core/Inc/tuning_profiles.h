@@ -24,7 +24,7 @@
 // Select profile here.
 // Baseline means: use the values defined in app_config.h as-is.
 #ifndef TUNING_PROFILE
-#define TUNING_PROFILE TUNING_PROFILE_NO_GUARD
+#define TUNING_PROFILE TUNING_PROFILE_NO_STATIC_FF
 #endif
 
 #endif  // TUNING_PROFILES_H

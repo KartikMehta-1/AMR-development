@@ -53,11 +53,11 @@
 #define RIGHT_ENCODER_POLARITY -1
 
 // Speed PID gains (per wheel). Output is duty 0..1 (clamped to 0..0.3)
-#define SPEED_PID_KP_L     0.020f
-#define SPEED_PID_KI_L     0.008f
+#define SPEED_PID_KP_L     0.015f
+#define SPEED_PID_KI_L     0.005f
 #define SPEED_PID_KD_L     0.0f
-#define SPEED_PID_KP_R     0.020f
-#define SPEED_PID_KI_R     0.008f
+#define SPEED_PID_KP_R     0.015f
+#define SPEED_PID_KI_R     0.005f
 #define SPEED_PID_KD_R     0.0f
 #define SPEED_PID_OUT_MIN -0.90f
 #define SPEED_PID_OUT_MAX  0.90f
@@ -84,10 +84,13 @@
 #define PID_TUNING_HIGH_FRAC 0.50f
 #define PID_TUNING_TOGGLE_MS 3000U
 
-// Ramp rates for command slewing (applied to v, w) and duty limit
-#define RAMPING_ENABLE        1        // set to 0 to disable v/w and duty ramping
-#define V_CMD_RAMP_RATE_MPS   0.8f    // slower linear ramp for smoother response
-#define W_CMD_RAMP_RATE_RAD   0.8f    // slower angular ramp to reduce spin jerk
+// Separate command and duty slew limits. Keep duty ramping to soften wheel
+// actuation, but disable v/w command ramping because diff_drive_controller
+// already applies acceleration limits and double-smoothing makes reversals lag.
+#define CMD_RAMP_ENABLE       0        // set to 1 to slew v/w commands in firmware
+#define DUTY_RAMP_ENABLE      1        // set to 0 to apply PID output directly
+#define V_CMD_RAMP_RATE_MPS   0.8f    // linear ramp for firmware v command if enabled
+#define W_CMD_RAMP_RATE_RAD   0.8f    // angular ramp for firmware w command if enabled
 #define MOTOR_DUTY_MAX        0.70f    // absolute duty limit for scaling/clamp
 
 // Open-loop motor test (bypass PID/control loop; fixed duty regardless of wheel_cmd)
@@ -115,8 +118,8 @@
 // Launch traction guard: soften initial command to avoid wheel slip on startup.
 #define LAUNCH_GUARD_ENABLE 0
 #define LAUNCH_GUARD_MS 1200U
-#define LAUNCH_MIN_SCALE 0.20f
-#define LAUNCH_MAX_V_MPS 0.05f
+#define LAUNCH_MIN_SCALE 0.85f
+#define LAUNCH_MAX_V_MPS 0.06f
 #define LAUNCH_MAX_W_RPS 0.25f
 
 // Fault thresholds
