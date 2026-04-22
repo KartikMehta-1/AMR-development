@@ -1,7 +1,7 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-04-19  
+**Last Updated:** 2026-04-22  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
@@ -12,9 +12,10 @@
 - Recent:
   - Reflashed `STM_Firmware_AMR_v2`, restored STM32 micro-ROS connectivity, and revalidated live `/amr/*` topics on the Jetson bring-up path.
   - Re-checked wheel encoders on live `/amr/wheel_state`, corrected left/right motor-channel wiring, and fixed wheel direction polarity so individual left/right wheel commands now actuate the intended side.
-  - Added ROS current topics (`/amr/current_left_ma`, `/amr/current_right_ma`) for bench bring-up and began current-sensor validation on the replacement sensor.
-  - Identified that current sign was initially wrong on the right side; flipped right current polarity and temporarily raised the overcurrent threshold to keep unloaded calibration/bring-up work moving.
-  - Current-sense calibration is still incomplete: right current now behaves directionally better under load, but idle zero drifts after the wheel has been driven, so raw ADC/zero-point investigation and scaling updates remain open.
+  - Added ROS current topics (`/amr/current_left_ma`, `/amr/current_right_ma`) plus raw ADC/zero topics for bench bring-up and calibration of the replacement current sensors.
+  - Completed current-sensor integration bring-up: current sign/polarity was corrected, idle offset reduced to a small near-zero bias, load current now rises in the expected direction on both sides, and current settles back near zero when the wheels stop.
+  - Restored the overcurrent threshold to `1500 mA` after calibration and confirmed the firmware-side current path is now usable for protection testing.
+  - Added a one-command Jetson bench monitor workflow for wheel state, duty, current, safety state, and fault tracking during bring-up.
   - slam_toolbox bring-up working with real LiDAR (`/scan` -> `/map`) and RViz config saved.
   - Saved a real map and validated map_server + AMCL localization; Nav2 navigation (planner/controller) working with RViz goal tool.
   - Added a Nav2 wrapper launch + params to remap `/cmd_vel` + `/odom` to ros2_control diff-drive topics and to launch RViz reliably inside Docker.
@@ -30,14 +31,14 @@
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
 - Current Focus (next sprint):
   - Integrate proximity sensors on the AMR: finish mounts/wiring and complete bring-up in the sensing stack.
-  - Integrate a higher-accuracy current sensor and develop the associated safety/protection algorithm.
+  - Add Jetson-side odometry fusion and slip/traction monitoring using wheel odom plus an external motion reference (start with IMU / camera-odometry path).
   - Mount the camera on SO-101 and refine the AMR-mounted camera/depth-sensor placement for better gripping and bagging viewpoints.
   - Recalibrate camera-to-arm / camera-to-base extrinsics after the sensor moves and revalidate grasp alignment.
   - Continue ACT manipulation iteration while the sensing and safety integrations are in progress.
 - Control Architecture Direction:
   - Yes, moving toward cascaded control makes sense: inner current/torque limiting (or current loop if feasible) + outer speed loop is the standard industrial structure and will reduce slip/launch transients once current sensing is reliable.
 - Next Focus:
-  - Close the loop on traction/launch transients (feedforward + ramp + slip) using current + better odom; then validate Nav2 navigation on battery power for 10-15 minute supervised runs.
+  - Close the loop on traction/launch transients (feedforward + ramp + slip) using current + better odom; begin with Jetson-side encoder + IMU fusion, then validate Nav2 navigation on battery power for 10-15 minute supervised runs.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
 
 ## Calendar Baseline (Week Alignment)
@@ -64,7 +65,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 9 | Firmware v2: Encoder Integration | <span style="color: green">Done</span> | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; TODO: add external 3.3 V pull-ups or software invert flag. | 2026-01-01 | 2025-11-16 |
 | 10 | Firmware v2: Current Telemetry + Calibration | <span style="color: green">Done</span> | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). | 2026-01-08 | 2025-11-25 |
 | 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: green">Done</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); hardware e-stop GPIO input + debounce wired into ControlState (latched fault); step/ramp plots + docs (docs/pid.md); gains/feedforward tuned. | 2026-01-15 | 2025-12-07 |
-| 12 | Firmware v2: Cascaded Control + Comparison | <span style="color: goldenrod">In Progress</span> | Higher-accuracy current sensor integration is now active together with development of a safety/protection algorithm. `STM_Firmware_AMR_v2` was reflashed on 2026-04-19; wheel-state and individual wheel commands were revalidated, ROS current topics were added, right current polarity was flipped, and the OC threshold was temporarily raised for calibration. Stay on single-loop speed control until the new sensing path is fully validated; then resume cascaded-control comparison work. | 2026-01-22 | TBD |
+| 12 | Firmware v2: Cascaded Control + Comparison | <span style="color: goldenrod">In Progress</span> | Higher-accuracy current-sensor integration is now functionally complete for bench bring-up and protection work: `STM_Firmware_AMR_v2` was reflashed, wheel-state and individual wheel commands were revalidated, ROS current + ADC/zero topics were added, current polarity/sign were corrected, and the OC threshold was returned to `1500 mA`. Stay on single-loop speed control for now; next step is Jetson-side odometry/slip work, then resume cascaded-control comparison once traction behavior is better characterized. | 2026-01-22 | TBD |
 | 13 | Firmware v2: Differential Drive | <span style="color: green">Done</span> | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. | 2026-01-29 | 2025-12-09 |
 | 14 | Firmware v2: Proximity Sensors HW | <span style="color: goldenrod">In Progress</span> | Proximity sensor integration is now active: mounts, wiring, pull-ups/protection, pin-map updates, and bench power-budget checks are being worked through on the AMR. | 2026-02-05 | TBD |
 | 15 | Firmware v2: Proximity Drivers | <span style="color: goldenrod">In Progress</span> | Driver bring-up and integration are now active: implement sampling scheduler, debouncing/filtering, fault detection, and telemetry exposure for the proximity sensors. | 2026-02-12 | TBD |
@@ -325,6 +326,7 @@ Consequences:
 ---
 
 ## Change Log
+- 2026-04-22: Closed the current-sensor integration bring-up loop for bench use: added raw ADC/zero ROS topics and a one-command Jetson monitor, corrected current polarity/sign, brought idle offsets down near zero on both sides, restored the overcurrent threshold to `1500 mA`, and shifted next-focus planning toward Jetson-side odometry fusion/slip detection.
 - 2026-04-19: Reflashed `STM_Firmware_AMR_v2`; recovered micro-ROS bring-up; revalidated encoder feedback and individual left/right wheel control; added ROS current topics; corrected wheel direction polarity; flipped right current polarity and temporarily raised the OC threshold for current-sensor calibration bring-up; noted remaining idle-zero drift on the replacement current sensor.
 - 2026-01-02: Added LiDAR/depth camera bring-up tasks; expanded navigation/mapping breakdown.
 - 2026-01-02: Marked Weeks 17-18 in progress; noted enclosure prep completion and structural changes underway.

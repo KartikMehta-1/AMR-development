@@ -38,7 +38,7 @@
 #define CURR_ZERO_SAMPLES     64U      // samples to average for zero offset
 #define CURR_AVG_SAMPLES      8U      // oversample to reduce noise without analog RC
 #define CURR_ZERO_VALID_WINDOW_COUNTS 2000U  // accept wider zero range; reject only near rails
-#define CURR_ZERO_TRACK_ALPHA 0.02f    // very slow IIR to track drift in zero offset
+#define CURR_ZERO_TRACK_ALPHA 0.0f     // temporarily disable zero tracking during current-sensor calibration
 #define CURR_ZERO_TRACK_MAX_DELTA_COUNTS 20U   // track only when delta is tiny (~<0.6 A)
 #define CURR_ZERO_TRACK_CURRENT_MA 200        // only track when measured current is near zero
 #define LEFT_CURR_POLARITY    1        // set -1 to flip left current sign
@@ -119,7 +119,7 @@
 #define LAUNCH_MAX_W_RPS 0.25f
 
 // Fault thresholds
-#define FAULT_OC_THRESH_MA        5000   // temporary calibration threshold; reduce after current scaling is validated
+#define FAULT_OC_THRESH_MA        1500   // restored overcurrent threshold after current-sensor calibration
 #define FAULT_OC_DWELL_MS         50     // overcurrent dwell to trip (ms)
 #define FAULT_STALL_DUTY_MIN      0.08f  // duty >= 8% considered driving
 #define FAULT_STALL_RPM_MAX       0.5f   // RPM below this while driving counts as stall

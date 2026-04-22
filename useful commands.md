@@ -150,6 +150,31 @@ ssh kartik@192.168.1.9
 ssh jetson
 ```
 
+### One-command AMR monitor (from dev PC)
+This SSHes to the Jetson, starts the `micro_ros_agent` container if needed, and opens a single-window bench monitor.
+
+Layout:
+- left column: launch status, safety/fault state, command shell
+- middle column: left wheel summary
+- right column: right wheel summary
+
+```bash
+cd ~/AMR-development
+./scripts/open_amr_monitor.sh
+```
+
+If the layout gets stale or broken, recreate it:
+```bash
+tmux kill-session -t amr_bench 2>/dev/null || true
+cd ~/AMR-development
+./scripts/open_amr_monitor.sh
+```
+
+Verify only one micro-ROS agent is running:
+```bash
+ssh -t jetson 'docker exec amr_foxy bash -lc "ps -ef | grep micro_ros_agent | grep -v grep | wc -l"'
+```
+
 ## Jetson Runtime (on Jetson)
 ### Launch AMR hardware bringup
 ```bash
@@ -169,6 +194,14 @@ docker run --rm -it --net=host --privileged --runtime nvidia \
 ### Exec into running Jetson container
 ```bash
 docker exec -it amr_foxy /entrypoint.sh bash
+```
+
+### One-command AMR monitor (on Jetson)
+This starts the `micro_ros_agent` container if needed, then opens the bench monitor locally on the Jetson.
+
+```bash
+cd ~/AMR-development
+./scripts/amr_micro_ros_tmux.sh
 ```
 
 ### Rebuild `amr_description` in running Jetson container
