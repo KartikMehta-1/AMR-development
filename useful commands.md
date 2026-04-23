@@ -14,11 +14,22 @@ docker run -d --name amr_foxy --net=host --privileged --runtime nvidia \
     start_camera:=false"
 ```
 
-### 2) Dev PC: Start single container (for SLAM/NAV2 + RViz + Teleop)
+### 2) Dev PC: One-command SLAM launcher
+This starts the `amr_devpc` container and opens a local tmux session with:
+- RViz
+- `slam_toolbox`
+- keyboard teleop
+
+```bash
+cd ~/AMR-development
+./scripts/open_amr_devpc_slam.sh
+```
+
+### 3) Dev PC: Manual container + tool commands (fallback)
 ```bash
 pkill -f rviz2 || true
 xhost +local:root
-docker rm amr_devpc
+docker rm -f amr_devpc 2>/dev/null || true
 
 docker run -it --name amr_devpc --net=host \
   -e ROS_DOMAIN_ID=0 -e ROS_LOCALHOST_ONLY=0 \
@@ -29,7 +40,7 @@ docker run -it --name amr_devpc --net=host \
   bash
 ```
 
-### 3) Dev PC: Launch/Run robot state publisher, SLAM toolbox, RVIZ, Teleop, AMCL, Nav2 (inside amr_devpc container)
+### 4) Dev PC: Launch/Run SLAM toolbox, RViz, Teleop, AMCL, Nav2 (inside amr_devpc container)
 
 ```bash
 docker exec -it amr_devpc bash
@@ -50,16 +61,15 @@ ros2 launch slam_toolbox online_async_launch.py \
   use_sim_time:=false \
   params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
 
-#Robot State Publisher
-source /opt/ros/foxy/setup.bash; \
-    ros2 run robot_state_publisher robot_state_publisher \
-      --ros-args -p use_sim_time:=false \
-      -p robot_description:="$(xacro /workspaces/AMR-development/ros_ws/src/amr_description/urdf/amr.urdf.xacro use_sim:=false)"
 ```
 
+Important:
+- Do not start `robot_state_publisher` again on the dev PC.
+- `hardware.launch.py` already starts `robot_state_publisher` on the Jetson, which is the correct place for it in this stack.
 
 
-### 4) Load saved map (Nav2 AMCL localization)
+
+### 5) Load saved map (Nav2 AMCL localization)
 Use this after you already have a saved `*.yaml` + `*.pgm` in `ros_ws/maps/`.
 
 Important: don't run AMCL at the same time as slam_toolbox mapping/localization (both publish `map->odom`).
@@ -76,7 +86,7 @@ ros2 launch nav2_bringup localization_launch.py \
 # In RViz: use "2D Pose Estimate" to set the initial pose on the map.
 ```
 
-### 5) Nav2 navigation (Map + AMCL + Planner/Controller)
+### 6) Nav2 navigation (Map + AMCL + Planner/Controller)
 This is the full navigation stack (AMCL localization + global planner + local controller).
 
 Important: don't run slam_toolbox while running Nav2 localization/navigation (both publish `map->odom`).
@@ -153,9 +163,9 @@ ssh jetson
 This runs the bench monitor from the desktop over SSH. It opens a local tmux session when `tmux` is installed, otherwise it falls back to terminal tabs. On the Jetson side it reuses `amr_foxy` if it is already running, or starts an agent-only container if needed.
 
 Layout:
-- left column: launch status, safety/fault state, command shell
-- middle column: left wheel summary
-- right column: right wheel summary
+- left column: launch status
+- middle column: left wheel summary over right wheel summary
+- right column: safety/fault state over command shell
 
 ```bash
 cd ~/AMR-development
@@ -172,20 +182,6 @@ cd ~/AMR-development
 Verify only one micro-ROS agent is running:
 ```bash
 ssh -t jetson 'docker exec amr_foxy bash -lc "ps -ef | grep micro_ros_agent | grep -v grep | wc -l"'
-```
-
-### Desktop: existing-container monitor during teleop
-Use this when the full hardware stack is already running on the same machine and you want the old multi-window topic view without creating or replacing containers.
-
-```bash
-cd ~/AMR-development
-./scripts/amr_existing_container_tmux.sh
-```
-
-If the container name is different:
-```bash
-cd ~/AMR-development
-AMR_CONTAINER_NAME=my_container ./scripts/amr_existing_container_tmux.sh
 ```
 
 ## Jetson Runtime (on Jetson)
@@ -206,22 +202,6 @@ docker run --rm -it --net=host --privileged --runtime nvidia \
 ### Exec into running Jetson container
 ```bash
 docker exec -it amr_foxy /entrypoint.sh bash
-```
-
-### Existing-container monitor (on Jetson)
-Use this while teleoperating or anytime `amr_foxy` is already running the full hardware launch. It does not create, restart, or replace containers.
-
-```bash
-cd ~/AMR-development
-./scripts/amr_existing_container_tmux.sh
-```
-
-### Agent-only monitor (on Jetson)
-Use this for bench bring-up when you want the older tmux monitor and are okay with the script creating an agent-only `amr_foxy` container if one is not already running.
-
-```bash
-cd ~/AMR-development
-./scripts/amr_micro_ros_tmux.sh
 ```
 
 ### Rebuild `amr_description` in running Jetson container

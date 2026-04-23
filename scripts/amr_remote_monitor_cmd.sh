@@ -8,6 +8,7 @@ ROS_DOMAIN_ID_VALUE="${ROS_DOMAIN_ID:-0}"
 ROS_LOCALHOST_ONLY_VALUE="${ROS_LOCALHOST_ONLY:-0}"
 REMOTE_ROS_WS="${AMR_REMOTE_ROS_WS:-$HOME/AMR-development/ros_ws}"
 AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
+AGENT_LOG="${AMR_AGENT_LOG:-/tmp/amr_monitor_agent.log}"
 
 default_agent_dev() {
   local dev
@@ -34,11 +35,11 @@ ensure_container() {
       -e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY_VALUE}" \
       -v "${REMOTE_ROS_WS}:/workspaces/ros_ws" \
       "${IMAGE_NAME}" \
-      bash -lc "touch /tmp/micro_ros_agent.log; ros2 run micro_ros_agent micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD} >>/tmp/micro_ros_agent.log 2>&1 & while sleep 3600; do :; done" >/dev/null
+      /entrypoint.sh bash -lc ": > ${AGENT_LOG}; ros2 run micro_ros_agent micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD} >>${AGENT_LOG} 2>&1 & while sleep 3600; do :; done" >/dev/null
   fi
 
-  docker exec "${CONTAINER_NAME}" bash -lc \
-    "touch /tmp/micro_ros_agent.log; mkdir -p /tmp/amr_monitor; while ! mkdir /tmp/amr_monitor/agent_lock 2>/dev/null; do sleep 0.1; done; trap 'rmdir /tmp/amr_monitor/agent_lock' EXIT; ps -ef | grep -F 'micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD}' | grep -v grep >/dev/null || (ros2 run micro_ros_agent micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD} >>/tmp/micro_ros_agent.log 2>&1 &) ; sleep 1" >/dev/null
+  docker exec "${CONTAINER_NAME}" /entrypoint.sh bash -lc \
+    "touch ${AGENT_LOG}; mkdir -p /tmp/amr_monitor; while ! mkdir /tmp/amr_monitor/agent_lock 2>/dev/null; do sleep 0.1; done; trap 'rmdir /tmp/amr_monitor/agent_lock' EXIT; ps -ef | grep -F 'micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD}' | grep -v grep >/dev/null || (: > ${AGENT_LOG}; ros2 run micro_ros_agent micro_ros_agent serial --dev ${AGENT_DEV} -b ${AGENT_BAUD} >>${AGENT_LOG} 2>&1 &) ; sleep 1" >/dev/null
 }
 
 run_in_container() {
@@ -171,15 +172,38 @@ PY
 python3 -u /tmp/amr_live_monitor.py ${mode}"
 }
 
-run_launch_status() {
-  run_in_container "while true; do printf '\033[2J\033[H'; printf '== launch_status ==\n\n'; printf 'container: ${CONTAINER_NAME} (connected)\n\n'; printf 'nodes:\n'; ros2 node list 2>/dev/null || true; printf '\nAMR topics:\n'; ros2 topic list 2>/dev/null | grep '^/amr/' || true; printf '\nagent log:\n'; tail -n 10 /tmp/micro_ros_agent.log 2>/dev/null || true; sleep 3; done"
+run_topics_status() {
+  run_in_container "while true; do \
+    out=\"\$( \
+      printf '== topics ==\n\n'; \
+      printf 'container: ${CONTAINER_NAME} (connected)\n\n'; \
+      printf 'AMR topics:\n'; \
+      ros2 topic list 2>/dev/null | grep '^/amr/' || true; \
+      printf '\nCore topics:\n'; \
+      ros2 topic list 2>/dev/null | grep -E '^/(scan|odom|tf|tf_static|joint_states|dynamic_joint_states|robot_description|parameter_events|rosout)$|^/diff_drive_controller/' || true; \
+    )\"; \
+    printf '\033[2J\033[H%s' \"\$out\"; \
+    sleep 3; \
+  done"
+}
+
+run_nodes_status() {
+  run_in_container "while true; do \
+    out=\"\$( \
+      printf '== nodes ==\n\n'; \
+      printf 'container: ${CONTAINER_NAME} (connected)\n\n'; \
+      ros2 node list 2>/dev/null | sort -u || true; \
+    )\"; \
+    printf '\033[2J\033[H%s' \"\$out\"; \
+    sleep 3; \
+  done"
 }
 
 ensure_container
 
 case "${MODE}" in
   agent_log)
-    run_in_container "printf '== agent_log ==\n'; printf 'Waiting for agent log output...\n\n'; tail -f /tmp/micro_ros_agent.log"
+    run_in_container "printf '== agent_log ==\n'; printf 'Waiting for agent log output...\n\n'; tail -f ${AGENT_LOG}"
     ;;
   safety)
     run_in_container "printf '== safety ==\n'; printf 'Waiting for /amr/safety_state ...\n\n'; ros2 topic echo /amr/safety_state std_msgs/msg/UInt32 --qos-reliability best_effort"
@@ -217,8 +241,11 @@ case "${MODE}" in
   drive_shell)
     run_in_container_tty "printf 'safe reset:\n'; printf 'ros2 topic pub --once /amr/enable std_msgs/msg/Bool \"{data: false}\"\n'; printf 'ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty \"{}\"\n'; printf '\n'; bash"
     ;;
-  launch_status)
-    run_launch_status
+  launch_status|topics_status)
+    run_topics_status
+    ;;
+  nodes_status)
+    run_nodes_status
     ;;
   state_summary)
     run_python_monitor state

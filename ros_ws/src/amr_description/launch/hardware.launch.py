@@ -1,7 +1,13 @@
 import glob
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    TimerAction,
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    SetEnvironmentVariable,
+)
 from launch.conditions import IfCondition
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -151,7 +157,9 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 output="screen",
             ),
+            SetEnvironmentVariable("RCUTILS_LOGGING_SEVERITY_THRESHOLD", "ERROR"),
             ydlidar_launch,
+            SetEnvironmentVariable("RCUTILS_LOGGING_SEVERITY_THRESHOLD", "INFO"),
             ExecuteProcess(
                 condition=IfCondition(start_camera),
                 cmd=[
