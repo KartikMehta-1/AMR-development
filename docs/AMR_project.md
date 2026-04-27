@@ -1,13 +1,13 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-04-22  
+**Last Updated:** 2026-04-27  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
-- Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
+- Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); one-shot Jetson+dev-PC bring-up scripts now include STM reset through ST-LINK/OpenOCD; an initial named-place mission layer is working on top of Nav2; SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
 - Progress: 20/42 weeks complete (~48%) (plan is now being executed iteratively vs. strictly week-by-week).
 - Recent:
   - Reflashed `STM_Firmware_AMR_v2`, restored STM32 micro-ROS connectivity, and revalidated live `/amr/*` topics on the Jetson bring-up path.
@@ -19,26 +19,32 @@
   - slam_toolbox bring-up working with real LiDAR (`/scan` -> `/map`) and RViz config saved.
   - Saved a real map and validated map_server + AMCL localization; Nav2 navigation (planner/controller) working with RViz goal tool.
   - Added a Nav2 wrapper launch + params to remap `/cmd_vel` + `/odom` to ros2_control diff-drive topics and to launch RViz reliably inside Docker.
+  - Added one-shot dev-PC workflows for SLAM and navigation that first bring up the Jetson hardware stack and then reset the STM over ST-LINK using `openocd` on the Jetson.
+  - Validated noninteractive STM reset from the Jetson with `sudo -n openocd -s /usr/share/openocd/scripts -f interface/stlink-v2-1.cfg -f target/stm32f4x.cfg -c "init; reset run; shutdown"`.
   - Fixed RViz map display QoS (Transient Local + Reliable) and added Nav2 UI tools/panel to `amr.rviz`.
   - Marked Week 21 (URDF base) and Week 22 (mapping/localization/navigation bring-up) complete; EKF fusion is tracked as a separate improvement.
   - Resolved TF bring-up issues by ensuring ros2_control/controller_manager + `/joint_states` are alive before SLAM.
   - LiDAR alignment parameterized in URDF (yaw adjust) and rebuilt into runtime container workflow.
   - Encoder pipeline validated on bench (manual rotations), moved to higher-resolution timer mode (TI12), and began closing the loop on wheel kinematics (track width / wheel separation) using 360-degree tests.
   - Added firmware tuning profiles for controlled A/B testing (launch guard, feedforward/static FF, etc.) to avoid “many knobs at once”.
+  - Added `amr_missions`, a first mission-layer ROS 2 package with YAML-defined named places and a `mission_cli` supporting `list`, `go_to <place>`, and `patrol ... --return-home ...`.
+  - Validated named-place navigation on real hardware for `kitchen` and `hall`; current saved places are `home`, `door`, `kitchen`, and `hall`.
   - Integrated SO-101 into the active project stack and completed the main AMR mechanical assembly.
   - Ran an ACT policy that successfully picked up an object and placed it into a bag.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live (wheel_state + duty topics visible); UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
 - Current Focus (next sprint):
-  - Integrate proximity sensors on the AMR: finish mounts/wiring and complete bring-up in the sensing stack.
-  - Add Jetson-side odometry fusion and slip/traction monitoring using wheel odom plus an external motion reference (start with IMU / camera-odometry path).
-  - Mount the camera on SO-101 and refine the AMR-mounted camera/depth-sensor placement for better gripping and bagging viewpoints.
-  - Recalibrate camera-to-arm / camera-to-base extrinsics after the sensor moves and revalidate grasp alignment.
-  - Continue ACT manipulation iteration while the sensing and safety integrations are in progress.
+  - Add Jetson-side EKF state estimation (`robot_localization`) using wheel odom plus camera IMU, then retest SLAM/AMCL/Nav2 on filtered odom.
+  - Convert the current `amr_missions` CLI into a persistent mission runtime (node/service/action) with named places, named routes, retries, timeouts, and return-home behavior.
+  - Add safety/health supervision for LiDAR freshness, localization validity, TF/odom staleness, STM comm health, and mission abort/stop behavior.
+  - Add a first voice I/O scaffold: speaker on AMR for TTS/status and laptop-mic command intake for a small set of mission commands.
+  - Keep proximity and manipulation/perception integration moving only as needed to support the above, but defer heavier perception-assisted autonomy until the Orin NX arrives.
 - Control Architecture Direction:
   - Yes, moving toward cascaded control makes sense: inner current/torque limiting (or current loop if feasible) + outer speed loop is the standard industrial structure and will reduce slip/launch transients once current sensing is reliable.
 - Next Focus:
-  - Close the loop on traction/launch transients (feedforward + ramp + slip) using current + better odom; begin with Jetson-side encoder + IMU fusion, then validate Nav2 navigation on battery power for 10-15 minute supervised runs.
+  - Close the loop on traction/launch transients (feedforward + ramp + slip) using current + filtered odom; validate longer battery-powered Nav2 runs with EKF enabled.
+  - Promote place-based navigation into a robust mission layer that no longer depends on shell-only workflows.
+  - Once the Jetson Orin NX arrives, move on-robot perception, semantic autonomy, and manipulator runtime there.
 - Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
 
 ## Calendar Baseline (Week Alignment)
@@ -76,99 +82,29 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
 | 21 | URDF Modeling (Base AMR) | <span style="color: green">Done</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); LiDAR/camera split into `lidar.xacro` + `camera.xacro`; D455 camera plugin added; base_footprint restored; wheel offsets corrected; caster clearance tuned; Gazebo launch defaults to `obstacles.world`; ros2_control config added; URDF validated in sim. | 2026-03-26 | 2026-02-11 |
 | 22 | Navigation & Mapping Bring-up | <span style="color: green">Done</span> | Mapping: slam_toolbox (2D LiDAR) running on real LiDAR; map save/load + posegraph serialization verified. Localization: AMCL on saved map working. Navigation: Nav2 bring-up working with RViz goals; costmaps wired to ros2_control topics. EKF fusion + odom improvements are tracked separately. | 2026-04-02 | 2026-02-11 |
-| 23 | Navigation Validation & Safety | Planned | Regression routes; obstacle handling using LiDAR + depth; recovery behaviors; watchdogs/staleness; bag/latency logging; refine limits before adding arms; battery-powered navigation runs with Nav2 on dev PC/NUC (Jetson runs drivers only); validate IMU stability and drift. | 2026-04-09 | TBD |
-| 24 | Task Executive & Sequencing (v1) | Planned | Choose BT/PlanSys2; define action interfaces (Navigate/Detect/Pick/Drop/Dock); implement mission executor; add retries/timeouts, status reporting, and logging. | 2026-04-16 | TBD |
-| 25 | Mission Actions + Task Graph | Planned | Implement skill actions (stubs OK) and wire to Nav2/perception/manipulation; add world-state/blackboard; validate scripted sequences in sim. | 2026-04-23 | TBD |
-| 26 | Voice Command MVP | Planned | Offline ASR (Vosk/Whisper) + intent parsing; confirmation prompts and safety gating; map intents to mission goals; log transcripts and outcomes. | 2026-04-30 | TBD |
+| 23 | EKF State Estimation & Nav Validation | Planned | Integrate `robot_localization`; fuse wheel odom + camera IMU; publish filtered odom/TF; retest SLAM, AMCL, and Nav2 on the improved state estimate; run longer battery-powered navigation routes and measure drift. | 2026-04-09 | TBD |
+| 24 | Mission Runtime & Sequencing (v1) | Planned | Promote `amr_missions` from CLI to a persistent node/service/action; keep YAML-defined named places; add named routes, retries, timeouts, return-home, status reporting, and logs. | 2026-04-16 | TBD |
+| 25 | Safety Supervision & Health Monitoring | Planned | Add watchdogs for LiDAR freshness, localization validity, TF/odom staleness, STM comm health, and Nav2 stuck/timeout detection; add safe-stop / mission-abort behavior and health summary topics. | 2026-04-23 | TBD |
+| 26 | Voice Command MVP | Planned | Add speaker output plus a first voice interface using laptop mic input; offline ASR (Vosk/Whisper) + intent parsing + confirmation prompts; map a small command set (`go home`, `go kitchen`, `stop`, `status`) into mission goals and log transcripts/outcomes. | 2026-04-30 | TBD |
 | 27 | Mechanical Integration: Dual SO-101 Arms | <span style="color: green">Done</span> | Assembled dual SO-101 arms; verify reach/clearance; add power budget/fusing for arms; harness routing and strain relief; update CAD and pin/power map. | 2026-05-07 | 2026-02-08 |
-| 28 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. | 2026-05-14 | TBD |
-| 29 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. | 2026-05-21 | TBD |
-| 30 | Calibration & Perception Baseline | <span style="color: goldenrod">In Progress</span> | Camera-mounting work is active on both SO-101 and the AMR-mounted camera/depth sensor. Follow with hand-eye and base-to-arm extrinsics, viewpoint validation for grasping/bagging, AprilTag validation, RGB-D grasp perception baseline (segmentation/keypoints), and the RGB-D+joints log pipeline. | 2026-05-28 | TBD |
-| 31 | Teleop + Dataset Collection | Planned | Teleop/teaching tools (SpaceMouse/joystick); record synchronized video/joints/gripper for pick/place tasks; label successes/failures. | 2026-06-04 | TBD |
-| 32 | Classical Grasp Pipeline | Planned | Perception -> grasp pose -> MoveIt planning/execution; guarded moves and retreat behaviors; bench metrics (success, cycle time, contact faults). | 2026-06-11 | TBD |
-| 33 | Base+Arm Integration (Classical) | Planned | Navigate to pickup pose, align with RGB-D, run classical grasp, place at drop zone; recovery behaviors (regrasp/replan base pose) and watchdogs. | 2026-06-18 | TBD |
-| 34 | VLA/VLM Model Trials (Sim) | Planned | Run state-of-the-art open VLA/VLM (OpenVLA/Octo/RT-class/diffusion) in sim with domain randomization; profile latency on Jetson/external GPU. | 2026-06-25 | TBD |
-| 35 | VLA Guarded Hardware Replay | Planned | Deploy selected policies on hardware with action clamps/safety envelopes; compare to classical baseline; track success/intervention rate. | 2026-07-02 | TBD |
-| 36 | End-to-End Autonomy Sprints | Planned | Full loop: navigate to goal -> pick -> place -> return; measure success, cycle time, collisions, latency; tighten limits/thresholds and logging. | 2026-07-09 | TBD |
-| 37 | Field Bring-up (Supervised) | Planned | On-robot runs with manipulators: drive + pick/place in controlled environment; telemetry review; safety validation and recovery drills. | 2026-07-16 | TBD |
+| 28 | URDF/MoveIt for Base + Arms | Planned | Add SO-101 URDF/Xacro + collision meshes; integrate with base URDF/TF tree; generate MoveIt2 configs and limits; verify planning scene. This is still mostly independent of the compute upgrade. | 2026-05-14 | TBD |
+| 29 | Arm Control Bring-up (Bench) | Planned | Bring up arm drivers (ros2_control/trajectory action); joint state/trajectory streaming; homing/limits/soft-stops; basic Cartesian jogs. Keep this bench-focused before shifting runtime onto the Orin NX. | 2026-05-21 | TBD |
+| 30 | Calibration & Perception Baseline | <span style="color: goldenrod">In Progress</span> | Camera-mounting work is active on both SO-101 and the AMR-mounted camera/depth sensor. Follow with hand-eye and base-to-arm extrinsics, viewpoint validation for grasping/bagging, AprilTag validation, RGB-D grasp perception baseline (segmentation/keypoints), and the RGB-D+joints log pipeline. Heavier on-robot perception compute is expected to shift to the Jetson Orin NX once available. | 2026-05-28 | TBD |
+| 31 | Teleop + Dataset Collection | Planned | Teleop/teaching tools (SpaceMouse/joystick); record synchronized video/joints/gripper for pick/place tasks; label successes/failures. Prepare datasets and logs now so they are ready for Orin-based perception/runtime experiments. | 2026-06-04 | TBD |
+| 32 | Classical Grasp Pipeline | Planned | Perception -> grasp pose -> MoveIt planning/execution; guarded moves and retreat behaviors; bench metrics (success, cycle time, contact faults). Keep this as the pre-Orin baseline against which later learned/perception-heavy approaches are compared. | 2026-06-11 | TBD |
+| 33 | Base+Arm Integration (Classical) | Planned | Navigate to pickup pose, align with RGB-D, run classical grasp, place at drop zone; recovery behaviors (regrasp/replan base pose) and watchdogs. Use this as the last major base+arm milestone before moving heavier runtime onto the Orin NX. | 2026-06-18 | TBD |
+| 34 | Orin NX Bring-up + Perception Runtime Migration | Planned | Bring up the new Jetson Orin NX, reproduce the ROS2/docker stack, move on-robot perception workloads there, validate cameras/depth/IMU throughput, and confirm manipulator-control processes can run on-robot with acceptable latency. | 2026-06-25 | TBD |
+| 35 | VLA/VLM Model Trials (Sim + Orin Profiling) | Planned | Run state-of-the-art open VLA/VLM (OpenVLA/Octo/RT-class/diffusion) in sim with domain randomization; profile latency on the Orin NX and any external GPU fallback; choose an initial perception/autonomy runtime stack. | 2026-07-02 | TBD |
+| 36 | VLA Guarded Hardware Replay | Planned | Deploy selected policies on hardware with action clamps/safety envelopes; compare to the classical baseline; track success/intervention rate; verify Orin-side perception/manipulation runtime stability. | 2026-07-09 | TBD |
+| 37 | End-to-End Autonomy Sprints | Planned | Full loop: navigate to goal -> pick -> place -> return using the mission runtime + Orin-based perception/manipulation stack; measure success, cycle time, collisions, latency; tighten limits/thresholds and logging. | 2026-07-16 | TBD |
 | 38 | PCB Concept & Requirements | Planned | Finalize end-state architecture (STM32 vs SOM, dual motor stage, rails, IO buses); measure/record real currents, noise, harness lengths; write electrical requirements. | 2026-07-23 | TBD |
 | 39 | Carrier PCB (Dev Modules) | Planned | Design carrier/backplane for Nucleo + Cytron + external buck; connectors, power distribution, current sensing, ferrites/filters, ground planes; fab + bench bring-up. | 2026-07-30 | TBD |
 | 40 | Custom Motor Driver / Production Prep | Planned | Begin custom H-bridge integration plan (DRV87xx + MOSFETs) and EMC/ESD prep; outline 4-layer stack, grounds, TVS/CMC, test points, panelization; plan pilot build. | 2026-08-06 | TBD |
-| 41 | Voice I/O Expansion (On-Robot) | Planned | Add wake-word, noise suppression, and command queue; integrate mission status feedback; verify latency and reliability on Nano. | 2026-08-13 | TBD |
-| 42 | Conversational TTS/Dialogue + Safety Guards | Planned | Add TTS responses, multi-turn clarification, and dialogue manager/LLM; explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails. | 2026-08-20 | TBD |
+| 41 | Voice I/O Expansion (On-Robot) | Planned | Move voice input/output fully onto the robot; add wake-word, noise suppression, and command queue; integrate mission status feedback; verify latency and reliability on the Jetson Orin NX. | 2026-08-13 | TBD |
+| 42 | Conversational TTS/Dialogue + Safety Guards | Planned | Add TTS responses, multi-turn clarification, and dialogue manager/LLM; explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails on the Orin-based stack. | 2026-08-20 | TBD |
 
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
----
-
-## ROS2 Control + Nav2 Roadmap (Phased)
-- Phase 1 - Lock robot description
-  - Finalize frames and geometry: base_footprint, base_link, left_wheel_joint, right_wheel_joint, lidar_link, camera_link.
-  - Verify wheel positions, wheel radius, ground contact height, and total mass 12 kg.
-  - Keep inertial and collision on all links; add gazebo tags when sim starts.
-  - Goal: `ros2 launch amr_description view_urdf.launch.py` renders correctly.
-- Phase 2 - Gazebo simulation
-  - Add gazebo_ros2_control plugin block in URDF and transmissions for both wheel joints.
-  - Create controller config YAML: joint_state_broadcaster and diff_drive_controller with wheel radius and separation.
-  - Launch Gazebo, spawn robot, start controllers.
-  - Goal: `/cmd_vel` moves robot in Gazebo and odom is produced.
-- Phase 3 - ROS2 control hardware interface
-  - Create package `amr_hardware` implementing hardware_interface::SystemInterface.
-  - write publishes `/amr/wheel_cmd_left` and `/amr/wheel_cmd_right` in rad/s.
-  - read consumes `/amr/wheel_state` for position and velocity.
-  - Optional: handle `/amr/enable`, `/amr/estop`, `/amr/clear_fault`.
-  - Goal: diff_drive_controller commands drive STM wheels.
-- Phase 4 - Odometry and state estimation
-  - Use diff_drive_controller odom first, then fuse IMU with robot_localization.
-  - Ensure TF chain map -> odom -> base_link -> sensors.
-  - Goal: stable odom and consistent TF.
-- Phase 5 - Sensor bring-up
-  - Lidar driver publishing /scan.
-  - Depth camera topics and pointcloud.
-  - Static transforms for lidar and camera relative to base.
-  - Goal: stable sensor data in RViz with correct frames.
-- Phase 6 - SLAM and Nav2 on dev PC
-  - Run slam_toolbox to build map.
-  - Configure Nav2 for footprint, inflation, costmaps.
-  - Goal: teleop to map to Nav2 goal.
-- Phase 7 - Split compute
-  - Jetson runs drivers and micro-ROS agent.
-  - Dev PC/NUC runs Nav2, slam_toolbox, and RViz.
-  - Ensure network config and time sync are stable.
-
----
-
-## Simulation & Navigation Breakdown - Foxy, Gazebo Classic
-This section expands Weeks 18-23 with explicit simulation tasks using Gazebo Classic, ros2_control, slam_toolbox, and Nav2.
-
-| Week | Simulation / Gazebo | ros2_control | slam_toolbox | Nav2 | Output |
-|---:|---|---|---|---|---|
-| 18 | Verify Gazebo Classic + RViz2 in devpc; create `amr_description`, `amr_gazebo`, `amr_bringup` packages; load a simple world | Stub diff_drive_controller config + controller_manager launch | N/A | N/A | Workspace scaffolding + Gazebo launches |
-| 19 | Keep sim on dev PC; document Jetson limitations for sim | N/A | N/A | N/A | Jetson stays headless; sim remains on PC |
-| 20 | Validate ROS graph over Wi-Fi between dev PC and Jetson; remote RViz2 from PC | N/A | N/A | N/A | Networked ROS2 verified (RViz on PC with Jetson sensors) |
-| 21 | Base URDF/Xacro with LiDAR + depth frames and inertials added; Gazebo launch + spawn verified | ros2_control tags + controller YAML added; controller bring-up verified | N/A | N/A | Spawn + `/cmd_vel` drive verified |
-| 22 | Add lidar plugin; verify `/scan`; add static transforms and base_link alignment | Tune wheel separation/radius, update controller params | Run slam_toolbox in sim; save map | Bring up Nav2 in sim; set params and run go-to-pose; test IMU fusion if simulated | Map saved; Nav2 go-to-pose works in sim |
-| 23 | Run same pipeline on real sensors (or bag playback); compare sim vs real frames | Switch to real odom source; validate wheel_state->odom | Run slam_toolbox on real LiDAR; save a real map | Tune costmaps/footprint, recovery behaviors, and velocity limits; verify IMU fusion | Stable nav on real robot for 10-15 min |
-
----
-
-## Detailed Tasks
-Firmware tasks have been consolidated into the weekly tracker above. Use the Week-by-Week Plan as the single source of truth.
-
----
-
-## Definitions of Done (per milestone)
-- Dual-motor duty: Both channels drive 0-20% with correct direction and safe stop via E-stop
-- Encoders: Stable RPM both wheels; correct direction; noise filtered
-- Current telemetry: Calibrated A/LSB; filtered stream at 50-100 Hz
-- Control (single-loop): <=10% overshoot, low SSE on step/ramp; plots archived
-- Cascaded control: Inner current loop stable; outer speed loop SSE <= 5%, overshoot <= 10%; comparison plots and gains documented
-- FreeRTOS (W13): Tasks meet deadlines under load; CPU < 70%; no missed watchdog
-- Validation (W16): E-stop latency <= 50 ms; current-limit interaction stable under step loads
-- SLAM demo (W19): Successful nav in mapped area for ~15 min without collision or watchdog resets
-- Battery-powered Nav2: Run Nav2 on dev PC/NUC (Jetson runs drivers only); AMR drives to at least 3 waypoints without tether
-
----
 
 ## PCB Migration Milestones (dev boards -> integrated AMR control PCB)
 - Conceptual architecture (target end-state): Define final board contents (STM32/bare MCU or SOM, dual motor stage, buck rails 12->5->3.3 V, encoder conditioning, current sense, battery protection, all IO connectors, CAN/UART/RS485/I2C). This is the "Cytron + Nucleo + buck + encoder + UART + IO" rolled into one.
@@ -235,38 +171,7 @@ Firmware tasks have been consolidated into the weekly tracker above. Use the Wee
 - STM32 firmware architecture: `docs/STM_architecture.md`
 - Jetson Nano runtime architecture: `docs/jetson_architecture.md`
 
----
 
-## Docker Development Environment (Draft)
-- Images/containers
-  - Firmware build: arm-none-eabi toolchain, micro-ROS build tools
-  - Jetson runtime: ROS2 base, micro-ROS agent, AMR nodes
-  - Desktop dev: ROS2, Gazebo, build/test tools
-- Compose
-  - `agent`, `ros-core`, `sim`, `tools` services; volumes for logs and bags
-- CI integration
-  - Build, lint, test stages; multi-arch where needed
-```
-
----
-
-## Issues & Backlog (triage labels)
-- P0 block progress today
-- P1 needed for this milestone
-- P2 nice to have / future
-
-```text
-[P1] Plot script: generate step response graphs from CSV (rise time, overshoot, SSE)
-[P1] Telemetry v2: add fault flags + setpoint
-[P1] Mechanical CAD: full AMR layout (chassis, mounts, sensor brackets, harness routing); deliver STEP/DXF + assembly guide
-[P1] Proximity sensor integration on AMR: mounting, wiring, driver bring-up, and telemetry
-[P1] Integrate higher-accuracy current sensor and implement safety/protection algorithm
-[P1] SO-101 wrist camera mount + cable routing for close-range grasp perception
-[P1] AMR-mounted camera/depth-sensor placement update and transform refresh for better gripping/bagging coverage
-[P2] CLI: live Bode-like sweep tool using chirp
-```
-
----
 
 ## Risks & Mitigations
 - Current spikes trip supply + Add soft-start/ramp; validate with current logs.

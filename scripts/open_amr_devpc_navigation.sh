@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CONTAINER_NAME="${AMR_DEVPC_CONTAINER:-amr_devpc}"
-SESSION_NAME="${AMR_DEVPC_SESSION:-amr_devpc}"
+SESSION_NAME="${AMR_DEVPC_SESSION:-amr_devpc_nav}"
 LOCAL_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DISPLAY_VALUE="${DISPLAY:-:0}"
 DEFAULT_TMUX_WIDTH="$(tput cols 2>/dev/null || printf '180')"
@@ -19,6 +19,26 @@ START_LIDAR="${AMR_START_LIDAR:-true}"
 START_CAMERA="${AMR_START_CAMERA:-false}"
 STM_RESET_DELAY_SEC="${AMR_STM_RESET_DELAY_SEC:-3}"
 
+usage() {
+  cat >&2 <<'EOF'
+Usage:
+  ./scripts/open_amr_devpc_navigation.sh <map_name_or_yaml>
+
+Examples:
+  ./scripts/open_amr_devpc_navigation.sh my_new_map
+  ./scripts/open_amr_devpc_navigation.sh my_new_map.yaml
+  ./scripts/open_amr_devpc_navigation.sh /workspaces/AMR-development/ros_ws/maps/my_new_map.yaml
+
+This starts:
+  - Jetson hardware stack (amr_foxy)
+  - Jetson ST-LINK reset of the STM after startup
+  - RViz
+  - Nav2 localization + navigation on the given saved map
+  - keyboard teleop for fallback checks
+EOF
+  exit 1
+}
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing required command: $1" >&2
@@ -26,10 +46,41 @@ require_cmd() {
   fi
 }
 
+resolve_map_paths() {
+  local input="$1"
+  local container_map
+  local host_map
+
+  if [[ "${input}" == /* ]]; then
+    container_map="${input}"
+    if [[ "${container_map}" == /workspaces/AMR-development/* ]]; then
+      host_map="${LOCAL_REPO}${container_map#/workspaces/AMR-development}"
+    else
+      echo "Absolute map path must be under /workspaces/AMR-development" >&2
+      exit 1
+    fi
+  else
+    local map_file="${input}"
+    [[ "${map_file}" == *.yaml ]] || map_file="${map_file}.yaml"
+    container_map="/workspaces/AMR-development/ros_ws/maps/${map_file}"
+    host_map="${LOCAL_REPO}/ros_ws/maps/${map_file}"
+  fi
+
+  if [[ ! -f "${host_map}" ]]; then
+    echo "Map file not found: ${host_map}" >&2
+    exit 1
+  fi
+
+  MAP_PATH_CONTAINER="${container_map}"
+}
+
 require_cmd docker
 require_cmd xhost
 require_cmd tmux
 require_cmd ssh
+
+[[ $# -ge 1 ]] || usage
+resolve_map_paths "$1"
 
 start_jetson_hardware() {
   ssh "${JETSON_HOST}" bash -s -- \
@@ -120,12 +171,12 @@ if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
   fi
 fi
 
-tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_NAME}" -n slam \
+tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_NAME}" -n navigation \
   "$(container_cmd "source /opt/ros/foxy/setup.bash; export LIBGL_ALWAYS_SOFTWARE=1; rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz")"
 
-rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:slam.0" '#{pane_id}')"
-slam_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch slam_toolbox online_async_launch.py use_sim_time:=false params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml")")"
-teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${slam_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
+rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
+nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false map:=${MAP_PATH_CONTAINER}")")"
+teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
 
 tmux select-pane -t "${teleop_pane}"
 

@@ -1,6 +1,23 @@
 # Useful Commands
 
 ## Quick Start (Top 4)
+
+### One-command AMR monitor (from dev PC)
+This runs the bench monitor from the desktop over SSH. It opens a local tmux session when `tmux` is installed, otherwise it falls back to terminal tabs. On the Jetson side it reuses `amr_foxy` if it is already running, or starts an agent-only container if needed.
+
+Layout:
+- left column: launch status
+- middle column: left wheel summary over right wheel summary
+- right column: safety/fault state over command shell
+
+
+If the layout gets stale or broken, recreate it:
+```bash
+tmux kill-session -t amr_bench 2>/dev/null || true
+cd ~/AMR-development
+./scripts/open_amr_monitor.sh
+```
+
 ### 1) Jetson: AMR hardware bringup (motors + lidar)
 ```bash
 docker run -d --name amr_foxy --net=host --privileged --runtime nvidia \
@@ -15,7 +32,10 @@ docker run -d --name amr_foxy --net=host --privileged --runtime nvidia \
 ```
 
 ### 2) Dev PC: One-command SLAM launcher
-This starts the `amr_devpc` container and opens a local tmux session with:
+This starts:
+- the Jetson hardware stack (`amr_foxy`)
+- Jetson ST-LINK reset of the STM after startup
+- the `amr_devpc` container
 - RViz
 - `slam_toolbox`
 - keyboard teleop
@@ -25,7 +45,73 @@ cd ~/AMR-development
 ./scripts/open_amr_devpc_slam.sh
 ```
 
-### 3) Dev PC: Manual container + tool commands (fallback)
+Save the map from inside the `amr_devpc` container once SLAM looks good:
+
+```bash
+docker exec -it amr_devpc bash
+source /opt/ros/foxy/setup.bash
+ros2 run nav2_map_server map_saver_cli \
+  -t /map \
+  -f /workspaces/AMR-development/ros_ws/maps/my_new_map \
+  --ros-args -p save_map_timeout:=10000
+```
+
+### 3) Dev PC: One-command navigation launcher
+This starts:
+- the Jetson hardware stack (`amr_foxy`)
+- Jetson ST-LINK reset of the STM after startup
+- the `amr_devpc` container
+- RViz
+- full Nav2 bring-up on a saved map
+- keyboard teleop for fallback checks
+
+```bash
+cd ~/AMR-development
+./scripts/open_amr_devpc_navigation.sh my_new_map
+```
+
+You can pass:
+- `my_new_map`
+- `my_new_map.yaml`
+- `/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml`
+
+### 4) Mission layer: named-place commands (inside `amr_devpc`)
+Build and source the mission package:
+
+```bash
+docker exec -it amr_devpc bash
+cd /workspaces/AMR-development/ros_ws
+source /opt/ros/foxy/setup.bash
+colcon build --merge-install --packages-select amr_missions
+source install/setup.bash
+```
+
+List named places:
+
+```bash
+ros2 run amr_missions mission_cli list
+```
+
+Go to a named place:
+
+```bash
+ros2 run amr_missions mission_cli go_to kitchen
+ros2 run amr_missions mission_cli go_to hall
+```
+
+Run a simple patrol and return home:
+
+```bash
+ros2 run amr_missions mission_cli patrol home hall door --return-home home
+```
+
+Current named places:
+- `home`
+- `door`
+- `kitchen`
+- `hall`
+
+### 5) Dev PC: Manual container + tool commands (fallback)
 ```bash
 pkill -f rviz2 || true
 xhost +local:root
@@ -40,7 +126,7 @@ docker run -it --name amr_devpc --net=host \
   bash
 ```
 
-### 4) Dev PC: Launch/Run SLAM toolbox, RViz, Teleop, AMCL, Nav2 (inside amr_devpc container)
+### 6) Dev PC: Launch/Run SLAM toolbox, RViz, Teleop, AMCL, Nav2 (inside amr_devpc container)
 
 ```bash
 docker exec -it amr_devpc bash
@@ -69,7 +155,7 @@ Important:
 
 
 
-### 5) Load saved map (Nav2 AMCL localization)
+### 7) Load saved map (Nav2 AMCL localization)
 Use this after you already have a saved `*.yaml` + `*.pgm` in `ros_ws/maps/`.
 
 Important: don't run AMCL at the same time as slam_toolbox mapping/localization (both publish `map->odom`).
@@ -86,7 +172,7 @@ ros2 launch nav2_bringup localization_launch.py \
 # In RViz: use "2D Pose Estimate" to set the initial pose on the map.
 ```
 
-### 6) Nav2 navigation (Map + AMCL + Planner/Controller)
+### 8) Nav2 navigation (Map + AMCL + Planner/Controller)
 This is the full navigation stack (AMCL localization + global planner + local controller).
 
 Important: don't run slam_toolbox while running Nav2 localization/navigation (both publish `map->odom`).
@@ -137,72 +223,8 @@ docker build -f docker/foxy/Dockerfile.devpc \
   -t amr/ros2-foxy-devpc:amd64 .
 ```
 
-## Networking & SSH
-### Add SSH config alias (dev PC)
-```bash
-mkdir -p ~/.ssh
-cat <<'SSHCONF' >> ~/.ssh/config
 
-Host jetson
-  HostName 192.168.1.9
-  User kartik
-  IdentitiesOnly yes
-  IdentityFile ~/.ssh/id_ed25519
-SSHCONF
-chmod 600 ~/.ssh/config
-```
 
-### SSH to Jetson
-```bash
-ssh kartik@192.168.1.9
-# alias (after adding ~/.ssh/config entry)
-ssh jetson
-```
-
-### One-command AMR monitor (from dev PC)
-This runs the bench monitor from the desktop over SSH. It opens a local tmux session when `tmux` is installed, otherwise it falls back to terminal tabs. On the Jetson side it reuses `amr_foxy` if it is already running, or starts an agent-only container if needed.
-
-Layout:
-- left column: launch status
-- middle column: left wheel summary over right wheel summary
-- right column: safety/fault state over command shell
-
-```bash
-cd ~/AMR-development
-./scripts/open_amr_monitor.sh
-```
-
-If the layout gets stale or broken, recreate it:
-```bash
-tmux kill-session -t amr_bench 2>/dev/null || true
-cd ~/AMR-development
-./scripts/open_amr_monitor.sh
-```
-
-Verify only one micro-ROS agent is running:
-```bash
-ssh -t jetson 'docker exec amr_foxy bash -lc "ps -ef | grep micro_ros_agent | grep -v grep | wc -l"'
-```
-
-## Jetson Runtime (on Jetson)
-### Launch AMR hardware bringup
-```bash
-docker run --rm -it --net=host --privileged --runtime nvidia \
-  -e ROS_DOMAIN_ID=0 \
-  -v ~/AMR-development/ros_ws:/workspaces/ros_ws \
-  --name amr_foxy \
-  amr/ros2-foxy-jetson:arm64 \
-  ros2 launch amr_description hardware.launch.py \
-    use_sim_time:=false \
-    agent_baud:=460800 \
-    start_lidar:=true \
-    start_camera:=false
-```
-
-### Exec into running Jetson container
-```bash
-docker exec -it amr_foxy /entrypoint.sh bash
-```
 
 ### Rebuild `amr_description` in running Jetson container
 ```bash
@@ -215,7 +237,6 @@ source install/setup.bash
 '
 ```
 
-
 ## Diagnostics
 ```bash
 ros2 daemon stop && ros2 daemon start
@@ -227,36 +248,9 @@ ros2 control list_controllers
 ros2 control list_hardware_interfaces
 ```
 
-### AMR micro-ROS topic monitors
-Use these during bench bring-up with only `micro_ros_agent` running.
-
-```bash
-# Wheel state
-ros2 topic echo /amr/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort
-
-# Safety / faults
-ros2 topic echo /amr/fault_mask std_msgs/msg/Int32 --qos-reliability best_effort
-ros2 topic echo /amr/safety_state std_msgs/msg/UInt32 --qos-reliability best_effort
-
-# Duty commands
-ros2 topic echo /amr/duty_cmd_left std_msgs/msg/Float32 --qos-reliability best_effort
-ros2 topic echo /amr/duty_cmd_right std_msgs/msg/Float32 --qos-reliability best_effort
-
-# Current (mA)
-ros2 topic echo /amr/current_left_ma std_msgs/msg/Int32 --qos-reliability best_effort
-ros2 topic echo /amr/current_right_ma std_msgs/msg/Int32 --qos-reliability best_effort
-```
-
 ### AMR fault clear / safe state
 ```bash
 ros2 topic pub --once /amr/enable std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /amr/estop std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty "{}"
-```
-
-### TF checks (best effort)
-```bash
-timeout 2s ros2 topic echo /tf --qos-reliability best_effort --qos-durability volatile
-
-timeout 2s ros2 topic echo /tf_static --qos-reliability reliable --qos-durability transient_local
 ```

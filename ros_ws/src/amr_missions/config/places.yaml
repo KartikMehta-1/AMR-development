@@ -1,0 +1,23 @@
+home:
+  frame_id: map
+  x: 3.559
+  y: 0.531
+  yaw: 3.120
+
+door:
+  frame_id: map
+  x: 7.229
+  y: 1.729
+  yaw: 2.945
+
+kitchen:
+  frame_id: map
+  x: -1.048
+  y: 0.099
+  yaw: 0.014
+
+hall:
+  frame_id: map
+  x: 2.502
+  y: 1.523
+  yaw: -1.182
