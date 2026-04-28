@@ -1,6 +1,6 @@
 # ROS Stack Diagrams
 
-This document explains the actual ROS 2 graph used in this repo for the real AMR bring-up path, mapping, localization, navigation, and the current mission layer on top of Nav2.
+This document explains the actual ROS 2 graph used in this repo for the real AMR bring-up path, mapping, localization, navigation, and the current persistent mission layer on top of Nav2.
 
 It is based on the current launch files, `ros2_control` config, Nav2 params, and STM32 firmware source, not just the older architecture notes.
 
@@ -42,7 +42,7 @@ flowchart LR
     SLAM[slam_toolbox]
     MAP_SERVER[map_server]
     AMCL[amcl]
-    MISSIONS[amr_missions]
+    MISSIONS[mission_server]
     BT[bt_navigator]
     PLANNER[planner_server]
     CONTROLLER[controller_server]
@@ -261,7 +261,7 @@ flowchart LR
   MAP_SERVER[map_server]
   RVIZ[rviz2]
   AMCL[amcl]
-  MISSIONS[amr_missions]
+    MISSIONS[mission_server]
   LIDAR[ydlidar_ros2_driver_node]
   DDC[diff_drive_controller]
   RSP[robot_state_publisher]
@@ -317,19 +317,26 @@ flowchart LR
 
 ## 6. Mission Layer Over Nav2
 
-The current mission layer is intentionally thin. It does not replace Nav2 planning; it sequences named goals and patrol behavior on top of Nav2.
+The current mission layer does not replace Nav2 planning; it runs as a persistent dev-PC-side runtime that sequences named goals and patrol behavior on top of Nav2.
 
 ```mermaid
 flowchart LR
   YAML[places.yaml]
   CLI[mission_cli]
-  SERVER[future amr_mission_server]
+  SERVER[mission_server]
+  STATUS[MissionStatus topic]
+  STATE[GetMissionState service]
+  CMD[command topic]
   NAV2[bt_navigator navigate_to_pose action]
   ROBOT[base navigation stack]
 
   YAML --> CLI
   YAML --> SERVER
-  CLI -->|go_to or patrol| NAV2
+  CLI -->|go_to or patrol services| SERVER
+  CLI -->|state query| STATE
+  STATE --> SERVER
+  CMD --> SERVER
+  SERVER -->|MissionStatus| STATUS
   SERVER -->|named goals and routes| NAV2
   NAV2 --> ROBOT
 ```
@@ -337,9 +344,10 @@ flowchart LR
 ### Current mission-layer responsibilities
 
 - Load named places from `places.yaml`
+- Accept `go_to`, `patrol`, and `cancel` requests over services and topic commands
 - Translate `go_to(name)` into a Nav2 `navigate_to_pose` goal
-- Support simple patrol sequencing
-- Add retries, timeouts, and optional return-home behavior
+- Support patrol sequencing with retries, timeouts, and optional return-home behavior
+- Publish typed mission status and expose current runtime state
 
 ### Current named places
 
@@ -351,8 +359,9 @@ flowchart LR
 ### Near-term direction
 
 - Keep `mission_cli` as a thin operator tool
-- Promote the mission layer into a persistent ROS node/service/action
-- Add named routes, mission status, cancellation, and safety-aware abort behavior
+- Keep `mission_server` as the long-running mission runtime next to Nav2 on the dev-PC side
+- Add named routes and richer mission supervision
+- Add safety-aware abort behavior and tighter integration with higher-level autonomy
 
 ## 7. Nav2 Topic Remapping In This Repo
 

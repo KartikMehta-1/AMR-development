@@ -1,6 +1,7 @@
 import threading
 import time
-from typing import Dict, Iterable, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -14,7 +15,20 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from amr_missions.common import NamedPlace, default_places_path, load_places, yaw_to_quaternion
-from amr_missions_msgs.srv import GoToNamedPose, ListPlaces, PatrolNamedPoses
+from amr_missions_msgs.msg import MissionStatus
+from amr_missions_msgs.srv import GetMissionState, GoToNamedPose, ListPlaces, PatrolNamedPoses
+
+
+@dataclass
+class MissionRuntimeState:
+    state: str = "idle"
+    mission_type: str = "none"
+    target_places: List[str] = field(default_factory=list)
+    current_place: str = ""
+    current_loop: int = 0
+    total_loops: int = 0
+    retries_remaining: int = 0
+    detail: str = "idle"
 
 
 class MissionServer(Node):
@@ -29,7 +43,7 @@ class MissionServer(Node):
             "navigate_to_pose",
             callback_group=self._callback_group,
         )
-        self._status_pub = self.create_publisher(String, "/amr_missions/status", 10)
+        self._status_pub = self.create_publisher(MissionStatus, "/amr_missions/status", 10)
         self.create_subscription(
             String,
             "/amr_missions/command",
@@ -56,6 +70,12 @@ class MissionServer(Node):
             callback_group=self._callback_group,
         )
         self.create_service(
+            GetMissionState,
+            "/amr_missions/state",
+            self._handle_state,
+            callback_group=self._callback_group,
+        )
+        self.create_service(
             Trigger,
             "/amr_missions/cancel",
             self._handle_cancel,
@@ -65,17 +85,47 @@ class MissionServer(Node):
         self._mission_thread: Optional[threading.Thread] = None
         self._cancel_requested = threading.Event()
         self._active_goal_handle = None
-        self._publish_status("idle")
+        self._mission_state = MissionRuntimeState()
+        self._publish_status()
 
     @property
     def places(self) -> Dict[str, NamedPlace]:
         return self._places
 
-    def _publish_status(self, text: str) -> None:
-        msg = String()
-        msg.data = text
+    def _status_message(self) -> MissionStatus:
+        with self._lock:
+            snapshot = MissionRuntimeState(
+                state=self._mission_state.state,
+                mission_type=self._mission_state.mission_type,
+                target_places=list(self._mission_state.target_places),
+                current_place=self._mission_state.current_place,
+                current_loop=self._mission_state.current_loop,
+                total_loops=self._mission_state.total_loops,
+                retries_remaining=self._mission_state.retries_remaining,
+                detail=self._mission_state.detail,
+            )
+        msg = MissionStatus()
+        msg.state = snapshot.state
+        msg.mission_type = snapshot.mission_type
+        msg.target_places = snapshot.target_places
+        msg.current_place = snapshot.current_place
+        msg.current_loop = snapshot.current_loop
+        msg.total_loops = snapshot.total_loops
+        msg.retries_remaining = snapshot.retries_remaining
+        msg.detail = snapshot.detail
+        return msg
+
+    def _set_state(self, **kwargs) -> None:
+        with self._lock:
+            for key, value in kwargs.items():
+                setattr(self._mission_state, key, value)
+
+    def _publish_status(self) -> None:
+        msg = self._status_message()
         self._status_pub.publish(msg)
-        self.get_logger().info(text)
+        self.get_logger().info(
+            f"state={msg.state} mission={msg.mission_type} place={msg.current_place} detail={msg.detail}"
+        )
 
     def refresh_places(self) -> None:
         self._places = load_places(self._places_path)
@@ -113,14 +163,18 @@ class MissionServer(Node):
 
     def _clear_active_mission(self) -> None:
         with self._lock:
+            last_detail = self._mission_state.detail
             self._mission_thread = None
             self._active_goal_handle = None
             self._cancel_requested.clear()
+            self._mission_state = MissionRuntimeState(detail=last_detail)
+        self._publish_status()
 
     def _ensure_server(self) -> bool:
         if self._client.wait_for_server(timeout_sec=20.0):
             return True
-        self._publish_status("error: navigate_to_pose action server unavailable")
+        self._set_state(state="error", detail="navigate_to_pose action server unavailable")
+        self._publish_status()
         return False
 
     def _execute_go_to(self, place_name: str, timeout_sec: float) -> Tuple[bool, str]:
@@ -131,9 +185,12 @@ class MissionServer(Node):
             return False, "navigate_to_pose action server unavailable"
 
         place = self._places[place_name]
-        self._publish_status(
-            f"navigating:{place.name}:x={place.x:.3f},y={place.y:.3f},yaw={place.yaw:.3f}"
+        self._set_state(
+            state="navigating",
+            current_place=place.name,
+            detail=f"x={place.x:.3f},y={place.y:.3f},yaw={place.yaw:.3f}",
         )
+        self._publish_status()
         send_future = self._client.send_goal_async(self._build_goal(place))
         if not self._wait_for_future(send_future, 10.0):
             return False, f"timed out sending goal to '{place_name}'"
@@ -172,16 +229,27 @@ class MissionServer(Node):
         return_home: Optional[str],
     ) -> Tuple[bool, str]:
         remaining_loops = loops
+        completed_loops = 0
         while remaining_loops != 0 and not self._cancel_requested.is_set():
+            completed_loops += 1
+            self._set_state(current_loop=completed_loops)
+            self._publish_status()
             for place in places:
                 attempts = retries + 1
                 while attempts > 0 and not self._cancel_requested.is_set():
+                    self._set_state(retries_remaining=attempts - 1)
                     success, message = self._execute_go_to(place, timeout_sec=timeout)
                     if success:
                         break
                     attempts -= 1
                     if attempts > 0:
-                        self._publish_status(f"retrying:{place}:remaining={attempts}")
+                        self._set_state(
+                            state="retrying",
+                            current_place=place,
+                            retries_remaining=attempts,
+                            detail=f"retrying mission target '{place}'",
+                        )
+                        self._publish_status()
                 else:
                     if return_home and not self._cancel_requested.is_set():
                         self._execute_go_to(return_home, timeout_sec=timeout)
@@ -207,10 +275,77 @@ class MissionServer(Node):
             self._mission_thread.start()
         return True, "mission started"
 
+    def _begin_mission(
+        self,
+        mission_type: str,
+        target_places: List[str],
+        current_place: str,
+        current_loop: int,
+        total_loops: int,
+        retries_remaining: int,
+        detail: str,
+        target,
+        *args,
+    ) -> Tuple[bool, str]:
+        with self._lock:
+            if self._mission_thread is not None and self._mission_thread.is_alive():
+                return False, "mission already running"
+            self._cancel_requested.clear()
+            self._mission_state = MissionRuntimeState(
+                state="accepted",
+                mission_type=mission_type,
+                target_places=list(target_places),
+                current_place=current_place,
+                current_loop=current_loop,
+                total_loops=total_loops,
+                retries_remaining=retries_remaining,
+                detail=detail,
+            )
+            self._mission_thread = threading.Thread(target=target, args=args, daemon=True)
+            self._mission_thread.start()
+        self._publish_status()
+        return True, "mission started"
+
+    def _validate_place(self, place_name: str) -> Tuple[bool, str]:
+        if place_name not in self._places:
+            return False, f"unknown place '{place_name}'"
+        return True, ""
+
+    def _validate_patrol_request(
+        self,
+        places: Iterable[str],
+        loops: int,
+        timeout_sec: float,
+        retries: int,
+        return_home: Optional[str],
+    ) -> Tuple[bool, str]:
+        places_list = list(places)
+        if not places_list:
+            return False, "patrol requires at least one place"
+        for place in places_list:
+            ok, message = self._validate_place(place)
+            if not ok:
+                return False, message
+        if return_home:
+            ok, message = self._validate_place(return_home)
+            if not ok:
+                return False, message
+        if loops < 0:
+            return False, "loops must be >= 0"
+        if timeout_sec <= 0.0:
+            return False, "timeout_sec must be > 0"
+        if retries < 0:
+            return False, "retries must be >= 0"
+        return True, ""
+
     def _run_single_mission_thread(self, place: str, timeout: float) -> None:
         try:
             success, message = self._execute_go_to(place, timeout_sec=timeout)
-            self._publish_status(("success:" if success else "error:") + message)
+            self._set_state(
+                state="succeeded" if success else "error",
+                detail=message,
+            )
+            self._publish_status()
         finally:
             self._clear_active_mission()
 
@@ -223,9 +358,22 @@ class MissionServer(Node):
         return_home: Optional[str],
     ) -> None:
         try:
-            self._publish_status(f"patrol_started:{','.join(places)}")
+            self._set_state(
+                state="running",
+                mission_type="patrol",
+                target_places=list(places),
+                current_loop=0,
+                total_loops=int(loops),
+                retries_remaining=int(retries),
+                detail="patrol started",
+            )
+            self._publish_status()
             success, message = self._run_patrol(places, loops, timeout, retries, return_home)
-            self._publish_status(("success:" if success else "error:") + message)
+            self._set_state(
+                state="succeeded" if success else "error",
+                detail=message,
+            )
+            self._publish_status()
         finally:
             self._clear_active_mission()
 
@@ -235,22 +383,59 @@ class MissionServer(Node):
         response.places = sorted(self._places.keys())
         return response
 
+    def _handle_state(self, request, response):
+        del request
+        response.status = self._status_message()
+        return response
+
     def _handle_go_to(self, request, response):
         self.refresh_places()
-        ok, message = self._start_thread(
+        ok, message = self._validate_place(request.place)
+        if not ok:
+            response.success = False
+            response.message = message
+            return response
+        if request.timeout_sec <= 0.0:
+            response.success = False
+            response.message = "timeout_sec must be > 0"
+            return response
+        ok, message = self._begin_mission(
+            "go_to",
+            [request.place],
+            request.place,
+            1,
+            1,
+            0,
+            "go_to accepted",
             self._run_single_mission_thread,
             request.place,
             float(request.timeout_sec),
         )
         response.success = ok
         response.message = message
-        if ok:
-            self._publish_status(f"accepted:go_to:{request.place}")
         return response
 
     def _handle_patrol(self, request, response):
         self.refresh_places()
-        ok, message = self._start_thread(
+        ok, message = self._validate_patrol_request(
+            request.places,
+            int(request.loops),
+            float(request.timeout_sec),
+            int(request.retries),
+            request.return_home or None,
+        )
+        if not ok:
+            response.success = False
+            response.message = message
+            return response
+        ok, message = self._begin_mission(
+            "patrol",
+            list(request.places),
+            "",
+            0,
+            int(request.loops),
+            int(request.retries),
+            "patrol accepted",
             self._run_patrol_thread,
             list(request.places),
             int(request.loops),
@@ -260,8 +445,6 @@ class MissionServer(Node):
         )
         response.success = ok
         response.message = message
-        if ok:
-            self._publish_status(f"accepted:patrol:{','.join(request.places)}")
         return response
 
     def _handle_cancel(self, request, response):
@@ -277,10 +460,15 @@ class MissionServer(Node):
 
         response.success = running
         response.message = "cancel requested" if running else "no active mission"
-        self._publish_status("cancel_requested" if running else "cancel_ignored:no_active_mission")
+        self._set_state(
+            state="cancel_requested" if running else "idle",
+            detail=response.message,
+        )
+        self._publish_status()
         return response
 
-    def _handle_command(self, msg: String) -> None:
+    def _handle_command(self, msg) -> None:
+        self.refresh_places()
         data = msg.data.strip()
         if not data:
             return
@@ -290,13 +478,53 @@ class MissionServer(Node):
         if data.startswith("go_to:"):
             place = data.split(":", 1)[1].strip()
             if place:
-                self._start_thread(self._run_single_mission_thread, place, 180.0)
+                ok, message = self._validate_place(place)
+                if ok:
+                    started, start_message = self._begin_mission(
+                        "go_to",
+                        [place],
+                        place,
+                        1,
+                        1,
+                        0,
+                        "go_to accepted from topic command",
+                        self._run_single_mission_thread,
+                        place,
+                        180.0,
+                    )
+                    if started:
+                        pass
+                    else:
+                        self._set_state(state="error", detail=start_message)
+                        self._publish_status()
+                else:
+                    self._set_state(state="error", detail=message)
+                    self._publish_status()
             return
         if data.startswith("patrol:"):
             raw_places = data.split(":", 1)[1].strip()
             places = [part.strip() for part in raw_places.split(",") if part.strip()]
             if places:
-                self._start_thread(self._run_patrol_thread, places, 1, 180.0, 1, None)
+                ok, message = self._validate_patrol_request(places, 1, 180.0, 1, None)
+                if ok:
+                    started, start_message = self._begin_mission(
+                        "patrol",
+                        list(places),
+                        "",
+                        0,
+                        1,
+                        1,
+                        "patrol accepted from topic command",
+                        self._run_patrol_thread, places, 1, 180.0, 1, None
+                    )
+                    if started:
+                        pass
+                    else:
+                        self._set_state(state="error", detail=start_message)
+                        self._publish_status()
+                else:
+                    self._set_state(state="error", detail=message)
+                    self._publish_status()
 
 
 def main() -> None:

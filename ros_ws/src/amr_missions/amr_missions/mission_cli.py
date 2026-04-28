@@ -6,7 +6,7 @@ from rclpy.node import Node
 from std_srvs.srv import Trigger
 
 from amr_missions.common import default_places_path, load_places
-from amr_missions_msgs.srv import GoToNamedPose, ListPlaces, PatrolNamedPoses
+from amr_missions_msgs.srv import GetMissionState, GoToNamedPose, ListPlaces, PatrolNamedPoses
 
 
 class MissionClient(Node):
@@ -17,6 +17,7 @@ class MissionClient(Node):
         self._list_client = self.create_client(ListPlaces, "/amr_missions/list_places")
         self._go_to_client = self.create_client(GoToNamedPose, "/amr_missions/go_to")
         self._patrol_client = self.create_client(PatrolNamedPoses, "/amr_missions/patrol")
+        self._state_client = self.create_client(GetMissionState, "/amr_missions/state")
         self._cancel_client = self.create_client(Trigger, "/amr_missions/cancel")
 
     @property
@@ -31,6 +32,7 @@ class MissionClient(Node):
             self._list_client,
             self._go_to_client,
             self._patrol_client,
+            self._state_client,
             self._cancel_client,
         ]
         return all(client.wait_for_service(timeout_sec=timeout_sec) for client in clients)
@@ -56,6 +58,12 @@ class MissionClient(Node):
         else:
             self.get_logger().error(response.message)
         return response.success
+
+    def mission_state(self):
+        future = self._state_client.call_async(GetMissionState.Request())
+        rclpy.spin_until_future_complete(self, future)
+        response = future.result()
+        return None if response is None else response.status
 
     def patrol(self, places, loops: int, timeout: float, retries: int, return_home: Optional[str]) -> bool:
         request = PatrolNamedPoses.Request()
@@ -107,6 +115,7 @@ def parse_args() -> argparse.Namespace:
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("list", help="List named places")
+    subparsers.add_parser("status", help="Show current mission runtime state")
 
     go_to = subparsers.add_parser("go_to", help="Navigate to a named place")
     go_to.add_argument("place", help="Named place to navigate to")
@@ -151,6 +160,26 @@ def main() -> None:
                 print(
                     f"{place.name}: frame={place.frame_id} x={place.x:.3f} y={place.y:.3f} yaw={place.yaw:.3f}"
                 )
+            return
+
+        if args.command == "status":
+            if not node._state_client.wait_for_service(timeout_sec=2.0):
+                node.get_logger().error("Mission state service is not available")
+                exit_code = 1
+                return
+            status = node.mission_state()
+            if status is None:
+                node.get_logger().error("No response from mission server")
+                exit_code = 1
+                return
+            print(f"state: {status.state}")
+            print(f"mission_type: {status.mission_type}")
+            print(f"target_places: {', '.join(status.target_places) if status.target_places else '-'}")
+            print(f"current_place: {status.current_place or '-'}")
+            print(f"current_loop: {status.current_loop}")
+            print(f"total_loops: {status.total_loops}")
+            print(f"retries_remaining: {status.retries_remaining}")
+            print(f"detail: {status.detail}")
             return
 
         if not node.wait_for_server(timeout_sec=args.server_timeout):
