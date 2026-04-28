@@ -73,6 +73,9 @@ This starts:
 - the `amr_devpc` container
 - RViz
 - full Nav2 bring-up on a saved map
+- `mission_server`
+- live mission status pane
+- mission command shell
 - keyboard teleop for fallback checks
 
 ```bash
@@ -85,15 +88,28 @@ You can pass:
 - `my_new_map.yaml`
 - `/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml`
 
-### 4) Mission layer: named-place commands (inside `amr_devpc`)
-Build and source the mission package:
+### 4) Mission layer: persistent runtime (inside `amr_devpc`)
+Build and source the mission packages:
 
 ```bash
 docker exec -it amr_devpc bash
 cd /workspaces/AMR-development/ros_ws
 source /opt/ros/foxy/setup.bash
-colcon build --merge-install --packages-select amr_missions
+colcon build --merge-install --packages-select amr_missions_msgs amr_missions
 source install/setup.bash
+```
+
+Start the mission server:
+
+```bash
+ros2 run amr_missions mission_server
+```
+
+Query mission runtime state:
+
+```bash
+ros2 run amr_missions mission_cli status
+ros2 service call /amr_missions/state amr_missions_msgs/srv/GetMissionState "{}"
 ```
 
 List named places:
@@ -113,6 +129,26 @@ Run a simple patrol and return home:
 
 ```bash
 ros2 run amr_missions mission_cli patrol home hall door --return-home home
+```
+
+Cancel the active mission:
+
+```bash
+ros2 run amr_missions mission_cli cancel
+```
+
+Watch structured mission status:
+
+```bash
+ros2 topic echo /amr_missions/status
+```
+
+Topic-command interface:
+
+```bash
+ros2 topic pub --once /amr_missions/command std_msgs/msg/String "{data: 'go_to:kitchen'}"
+ros2 topic pub --once /amr_missions/command std_msgs/msg/String "{data: 'patrol:home,hall,door'}"
+ros2 topic pub --once /amr_missions/command std_msgs/msg/String "{data: 'cancel'}"
 ```
 
 Current named places:

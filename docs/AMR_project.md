@@ -1,13 +1,13 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-04-27  
+**Last Updated:** 2026-04-28  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
 
 ## Status Summary
-- Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); one-shot Jetson+dev-PC bring-up scripts now include STM reset through ST-LINK/OpenOCD; an initial named-place mission layer is working on top of Nav2; SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
+- Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); one-shot Jetson+dev-PC bring-up scripts now include STM reset through ST-LINK/OpenOCD; the mission layer now runs as a persistent dev-PC-side runtime on top of Nav2 with typed status/state and integrated tmux panes; SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
 - Progress: 20/42 weeks complete (~48%) (plan is now being executed iteratively vs. strictly week-by-week).
 - Recent:
   - Reflashed `STM_Firmware_AMR_v2`, restored STM32 micro-ROS connectivity, and revalidated live `/amr/*` topics on the Jetson bring-up path.
@@ -27,15 +27,15 @@
   - LiDAR alignment parameterized in URDF (yaw adjust) and rebuilt into runtime container workflow.
   - Encoder pipeline validated on bench (manual rotations), moved to higher-resolution timer mode (TI12), and began closing the loop on wheel kinematics (track width / wheel separation) using 360-degree tests.
   - Added firmware tuning profiles for controlled A/B testing (launch guard, feedforward/static FF, etc.) to avoid “many knobs at once”.
-  - Added `amr_missions`, a first mission-layer ROS 2 package with YAML-defined named places and a `mission_cli` supporting `list`, `go_to <place>`, and `patrol ... --return-home ...`.
-  - Validated named-place navigation on real hardware for `kitchen` and `hall`; current saved places are `home`, `door`, `kitchen`, and `hall`.
+  - Promoted `amr_missions` into a persistent mission runtime with `mission_server`, typed `MissionStatus`, `/amr_missions/state`, and a command topic; the one-shot navigation launcher now includes mission-server, mission-status, and mission-command panes.
+  - Revalidated named-place navigation and patrol flows on real hardware with the persistent mission runtime; current saved places are `home`, `door`, `kitchen`, and `hall`.
   - Integrated SO-101 into the active project stack and completed the main AMR mechanical assembly.
   - Ran an ACT policy that successfully picked up an object and placed it into a bag.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live (wheel_state + duty topics visible); UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
 - Current Focus (next sprint):
   - Add Jetson-side EKF state estimation (`robot_localization`) using wheel odom plus camera IMU, then retest SLAM/AMCL/Nav2 on filtered odom.
-  - Convert the current `amr_missions` CLI into a persistent mission runtime (node/service/action) with named places, named routes, retries, timeouts, and return-home behavior.
+  - Extend the persistent mission runtime with named routes, stronger supervision, and tighter integration with the rest of the autonomy stack.
   - Add safety/health supervision for LiDAR freshness, localization validity, TF/odom staleness, STM comm health, and mission abort/stop behavior.
   - Add a first voice I/O scaffold: speaker on AMR for TTS/status and laptop-mic command intake for a small set of mission commands.
   - Keep proximity and manipulation/perception integration moving only as needed to support the above, but defer heavier perception-assisted autonomy until the Orin NX arrives.
@@ -83,7 +83,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 21 | URDF Modeling (Base AMR) | <span style="color: green">Done</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); LiDAR/camera split into `lidar.xacro` + `camera.xacro`; D455 camera plugin added; base_footprint restored; wheel offsets corrected; caster clearance tuned; Gazebo launch defaults to `obstacles.world`; ros2_control config added; URDF validated in sim. | 2026-03-26 | 2026-02-11 |
 | 22 | Navigation & Mapping Bring-up | <span style="color: green">Done</span> | Mapping: slam_toolbox (2D LiDAR) running on real LiDAR; map save/load + posegraph serialization verified. Localization: AMCL on saved map working. Navigation: Nav2 bring-up working with RViz goals; costmaps wired to ros2_control topics. EKF fusion + odom improvements are tracked separately. | 2026-04-02 | 2026-02-11 |
 | 23 | EKF State Estimation & Nav Validation | Planned | Integrate `robot_localization`; fuse wheel odom + camera IMU; publish filtered odom/TF; retest SLAM, AMCL, and Nav2 on the improved state estimate; run longer battery-powered navigation routes and measure drift. | 2026-04-09 | TBD |
-| 24 | Mission Runtime & Sequencing (v1) | Planned | Promote `amr_missions` from CLI to a persistent node/service/action; keep YAML-defined named places; add named routes, retries, timeouts, return-home, status reporting, and logs. | 2026-04-16 | TBD |
+| 24 | Mission Runtime & Sequencing (v1) | <span style="color: green">Done</span> | Promoted `amr_missions` from CLI-only use into a persistent `mission_server` with typed `MissionStatus`, a `/amr_missions/state` service, topic-command support, request validation, retries/timeouts/return-home handling, and direct integration into the one-shot navigation tmux workflow. | 2026-04-16 | 2026-04-28 |
 | 25 | Safety Supervision & Health Monitoring | Planned | Add watchdogs for LiDAR freshness, localization validity, TF/odom staleness, STM comm health, and Nav2 stuck/timeout detection; add safe-stop / mission-abort behavior and health summary topics. | 2026-04-23 | TBD |
 | 26 | Voice Command MVP | Planned | Add speaker output plus a first voice interface using laptop mic input; offline ASR (Vosk/Whisper) + intent parsing + confirmation prompts; map a small command set (`go home`, `go kitchen`, `stop`, `status`) into mission goals and log transcripts/outcomes. | 2026-04-30 | TBD |
 | 27 | Mechanical Integration: Dual SO-101 Arms | <span style="color: green">Done</span> | Assembled dual SO-101 arms; verified reach/clearance; added power budget/fusing direction for arms; harness routing and strain relief; updated CAD and pin/power map. | 2026-05-07 | 2026-02-08 |
@@ -128,6 +128,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 - 2026-04-27: Updated the canonical roadmap to split near-term work and post-Orin work more cleanly. Short-term milestones are now EKF state estimation, persistent mission runtime, safety supervision, and voice I/O scaffolding. Perception-heavy autonomy and manipulator runtime migration are explicitly deferred to the Jetson Orin NX phase.
 - 2026-04-27: Added one-shot dev-PC workflows for SLAM and navigation that first bring up the Jetson hardware stack, then reset the STM over ST-LINK via `openocd`, then launch the desktop-side session. Validated noninteractive reset with `sudo -n openocd -s /usr/share/openocd/scripts -f interface/stlink-v2-1.cfg -f target/stm32f4x.cfg -c "init; reset run; shutdown"`.
 - 2026-04-27: Added `amr_missions`, a first mission-layer ROS 2 package with YAML-defined named places and a `mission_cli` supporting `list`, `go_to <place>`, and `patrol ... --return-home ...`. Validated named-place navigation on real hardware for `kitchen` and `hall`; current saved places are `home`, `door`, `kitchen`, and `hall`.
+- 2026-04-28: Promoted `amr_missions` into a persistent dev-PC-side mission runtime: added `mission_server`, typed `MissionStatus` publishing on `/amr_missions/status`, a `/amr_missions/state` service, topic-command control, stricter request validation, and mission-server/status/command panes in the one-shot navigation tmux workflow. Patrol was revalidated before merge.
 - 2026-04-22: Closed the current-sensor integration bring-up loop for bench use: added raw ADC/zero ROS topics and a one-command Jetson monitor, corrected current polarity/sign, brought idle offsets down near zero on both sides, restored the overcurrent threshold to `1500 mA`, and shifted next-focus planning toward Jetson-side odometry fusion/slip detection.
 - 2026-04-19: Reflashed `STM_Firmware_AMR_v2`; recovered micro-ROS bring-up; revalidated encoder feedback and individual left/right wheel control; added ROS current topics; corrected wheel direction polarity; flipped right current polarity and temporarily raised the OC threshold for current-sensor calibration bring-up; noted remaining idle-zero drift on the replacement current sensor.
 - 2026-04-17: Marked Week 17 mechanical assembly complete; noted SO-101 integration, successful ACT pick-and-place-into-bag demo, and next focus on wrist camera mounting + AMR depth sensor repositioning.

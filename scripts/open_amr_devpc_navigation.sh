@@ -37,6 +37,9 @@ This starts:
   - Jetson ST-LINK reset of the STM after startup
   - RViz
   - Nav2 localization + navigation on the given saved map
+  - mission_server
+  - live mission status pane
+  - a mission command shell for mission_cli actions
   - keyboard teleop for fallback checks
 EOF
   exit 1
@@ -268,7 +271,11 @@ tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_N
 rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
 nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false map:=${MAP_PATH_CONTAINER}")")"
 teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
+mission_server_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select amr_missions_msgs amr_missions; source install/setup.bash; ros2 run amr_missions mission_server")")"
+mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; while [ ! -f install/setup.bash ]; do sleep 1; done; source install/setup.bash; ros2 topic echo /amr_missions/status")")"
+mission_shell_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_status_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; while [ ! -f install/setup.bash ]; do sleep 1; done; source install/setup.bash; echo Mission shell ready.; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")")"
 
-tmux select-pane -t "${teleop_pane}"
+tmux select-layout -t "${SESSION_NAME}:navigation" tiled
+tmux select-pane -t "${mission_shell_pane}"
 
 exec tmux attach -t "${SESSION_NAME}"
