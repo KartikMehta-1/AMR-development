@@ -1,21 +1,22 @@
 # STM32 Architecture (Firmware + micro-ROS)
 
 Owner: Kartik Mehta  
-Status: In progress - dual-motor speed PI with ramp; current used for protection; micro-ROS client active on USART2 with cmd_vel + enable/estop/clear and wheel_state + safety_state publishers.  
-Last Updated: 2026-01-04
+Status: In progress - dual-motor speed PI with ramp; current used for protection; micro-ROS client active on USART2 with wheel-command + enable/estop/clear subscribers and wheel-state + diagnostic publishers.  
+Last Updated: 2026-04-28
 
 ## Current Implementation Snapshot
-- Control loop: TIM4 at 100 Hz; speed PI per wheel; duty ramp; differential-drive mapping; cmd_vel staleness timeout (500 ms).
+- Control loop: TIM4 at 100 Hz; speed PI per wheel; duty ramp; differential-drive mapping from left/right wheel command topics; command staleness timeout (500 ms).
 - Sensing: encoders TIM3 (left, 16-bit) / TIM2 (right, 32-bit) with RPM LPF; ADC1 CH8/11 current sense (ACS758) with scaling and LPF.
 - Faults: overcurrent, stall, encoder timeout, ADC stuck detection; fault mask latched in ControlState and cleared via /amr/clear_fault when faults/estop are inactive.
-- micro-ROS: USART2 custom transport; /cmd_vel, /amr/enable, /amr/estop, /amr/clear_fault subs; /amr/wheel_rpm_left, /amr/wheel_rpm_right, /amr/duty_cmd_left, /amr/duty_cmd_right, /amr/fault_mask, /amr/wheel_state, /amr/safety_state pubs at 20 Hz.
+- micro-ROS: USART2 custom transport over the STM32 ST-LINK virtual COM path; subscribers are `/amr/wheel_cmd_left`, `/amr/wheel_cmd_right`, `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; publishers are `/amr/wheel_state`, `/amr/fault_mask`, `/amr/safety_state`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/current_left_ma`, `/amr/current_right_ma`, `/amr/current_left_adc`, `/amr/current_right_adc`, `/amr/current_left_zero`, `/amr/current_right_zero` at 20 Hz.
 - PWM/Dir: TIM1 CH1/CH2 at 20 kHz; DIR PB4/PB5; duty capped at 30%.
 - Legacy UART telemetry: disabled to avoid contention with micro-ROS on USART2.
+- Diagnostics policy: all current, duty, fault, and safety topics are intentionally still published. Some are mainly used by bench/monitor tools, but none are being pruned from firmware yet.
 
 ## Goals
 - Deterministic control on STM32: dual-wheel speed PI (single-loop) with smooth ramps.
 - Current sensing used for protection/diagnostics (not in the control loop).
-- micro-ROS interface for wheel commands (Twist/cmd_vel), enable/estop/clear, and telemetry.
+- micro-ROS interface for per-wheel commands, enable/estop/clear, and telemetry.
 - Safety gating and fault latching.
 
 ## Peripherals and IO
@@ -47,12 +48,12 @@ Last Updated: 2026-01-04
 - ISRs/ticks own control math; RTOS tasks move messages/buffers.
 
 ## Data Flow (single-loop)
-1) Receive /cmd_vel via micro-ROS; store latest with timestamp.
-2) Outer tick: read cmd, map v/w to left/right RPM targets, clamp, apply ramp, run speed PI -> duty targets.
+1) Receive `/amr/wheel_cmd_left` and `/amr/wheel_cmd_right` via micro-ROS; store latest with timestamps.
+2) Outer tick: read left/right wheel commands, clamp, apply ramp, run speed PI -> duty targets.
 3) Apply duty via TIM1 CH1/CH2 (DIR set per polarity).
 4) Sense: encoder deltas -> RPM (LPF); currents -> filtered for protection.
 5) Fault monitor computes fault_bits; ControlState latches faults.
-6) micro-ROS publishes wheel RPM, duty commands, wheel_state, and safety_state.
+6) micro-ROS publishes wheel_state plus fault, safety, duty, and current diagnostics.
 
 ## Motor Control Diagrams
 
@@ -188,18 +189,21 @@ flowchart TD
   W_L --> PWM1
   W_R --> PWM2
 
-  RPUB -->|/cmd_vel| MODE
+  RPUB -->|/amr/wheel_cmd_left right| MODE
   VEL --> RPUB
   SAFE --> RPUB
 ```
 
 Current topics
-- Sub: /cmd_vel (geometry_msgs/Twist).
+- Sub: /amr/wheel_cmd_left, /amr/wheel_cmd_right (std_msgs/Float32, wheel angular velocity command in rad/s as currently consumed by the firmware).
 - Sub: /amr/enable (std_msgs/Bool), /amr/estop (std_msgs/Bool), /amr/clear_fault (std_msgs/Empty).
-- Pub: /amr/wheel_rpm_left, /amr/wheel_rpm_right (std_msgs/Float32, RPM).
 - Pub: /amr/duty_cmd_left, /amr/duty_cmd_right (std_msgs/Float32, duty percent).
 - Pub: /amr/fault_mask (std_msgs/Int32).
-- Pub: /amr/wheel_state (sensor_msgs/JointState), /amr/safety_state (std_msgs/UInt32).
+- Pub: /amr/wheel_state (sensor_msgs/JointState).
+- Pub: /amr/safety_state (std_msgs/UInt32).
+- Pub: /amr/current_left_ma, /amr/current_right_ma (std_msgs/Int32, filtered current estimate in mA).
+- Pub: /amr/current_left_adc, /amr/current_right_adc (std_msgs/UInt32, raw ADC sample).
+- Pub: /amr/current_left_zero, /amr/current_right_zero (std_msgs/UInt32, zero-offset estimate).
 
 ## Fault Mask (current bits)
 - Bit 0: CTRL_FAULT_ESTOP

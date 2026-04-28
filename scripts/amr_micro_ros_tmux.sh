@@ -10,13 +10,6 @@ ROS_WS_HOST_PATH="${AMR_ROS_WS_HOST_PATH:-$HOME/AMR-development/ros_ws}"
 AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
 
 default_agent_dev() {
-  local dev
-  for dev in /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*; do
-    if [[ -e "${dev}" ]]; then
-      printf '%s\n' "${dev}"
-      return
-    fi
-  done
   printf '%s\n' "/dev/ttyACM0"
 }
 

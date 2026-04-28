@@ -1,5 +1,3 @@
-import glob
-
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -13,15 +11,6 @@ from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitut
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-
-
-def _default_agent_device():
-    matches = sorted(glob.glob("/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_*"))
-    if matches:
-        return matches[0]
-    return "/dev/ttyACM0"
-
-
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     agent_dev = LaunchConfiguration("agent_dev")
@@ -116,8 +105,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "agent_dev",
-                default_value=_default_agent_device(),
-                description="Serial device for micro-ROS agent; prefers /dev/serial/by-id ST-LINK path",
+                default_value="/dev/ttyACM0",
+                description="Serial device for micro-ROS agent",
             ),
             DeclareLaunchArgument(
                 "agent_baud",

@@ -2,6 +2,14 @@
 
 ## Quick Start (Top 4)
 
+STM serial-access note:
+- On this Jetson, `/dev/ttyACM0` is owned by `root:plugdev`, not `dialout`.
+- Any Jetson-side `amr_foxy` container that needs the STM port must include the host `plugdev` group with `--group-add "$(getent group plugdev | cut -d: -f3)"`.
+- The repo scripts already patched for this are:
+  - `scripts/open_amr_devpc_navigation.sh`
+  - `scripts/open_amr_devpc_slam.sh`
+  - `scripts/open_amr_devpc_localization.sh`
+
 ### One-command AMR monitor (from dev PC)
 This runs the bench monitor from the desktop over SSH. It opens a local tmux session when `tmux` is installed, otherwise it falls back to terminal tabs. On the Jetson side it reuses `amr_foxy` if it is already running, or starts an agent-only container if needed.
 
@@ -20,7 +28,9 @@ cd ~/AMR-development
 
 ### 1) Jetson: AMR hardware bringup (motors + lidar)
 ```bash
+PLUGDEV_GID="$(getent group plugdev | cut -d: -f3)"
 docker run -d --name amr_foxy --net=host --privileged --runtime nvidia \
+  --group-add "${PLUGDEV_GID}" \
   -e ROS_DOMAIN_ID=0 -e ROS_LOCALHOST_ONLY=0 \
   -v ~/AMR-development/ros_ws:/workspaces/ros_ws \
   amr/ros2-foxy-jetson:arm64 \
@@ -247,6 +257,67 @@ ros2 topic list | grep map
 ros2 control list_controllers
 ros2 control list_hardware_interfaces
 ```
+
+### STM firmware topic inventory
+Current STM firmware subscribes to:
+- `/amr/wheel_cmd_left`
+- `/amr/wheel_cmd_right`
+- `/amr/enable`
+- `/amr/estop`
+- `/amr/clear_fault`
+
+Current STM firmware publishes:
+- `/amr/wheel_state`
+- `/amr/fault_mask`
+- `/amr/safety_state`
+- `/amr/duty_cmd_left`
+- `/amr/duty_cmd_right`
+- `/amr/current_left_ma`
+- `/amr/current_right_ma`
+- `/amr/current_left_adc`
+- `/amr/current_right_adc`
+- `/amr/current_left_zero`
+- `/amr/current_right_zero`
+
+### STM and Jetson handshake validation
+Use this after changing STM transport behavior or after patching Jetson-side container access.
+
+1. Validate that `micro_ros_agent` can open the STM port:
+
+```bash
+PLUGDEV_GID="$(getent group plugdev | cut -d: -f3)"
+docker run --rm -it --net=host --privileged --runtime nvidia \
+  --group-add "${PLUGDEV_GID}" \
+  --name amr_foxy \
+  amr/ros2-foxy-jetson:arm64 \
+  /entrypoint.sh bash -lc "ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 460800 -v 6"
+```
+
+Pass condition:
+- no immediate `Error while starting serial agent!`
+
+2. After STM reset or power-cycle, confirm the first required publisher exists:
+
+```bash
+docker exec -it amr_foxy /entrypoint.sh bash -lc "ros2 topic info -v /amr/wheel_state"
+```
+
+Pass condition:
+- `Publisher count: 1` or higher
+
+3. Validate full base readiness:
+
+```bash
+docker exec -it amr_foxy /entrypoint.sh bash -lc "ros2 control list_controllers"
+docker exec -it amr_foxy /entrypoint.sh bash -lc "timeout 5s ros2 topic echo /amr/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort"
+docker exec -it amr_foxy /entrypoint.sh bash -lc "timeout 5s ros2 run tf2_ros tf2_echo odom base_footprint"
+```
+
+Pass condition:
+- `joint_state_broadcaster` active
+- `diff_drive_controller` active
+- `/amr/wheel_state` streaming
+- `odom -> base_footprint` exists
 
 ### AMR fault clear / safe state
 ```bash

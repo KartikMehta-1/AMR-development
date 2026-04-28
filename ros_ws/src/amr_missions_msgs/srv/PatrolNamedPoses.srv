@@ -1,0 +1,8 @@
+string[] places
+int32 loops
+float32 timeout_sec
+int32 retries
+string return_home
+---
+bool success
+string message

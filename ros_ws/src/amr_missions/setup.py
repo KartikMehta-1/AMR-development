@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mission_cli = amr_missions.mission_cli:main",
+            "mission_server = amr_missions.mission_server:main",
         ],
     },
 )

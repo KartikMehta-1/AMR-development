@@ -166,10 +166,10 @@ Notes
 | Flash / RAM | 512 KB Flash, 96 KB SRAM |
 | Timers in use | TIM1 PWM (CH1/CH2), TIM2 encoder (right, 32-bit), TIM3 encoder (left, 16-bit) |
 | ADC | ADC1 12-bit with DMA; channels PB0 (IN8) left current, PC1 (IN11) right current |
-| UART | USART2 at 460800 bps for telemetry |
+| UART | USART2 at 460800 bps for the STM-side micro-ROS custom transport |
 | GPIO map | PA8/PA9 PWM, PB4/PB5 DIR, PA6/PA7 TIM3 enc, PA0/PA1 TIM2 enc, PA2/PA3 UART2, PA5 LED, PC13 button |
 | Debug | ST-LINK/V2-1 onboard |
-| Notes | Hosts motor-control firmware and planned micro-ROS client |
+| Notes | Hosts the live AMR motor-control firmware and micro-ROS client; currently subscribes to per-wheel command topics and publishes wheel-state plus fault, safety, duty, and current-diagnostic topics |
 
 ---
 

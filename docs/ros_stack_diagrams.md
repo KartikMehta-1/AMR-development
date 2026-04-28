@@ -1,6 +1,6 @@
 # ROS Stack Diagrams
 
-This document explains the actual ROS 2 graph used in this repo for the real AMR bring-up path, mapping, localization, and navigation.
+This document explains the actual ROS 2 graph used in this repo for the real AMR bring-up path, mapping, localization, navigation, and the current mission layer on top of Nav2.
 
 It is based on the current launch files, `ros2_control` config, Nav2 params, and STM32 firmware source, not just the older architecture notes.
 
@@ -11,7 +11,9 @@ It is based on the current launch files, `ros2_control` config, Nav2 params, and
 - Diff-drive controller config: `ros_ws/src/amr_description/config/ros2_control.yaml`
 - SLAM Toolbox config: `ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml`
 - Nav2 + AMCL config: `ros_ws/src/amr_description/config/nav2_params_amr.yaml`
+- Mission layer package: `ros_ws/src/amr_missions`
 - STM32 micro-ROS firmware: `STM/STM_Firmware_AMR_v2/Core/Src/main.c`
+- STM32 micro-ROS transport: `STM/STM_Firmware_AMR_v2/Core/Src/dma_transport.c`
 
 ## Important note about the motion-command path
 
@@ -40,6 +42,7 @@ flowchart LR
     SLAM[slam_toolbox]
     MAP_SERVER[map_server]
     AMCL[amcl]
+    MISSIONS[amr_missions]
     BT[bt_navigator]
     PLANNER[planner_server]
     CONTROLLER[controller_server]
@@ -106,6 +109,7 @@ flowchart LR
   AMCL -->|map tf| RVIZ
   RVIZ -->|initial pose| AMCL
   RVIZ -->|goal action| BT
+  MISSIONS -->|navigate_to_pose action goals| BT
   BT --> PLANNER
   BT --> CONTROLLER
   BT --> RECOVERIES
@@ -257,6 +261,7 @@ flowchart LR
   MAP_SERVER[map_server]
   RVIZ[rviz2]
   AMCL[amcl]
+  MISSIONS[amr_missions]
   LIDAR[ydlidar_ros2_driver_node]
   DDC[diff_drive_controller]
   RSP[robot_state_publisher]
@@ -274,6 +279,7 @@ flowchart LR
 
   RVIZ -->|initial pose| AMCL
   RVIZ -->|goal action| BT
+  MISSIONS -->|navigate_to_pose action goals| BT
 
   LIDAR -->|scan topic| AMCL
   LIDAR -->|scan topic| GCM
@@ -309,7 +315,46 @@ flowchart LR
 - `bt_navigator`: coordinates the whole navigation behavior.
 - `recoveries_server`: handles backup, spin, and wait recoveries when needed.
 
-## 6. Nav2 Topic Remapping In This Repo
+## 6. Mission Layer Over Nav2
+
+The current mission layer is intentionally thin. It does not replace Nav2 planning; it sequences named goals and patrol behavior on top of Nav2.
+
+```mermaid
+flowchart LR
+  YAML[places.yaml]
+  CLI[mission_cli]
+  SERVER[future amr_mission_server]
+  NAV2[bt_navigator navigate_to_pose action]
+  ROBOT[base navigation stack]
+
+  YAML --> CLI
+  YAML --> SERVER
+  CLI -->|go_to or patrol| NAV2
+  SERVER -->|named goals and routes| NAV2
+  NAV2 --> ROBOT
+```
+
+### Current mission-layer responsibilities
+
+- Load named places from `places.yaml`
+- Translate `go_to(name)` into a Nav2 `navigate_to_pose` goal
+- Support simple patrol sequencing
+- Add retries, timeouts, and optional return-home behavior
+
+### Current named places
+
+- `home`
+- `door`
+- `kitchen`
+- `hall`
+
+### Near-term direction
+
+- Keep `mission_cli` as a thin operator tool
+- Promote the mission layer into a persistent ROS node/service/action
+- Add named routes, mission status, cancellation, and safety-aware abort behavior
+
+## 7. Nav2 Topic Remapping In This Repo
 
 Nav2 normally expects:
 
@@ -326,13 +371,13 @@ That remap is done in:
 - `ros_ws/src/amr_description/launch/bringup_nav2.launch.py`
 - `ros_ws/src/amr_description/launch/nav2_navigation.launch.py`
 
-## 7. Exhaustive Topic Ownership
+## 8. Exhaustive Topic Ownership
 
 This section is exhaustive for the repo-controlled topics used by the real AMR base, SLAM, localization, navigation, RViz interaction, and STM32 diagnostics.
 
 It does not attempt to enumerate every internal topic, service, or action created inside upstream packages such as Nav2, `slam_toolbox`, `realsense2_camera`, or RViz plugins. For example, the RViz Nav2 Goal tool talks to Nav2 through an action API rather than a normal topic.
 
-### 7.1 Core base-control topics
+### 8.1 Core base-control topics
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
@@ -343,7 +388,9 @@ It does not attempt to enumerate every internal topic, service, or action create
 | `/joint_states` | `joint_state_broadcaster` | `robot_state_publisher`, RViz | `sensor_msgs/JointState` representing the joint-state view exposed by `ros2_control` for the robot model |
 | `/diff_drive_controller/odom` | `diff_drive_controller` | `slam_toolbox`, `amcl`, Nav2, RViz | `nav_msgs/Odometry` with robot pose and twist in the odometry frame, derived from wheel feedback |
 
-### 7.2 Safety, enable, and bench-diagnostics topics
+### 8.2 Safety, enable, and bench-diagnostics topics
+
+These topics are all still intentionally present in the STM firmware. Some are mainly used by monitor and bench-calibration tooling rather than the core Nav2 path, but they remain part of the live firmware topic set and should not be treated as stale or removed from the current documentation.
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
@@ -361,7 +408,7 @@ It does not attempt to enumerate every internal topic, service, or action create
 | `/amr/current_left_zero` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` stored or estimated zero-offset value for the left current sensor |
 | `/amr/current_right_zero` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` stored or estimated zero-offset value for the right current sensor |
 
-### 7.3 Perception and mapping topics
+### 8.3 Perception and mapping topics
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
@@ -369,7 +416,7 @@ It does not attempt to enumerate every internal topic, service, or action create
 | `/map` | `slam_toolbox` in mapping mode, `map_server` in localization/navigation mode | RViz, `amcl`, Nav2 global costmap, `map_saver_cli` | `nav_msgs/OccupancyGrid` with map metadata like resolution, width, height, origin, and the occupancy data array |
 | `/map_updates` | `slam_toolbox` | RViz | Incremental occupancy-grid update messages describing changed regions of the map since the last full map |
 
-### 7.4 RViz interaction topics
+### 8.4 RViz interaction topics
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
@@ -377,21 +424,21 @@ It does not attempt to enumerate every internal topic, service, or action create
 | `/clicked_point` | RViz Publish Point tool | user tools or debug scripts | `geometry_msgs/PointStamped` containing a user-clicked 3D point in the current fixed frame |
 | `/robot_description` | robot-description source used by `robot_state_publisher` and exposed to RViz | RViz RobotModel display | URDF XML string describing the robot links, joints, visuals, and fixed sensor placements |
 
-### 7.5 Navigation-support topics explicitly configured in this repo
+### 8.5 Navigation-support topics explicitly configured in this repo
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
 | `local_costmap/costmap_raw` | Nav2 local costmap | `recoveries_server` | Local obstacle costmap grid around the robot before RViz-style display processing |
 | `local_costmap/published_footprint` | Nav2 local costmap | `recoveries_server` | Robot footprint polygon currently being used in the local costmap |
 
-### 7.6 Transform topics
+### 8.6 Transform topics
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
 | `/tf` | `robot_state_publisher`, `diff_drive_controller`, `slam_toolbox` or `amcl` | SLAM, localization, Nav2, RViz | `tf2_msgs/TFMessage` containing one or more time-stamped dynamic transforms between parent and child frames |
 | `/tf_static` | `robot_state_publisher` | SLAM, localization, Nav2, RViz | `tf2_msgs/TFMessage` containing latched static transforms for fixed parent-child frame pairs |
 
-### 7.7 Named transforms carried on `/tf` or `/tf_static`
+### 8.7 Named transforms carried on `/tf` or `/tf_static`
 
 | Transform | Published on | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- | --- |
@@ -401,12 +448,12 @@ It does not attempt to enumerate every internal topic, service, or action create
 | `base_link -> lidar_link` | usually `/tf_static` | `robot_state_publisher` | `ydlidar_ros2_driver_node`, `slam_toolbox`, RViz | Fixed LiDAR mounting offset and orientation relative to the robot body |
 | `base_link -> camera_link` | usually `/tf_static` | `robot_state_publisher` | optional camera stack, RViz | Fixed camera mounting offset and orientation relative to the robot body |
 
-### 7.8 Optional topics not expanded in detail here
+### 8.8 Optional topics not expanded in detail here
 
 - Optional RealSense bring-up publishes a larger `/camera/*` and point-cloud topic set through `realsense2_camera`.
 - Those topics are not part of the current base teleop, SLAM, AMCL, and Nav2 loop, so they are intentionally not expanded in the tables above.
 
-## 8. What `/tf`, `/tf_static`, `map -> odom`, and `odom -> base_footprint` Mean
+## 9. What `/tf`, `/tf_static`, `map -> odom`, and `odom -> base_footprint` Mean
 
 ### `/tf`
 
@@ -521,7 +568,10 @@ Current firmware publishes:
 - `/amr/duty_cmd_right`
 - `/amr/current_left_ma`
 - `/amr/current_right_ma`
-- raw current/zero topics used for bench bring-up
+- `/amr/current_left_adc`
+- `/amr/current_right_adc`
+- `/amr/current_left_zero`
+- `/amr/current_right_zero`
 
 Current firmware subscribes to:
 

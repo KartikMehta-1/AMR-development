@@ -253,6 +253,15 @@ void * microros_allocate(size_t size, void * state);
 void microros_deallocate(void * pointer, void * state);
 void * microros_reallocate(void * pointer, size_t size, void * state);
 void * microros_zero_allocate(size_t number_of_elements, size_t size_of_element, void * state);
+extern volatile uint32_t microros_transport_open_calls;
+extern volatile uint32_t microros_transport_open_failures;
+extern volatile uint32_t microros_transport_last_open_status;
+extern volatile uint32_t microros_transport_write_calls;
+extern volatile uint32_t microros_transport_write_failures;
+extern volatile uint32_t microros_transport_write_success_bytes;
+extern volatile uint32_t microros_transport_read_calls;
+extern volatile uint32_t microros_transport_read_nonzero_calls;
+extern volatile uint32_t microros_transport_read_success_bytes;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -270,6 +279,14 @@ static void StatusLed_Blink(uint32_t on_ms, uint32_t off_ms)
   osDelay(on_ms);
   StatusLed_Set(GPIO_PIN_RESET);
   osDelay(off_ms);
+}
+
+static void StatusLed_BlinkCount(uint32_t count, uint32_t on_ms, uint32_t off_ms, uint32_t gap_ms)
+{
+  for (uint32_t i = 0; i < count; ++i) {
+    StatusLed_Blink(on_ms, off_ms);
+  }
+  osDelay(gap_ms);
 }
 
 static void StatusLed_BootSignature(void)
@@ -1424,8 +1441,28 @@ ros_init_fail:
   // Blink the failing init stage repeatedly so it is easy to identify on the
   // bench. Auto-reset can be re-enabled after diagnosis.
   while (1) {
-    for (int i = 0; i < ros_init_fail_stage; i++) {
-      StatusLed_Blink(ROS_INIT_FAIL_BLINK_ON_MS, ROS_INIT_FAIL_BLINK_OFF_MS);
+    StatusLed_BlinkCount(
+        (uint32_t)ros_init_fail_stage,
+        ROS_INIT_FAIL_BLINK_ON_MS,
+        ROS_INIT_FAIL_BLINK_OFF_MS,
+        ROS_INIT_FAIL_GAP_MS);
+
+    if (ros_init_fail_stage == 1) {
+      uint32_t transport_diag = 4U;
+      if (microros_transport_open_failures > 0U ||
+          microros_transport_last_open_status != (uint32_t)HAL_OK) {
+        transport_diag = 1U;
+      } else if (microros_transport_write_success_bytes == 0U) {
+        transport_diag = 2U;
+      } else if (microros_transport_read_success_bytes == 0U) {
+        transport_diag = 3U;
+      }
+
+      StatusLed_BlinkCount(
+          transport_diag,
+          ROS_INIT_FAIL_BLINK_ON_MS,
+          ROS_INIT_FAIL_BLINK_OFF_MS,
+          ROS_INIT_FAIL_GAP_MS);
     }
 #if ROS_INIT_AUTO_RESET
     osDelay(ROS_INIT_RETRY_DELAY_MS);

@@ -18,6 +18,9 @@ AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
 START_LIDAR="${AMR_START_LIDAR:-true}"
 START_CAMERA="${AMR_START_CAMERA:-false}"
 STM_RESET_DELAY_SEC="${AMR_STM_RESET_DELAY_SEC:-3}"
+JETSON_READY_TIMEOUT_SEC="${AMR_JETSON_READY_TIMEOUT_SEC:-45}"
+STM_POST_RESET_TIMEOUT_SEC="${AMR_STM_POST_RESET_TIMEOUT_SEC:-30}"
+JETSON_CONTROLLERS_TIMEOUT_SEC="${AMR_JETSON_CONTROLLERS_TIMEOUT_SEC:-30}"
 
 usage() {
   cat >&2 <<'EOF'
@@ -102,10 +105,16 @@ agent_dev="$5"
 agent_baud="$6"
 start_lidar="$7"
 start_camera="$8"
+plugdev_gid="$(getent group plugdev | cut -d: -f3 || true)"
+docker_group_args=()
+if [[ -n "${plugdev_gid}" ]]; then
+  docker_group_args+=(--group-add "${plugdev_gid}")
+fi
 
 docker rm -f "${container_name}" >/dev/null 2>&1 || true
 
 docker run -d --name "${container_name}" --net=host --privileged --runtime nvidia \
+  "${docker_group_args[@]}" \
   -e ROS_DOMAIN_ID="${ros_domain_id}" \
   -e ROS_LOCALHOST_ONLY="${ros_localhost_only}" \
   -v "${remote_repo}/ros_ws:/workspaces/ros_ws" \
@@ -126,15 +135,97 @@ EOF
 }
 
 reset_stm_via_stlink() {
-  ssh "${JETSON_HOST}" bash -s -- "${STM_RESET_DELAY_SEC}" <<'EOF'
+  ssh "${JETSON_HOST}" bash -s -- \
+    "${JETSON_CONTAINER}" \
+    "${AGENT_DEV}" \
+    "${STM_RESET_DELAY_SEC}" \
+    "${JETSON_READY_TIMEOUT_SEC}" \
+    "${STM_POST_RESET_TIMEOUT_SEC}" \
+    "${JETSON_CONTROLLERS_TIMEOUT_SEC}" <<'EOF'
 set -euo pipefail
 
-delay_sec="$1"
+container_name="$1"
+agent_dev="$2"
+delay_sec="$3"
+ready_timeout="$4"
+post_reset_timeout="$5"
+controllers_timeout="$6"
+
+wait_for_agent() {
+  local deadline=$((SECONDS + ready_timeout))
+  while (( SECONDS < deadline )); do
+    if docker exec "${container_name}" bash -lc "pgrep -af 'micro_ros_agent.*${agent_dev}' >/dev/null" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_controllers() {
+  local deadline=$((SECONDS + controllers_timeout))
+  while (( SECONDS < deadline )); do
+    if docker exec "${container_name}" /entrypoint.sh bash -lc \
+      "ros2 control list_controllers 2>/dev/null | grep -q '^joint_state_broadcaster\\[.* active' && \
+       ros2 control list_controllers 2>/dev/null | grep -q '^diff_drive_controller\\[.* active'" \
+      >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_wheel_state() {
+  local deadline=$((SECONDS + post_reset_timeout))
+  while (( SECONDS < deadline )); do
+    if docker exec "${container_name}" /entrypoint.sh bash -lc \
+      "ros2 topic info -v /amr/wheel_state 2>/dev/null | grep -q 'Publisher count: 1\\|Publisher count: 2\\|Publisher count: 3\\|Publisher count: 4\\|Publisher count: 5\\|Publisher count: 6\\|Publisher count: 7\\|Publisher count: 8\\|Publisher count: 9'" \
+      >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+do_reset() {
+  sudo -n openocd -s /usr/share/openocd/scripts \
+    -f interface/stlink-v2-1.cfg \
+    -f target/stm32f4x.cfg \
+    -c "init; reset run; shutdown" >/dev/null
+}
+
+if ! wait_for_agent; then
+  echo "Timed out waiting for micro_ros_agent in ${container_name}" >&2
+  exit 1
+fi
+
+if ! wait_for_controllers; then
+  echo "Timed out waiting for ROS2 controllers to become active in ${container_name}" >&2
+  echo "Check on Jetson:" >&2
+  echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 control list_controllers\"" >&2
+  exit 1
+fi
+
 sleep "${delay_sec}"
-sudo -n openocd -s /usr/share/openocd/scripts \
-  -f interface/stlink-v2-1.cfg \
-  -f target/stm32f4x.cfg \
-  -c "init; reset run; shutdown" >/dev/null
+do_reset
+
+if wait_for_wheel_state; then
+  exit 0
+fi
+
+echo "First STM reset did not produce /amr/wheel_state, retrying once..." >&2
+sleep 2
+do_reset
+
+if ! wait_for_wheel_state; then
+  echo "STM reset completed but /amr/wheel_state still has no publisher." >&2
+  echo "Check on Jetson:" >&2
+  echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 topic info -v /amr/wheel_state\"" >&2
+  echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 control list_controllers\"" >&2
+  exit 1
+fi
 EOF
 }
 
@@ -175,7 +266,7 @@ tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_N
   "$(container_cmd "source /opt/ros/foxy/setup.bash; export LIBGL_ALWAYS_SOFTWARE=1; rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz")"
 
 rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
-nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false map:=${MAP_PATH_CONTAINER}")")"
+nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false map:=${MAP_PATH_CONTAINER}")")"
 teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
 
 tmux select-pane -t "${teleop_pane}"

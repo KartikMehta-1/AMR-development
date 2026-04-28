@@ -103,10 +103,16 @@ agent_dev="$5"
 agent_baud="$6"
 start_lidar="$7"
 start_camera="$8"
+plugdev_gid="$(getent group plugdev | cut -d: -f3 || true)"
+docker_group_args=()
+if [[ -n "${plugdev_gid}" ]]; then
+  docker_group_args+=(--group-add "${plugdev_gid}")
+fi
 
 docker rm -f "${container_name}" >/dev/null 2>&1 || true
 
 docker run -d --name "${container_name}" --net=host --privileged --runtime nvidia \
+  "${docker_group_args[@]}" \
   -e ROS_DOMAIN_ID="${ros_domain_id}" \
   -e ROS_LOCALHOST_ONLY="${ros_localhost_only}" \
   -v "${remote_repo}/ros_ws:/workspaces/ros_ws" \
