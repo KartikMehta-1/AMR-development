@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include <math.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
@@ -70,7 +71,15 @@ typedef StaticTask_t osStaticThreadDef_t;
 #define ROS_INIT_FAIL_BLINK_ON_MS 300U
 #define ROS_INIT_FAIL_BLINK_OFF_MS 300U
 #define ROS_INIT_FAIL_GAP_MS 1500U
-#define ROS_INIT_AUTO_RESET 1
+#define ROS_INIT_AUTO_RESET 0
+#define ROS_AGENT_PING_TIMEOUT_MS 100U
+#define ROS_AGENT_PING_ATTEMPTS 1U
+#define ROS_AGENT_PING_RETRY_MS 250U
+#define ROS_AGENT_RUNTIME_PING_PERIOD_MS 1000U
+#define ROS_AGENT_RUNTIME_PING_FAIL_LIMIT 3U
+#define ROS_RECONNECT_DELAY_MS 500U
+#define ROS_PUBLISH_FAIL_RESET_COUNT 5U
+#define ROS_PUBLISH_FAIL_RESET_DELAY_MS 100U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -106,7 +115,7 @@ const osThreadAttr_t control_task_attributes = {
 /* Definitions for ros_exec_task */
 /* Definitions for ros_pub_task */
 osThreadId_t ros_pub_taskHandle;
-uint32_t ros_pub_taskBuffer[ 2000 ];
+uint32_t ros_pub_taskBuffer[ 2816 ];
 osStaticThreadDef_t ros_pub_taskControlBlock;
 const osThreadAttr_t ros_pub_task_attributes = {
   .name = "ros_pub_task",
@@ -211,7 +220,10 @@ static std_msgs__msg__Bool msg_enable;
 static std_msgs__msg__Bool msg_estop;
 static std_msgs__msg__Empty msg_clear_fault;
 static volatile bool ros_ready = false;
+static volatile bool ros_entities_created = false;
+static bool ros_wheel_state_msg_initialized = false;
 static volatile int ros_init_fail_stage = 0;
+static volatile uint32_t ros_agent_ping_failures = 0U;
 static volatile float wheel_cmd_l_rad_s = 0.0f;
 static volatile float wheel_cmd_r_rad_s = 0.0f;
 static volatile uint32_t last_wheel_cmd_ms = 0U;
@@ -249,6 +261,7 @@ bool cubemx_transport_open(struct uxrCustomTransport * transport);
 bool cubemx_transport_close(struct uxrCustomTransport * transport);
 size_t cubemx_transport_write(struct uxrCustomTransport* transport, const uint8_t * buf, size_t len, uint8_t * err);
 size_t cubemx_transport_read(struct uxrCustomTransport* transport, uint8_t* buf, size_t len, int timeout, uint8_t* err);
+void microros_transport_reset(UART_HandleTypeDef * uart);
 void * microros_allocate(size_t size, void * state);
 void microros_deallocate(void * pointer, void * state);
 void * microros_reallocate(void * pointer, size_t size, void * state);
@@ -259,9 +272,77 @@ extern volatile uint32_t microros_transport_last_open_status;
 extern volatile uint32_t microros_transport_write_calls;
 extern volatile uint32_t microros_transport_write_failures;
 extern volatile uint32_t microros_transport_write_success_bytes;
+extern volatile uint32_t microros_transport_write_timeouts;
+extern volatile uint32_t microros_transport_last_write_status;
 extern volatile uint32_t microros_transport_read_calls;
 extern volatile uint32_t microros_transport_read_nonzero_calls;
 extern volatile uint32_t microros_transport_read_success_bytes;
+
+static void Ros_ResetEntityHandles(void)
+{
+  memset(&ros_support, 0, sizeof(ros_support));
+  ros_node = rcl_get_zero_initialized_node();
+  ros_executor = rclc_executor_get_zero_initialized_executor();
+
+  pub_fault_mask = rcl_get_zero_initialized_publisher();
+  pub_current_left = rcl_get_zero_initialized_publisher();
+  pub_current_right = rcl_get_zero_initialized_publisher();
+  pub_current_left_adc = rcl_get_zero_initialized_publisher();
+  pub_current_right_adc = rcl_get_zero_initialized_publisher();
+  pub_current_left_zero = rcl_get_zero_initialized_publisher();
+  pub_current_right_zero = rcl_get_zero_initialized_publisher();
+  pub_duty_left = rcl_get_zero_initialized_publisher();
+  pub_duty_right = rcl_get_zero_initialized_publisher();
+  pub_wheel_state = rcl_get_zero_initialized_publisher();
+  pub_safety_state = rcl_get_zero_initialized_publisher();
+
+  sub_wheel_cmd_left = rcl_get_zero_initialized_subscription();
+  sub_wheel_cmd_right = rcl_get_zero_initialized_subscription();
+  sub_enable = rcl_get_zero_initialized_subscription();
+  sub_estop = rcl_get_zero_initialized_subscription();
+  sub_clear_fault = rcl_get_zero_initialized_subscription();
+}
+
+static void Ros_StopForReconnect(void)
+{
+  wheel_cmd_l_rad_s = 0.0f;
+  wheel_cmd_r_rad_s = 0.0f;
+  last_wheel_cmd_ms = 0U;
+}
+
+static void Ros_DestroyEntities(void)
+{
+  ros_ready = false;
+
+  if (ros_entities_created) {
+    (void)rclc_executor_fini(&ros_executor);
+
+    (void)rcl_subscription_fini(&sub_clear_fault, &ros_node);
+    (void)rcl_subscription_fini(&sub_estop, &ros_node);
+    (void)rcl_subscription_fini(&sub_enable, &ros_node);
+    (void)rcl_subscription_fini(&sub_wheel_cmd_right, &ros_node);
+    (void)rcl_subscription_fini(&sub_wheel_cmd_left, &ros_node);
+
+    (void)rcl_publisher_fini(&pub_safety_state, &ros_node);
+    (void)rcl_publisher_fini(&pub_wheel_state, &ros_node);
+    (void)rcl_publisher_fini(&pub_duty_right, &ros_node);
+    (void)rcl_publisher_fini(&pub_duty_left, &ros_node);
+    (void)rcl_publisher_fini(&pub_current_right_zero, &ros_node);
+    (void)rcl_publisher_fini(&pub_current_left_zero, &ros_node);
+    (void)rcl_publisher_fini(&pub_current_right_adc, &ros_node);
+    (void)rcl_publisher_fini(&pub_current_left_adc, &ros_node);
+    (void)rcl_publisher_fini(&pub_current_right, &ros_node);
+    (void)rcl_publisher_fini(&pub_current_left, &ros_node);
+    (void)rcl_publisher_fini(&pub_fault_mask, &ros_node);
+
+    (void)rcl_node_fini(&ros_node);
+    (void)rclc_support_fini(&ros_support);
+  }
+
+  ros_entities_created = false;
+  Ros_ResetEntityHandles();
+  microros_transport_reset(&huart2);
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -1159,6 +1240,20 @@ void StartRosPubTask(void *argument)
   ros_allocator.zero_allocate = microros_zero_allocate;
   (void)rcutils_set_default_allocator(&ros_allocator);
 
+  Ros_ResetEntityHandles();
+
+ros_reconnect:
+  Ros_StopForReconnect();
+  Ros_DestroyEntities();
+  osDelay(ROS_RECONNECT_DELAY_MS);
+
+  ros_init_fail_stage = 1;
+  while (rmw_uros_ping_agent(ROS_AGENT_PING_TIMEOUT_MS, ROS_AGENT_PING_ATTEMPTS) != RMW_RET_OK) {
+    ros_agent_ping_failures++;
+    StatusLed_Blink(ROS_INIT_FAIL_BLINK_ON_MS, ROS_AGENT_PING_RETRY_MS);
+    osDelay(ROS_AGENT_PING_RETRY_MS);
+  }
+
   if (rclc_support_init(&ros_support, 0, NULL, &ros_allocator) != RCL_RET_OK) {
     ros_init_fail_stage = 1;
     goto ros_init_fail;
@@ -1173,7 +1268,7 @@ void StartRosPubTask(void *argument)
           &pub_fault_mask,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/fault_mask") != RCL_RET_OK) {
+          "/amr_stm/fault_mask") != RCL_RET_OK) {
     ros_init_fail_stage = 5;
     goto ros_init_fail;
   }
@@ -1182,7 +1277,7 @@ void StartRosPubTask(void *argument)
           &pub_current_left,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/current_left_ma") != RCL_RET_OK) {
+          "/amr_stm/current_left_ma") != RCL_RET_OK) {
     ros_init_fail_stage = 6;
     goto ros_init_fail;
   }
@@ -1191,7 +1286,7 @@ void StartRosPubTask(void *argument)
           &pub_current_right,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-          "/amr/current_right_ma") != RCL_RET_OK) {
+          "/amr_stm/current_right_ma") != RCL_RET_OK) {
     ros_init_fail_stage = 7;
     goto ros_init_fail;
   }
@@ -1200,7 +1295,7 @@ void StartRosPubTask(void *argument)
           &pub_current_left_adc,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32),
-          "/amr/current_left_adc") != RCL_RET_OK) {
+          "/amr_stm/current_left_adc") != RCL_RET_OK) {
     ros_init_fail_stage = 8;
     goto ros_init_fail;
   }
@@ -1209,7 +1304,7 @@ void StartRosPubTask(void *argument)
           &pub_current_right_adc,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32),
-          "/amr/current_right_adc") != RCL_RET_OK) {
+          "/amr_stm/current_right_adc") != RCL_RET_OK) {
     ros_init_fail_stage = 9;
     goto ros_init_fail;
   }
@@ -1218,7 +1313,7 @@ void StartRosPubTask(void *argument)
           &pub_current_left_zero,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32),
-          "/amr/current_left_zero") != RCL_RET_OK) {
+          "/amr_stm/current_left_zero") != RCL_RET_OK) {
     ros_init_fail_stage = 10;
     goto ros_init_fail;
   }
@@ -1227,7 +1322,7 @@ void StartRosPubTask(void *argument)
           &pub_current_right_zero,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32),
-          "/amr/current_right_zero") != RCL_RET_OK) {
+          "/amr_stm/current_right_zero") != RCL_RET_OK) {
     ros_init_fail_stage = 11;
     goto ros_init_fail;
   }
@@ -1236,7 +1331,7 @@ void StartRosPubTask(void *argument)
           &pub_duty_left,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/duty_cmd_left") != RCL_RET_OK) {
+          "/amr_stm/duty_cmd_left") != RCL_RET_OK) {
     ros_init_fail_stage = 12;
     goto ros_init_fail;
   }
@@ -1245,7 +1340,7 @@ void StartRosPubTask(void *argument)
           &pub_duty_right,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/duty_cmd_right") != RCL_RET_OK) {
+          "/amr_stm/duty_cmd_right") != RCL_RET_OK) {
     ros_init_fail_stage = 13;
     goto ros_init_fail;
   }
@@ -1254,7 +1349,7 @@ void StartRosPubTask(void *argument)
           &pub_wheel_state,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
-          "/amr/wheel_state") != RCL_RET_OK) {
+          "/amr_stm/wheel_state") != RCL_RET_OK) {
     ros_init_fail_stage = 14;
     goto ros_init_fail;
   }
@@ -1263,42 +1358,46 @@ void StartRosPubTask(void *argument)
           &pub_safety_state,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32),
-          "/amr/safety_state") != RCL_RET_OK) {
+          "/amr_stm/safety_state") != RCL_RET_OK) {
     ros_init_fail_stage = 15;
     goto ros_init_fail;
   }
 
-  if (!sensor_msgs__msg__JointState__init(&msg_wheel_state)) {
-    ros_init_fail_stage = 16;
-    goto ros_init_fail;
-  }
+  if (!ros_wheel_state_msg_initialized) {
+    if (!sensor_msgs__msg__JointState__init(&msg_wheel_state)) {
+      ros_init_fail_stage = 16;
+      goto ros_init_fail;
+    }
 
-  if (!rosidl_runtime_c__String__Sequence__init(&msg_wheel_state.name, 2)) {
-    ros_init_fail_stage = 17;
-    goto ros_init_fail;
-  }
+    if (!rosidl_runtime_c__String__Sequence__init(&msg_wheel_state.name, 2)) {
+      ros_init_fail_stage = 17;
+      goto ros_init_fail;
+    }
 
-  if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.position, 2)) {
-    ros_init_fail_stage = 18;
-    goto ros_init_fail;
-  }
+    if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.position, 2)) {
+      ros_init_fail_stage = 18;
+      goto ros_init_fail;
+    }
 
-  if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.velocity, 2)) {
-    ros_init_fail_stage = 19;
-    goto ros_init_fail;
-  }
+    if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.velocity, 2)) {
+      ros_init_fail_stage = 19;
+      goto ros_init_fail;
+    }
 
-  if (!rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[0], "left_wheel_joint") ||
-      !rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[1], "right_wheel_joint")) {
-    ros_init_fail_stage = 20;
-    goto ros_init_fail;
+    if (!rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[0], "left_wheel_joint") ||
+        !rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[1], "right_wheel_joint")) {
+      ros_init_fail_stage = 20;
+      goto ros_init_fail;
+    }
+
+    ros_wheel_state_msg_initialized = true;
   }
 
   if (rclc_subscription_init_default(
           &sub_wheel_cmd_left,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/wheel_cmd_left") != RCL_RET_OK) {
+          "/amr_stm/wheel_cmd_left") != RCL_RET_OK) {
     ros_init_fail_stage = 21;
     goto ros_init_fail;
   }
@@ -1307,7 +1406,7 @@ void StartRosPubTask(void *argument)
           &sub_wheel_cmd_right,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-          "/amr/wheel_cmd_right") != RCL_RET_OK) {
+          "/amr_stm/wheel_cmd_right") != RCL_RET_OK) {
     ros_init_fail_stage = 22;
     goto ros_init_fail;
   }
@@ -1316,7 +1415,7 @@ void StartRosPubTask(void *argument)
           &sub_enable,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
-          "/amr/enable") != RCL_RET_OK) {
+          "/amr_stm/enable") != RCL_RET_OK) {
     ros_init_fail_stage = 23;
     goto ros_init_fail;
   }
@@ -1325,7 +1424,7 @@ void StartRosPubTask(void *argument)
           &sub_estop,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
-          "/amr/estop") != RCL_RET_OK) {
+          "/amr_stm/estop") != RCL_RET_OK) {
     ros_init_fail_stage = 24;
     goto ros_init_fail;
   }
@@ -1334,7 +1433,7 @@ void StartRosPubTask(void *argument)
           &sub_clear_fault,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Empty),
-          "/amr/clear_fault") != RCL_RET_OK) {
+          "/amr_stm/clear_fault") != RCL_RET_OK) {
     ros_init_fail_stage = 25;
     goto ros_init_fail;
   }
@@ -1369,17 +1468,42 @@ void StartRosPubTask(void *argument)
     goto ros_init_fail;
   }
 
+  ros_entities_created = true;
   ros_ready = true;
 
   /* Infinite loop */
   bool led_state = false;
   uint32_t last_pub_ms = 0U;
+  uint32_t consecutive_pub_failures = 0U;
+  uint32_t runtime_ping_failures = 0U;
+  uint32_t last_runtime_ping_ms = HAL_GetTick();
+  uint32_t last_write_failures = microros_transport_write_failures;
+  uint32_t last_write_timeouts = microros_transport_write_timeouts;
   for(;;)
   {
     // Pump executor to receive command topics
-    rclc_executor_spin_some(&ros_executor, 1000000ULL); // 1 ms
+    rcl_ret_t spin_rc = rclc_executor_spin_some(&ros_executor, 1000000ULL); // 1 ms
+    if (spin_rc != RCL_RET_OK) {
+      consecutive_pub_failures++;
+    }
 
     uint32_t now = HAL_GetTick();
+    if ((now - last_runtime_ping_ms) >= ROS_AGENT_RUNTIME_PING_PERIOD_MS) {
+      last_runtime_ping_ms = now;
+      if ((microros_transport_write_failures != last_write_failures) ||
+          (microros_transport_write_timeouts != last_write_timeouts)) {
+        goto ros_reconnect;
+      }
+      if (rmw_uros_ping_agent(ROS_AGENT_PING_TIMEOUT_MS, ROS_AGENT_PING_ATTEMPTS) == RMW_RET_OK) {
+        runtime_ping_failures = 0U;
+      } else {
+        runtime_ping_failures++;
+        if (runtime_ping_failures >= ROS_AGENT_RUNTIME_PING_FAIL_LIMIT) {
+          goto ros_reconnect;
+        }
+      }
+    }
+
     if ((last_pub_ms == 0U) || ((now - last_pub_ms) >= ROS_PUB_PERIOD_MS)) {
       last_pub_ms = now;
       // Publish wheel state and safety status
@@ -1426,10 +1550,16 @@ void StartRosPubTask(void *argument)
                     (rc8 == RCL_RET_OK) && (rc9 == RCL_RET_OK) &&
                     (rc10 == RCL_RET_OK) && (rc11 == RCL_RET_OK);
       if (pub_ok) {
+        consecutive_pub_failures = 0U;
         led_state = !led_state;
         StatusLed_Set(led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
       } else {
+        consecutive_pub_failures++;
         StatusLed_Set(GPIO_PIN_SET);
+        if (consecutive_pub_failures >= ROS_PUBLISH_FAIL_RESET_COUNT) {
+          osDelay(ROS_PUBLISH_FAIL_RESET_DELAY_MS);
+          goto ros_reconnect;
+        }
       }
     }
 
@@ -1438,39 +1568,34 @@ void StartRosPubTask(void *argument)
 
 ros_init_fail:
   ros_ready = false;
-  // Blink the failing init stage repeatedly so it is easy to identify on the
-  // bench. Auto-reset can be re-enabled after diagnosis.
-  while (1) {
+  StatusLed_BlinkCount(
+      (uint32_t)ros_init_fail_stage,
+      ROS_INIT_FAIL_BLINK_ON_MS,
+      ROS_INIT_FAIL_BLINK_OFF_MS,
+      ROS_INIT_FAIL_GAP_MS);
+
+  if (ros_init_fail_stage == 1) {
+    uint32_t transport_diag = 4U;
+    if (microros_transport_open_failures > 0U ||
+        microros_transport_last_open_status != (uint32_t)HAL_OK) {
+      transport_diag = 1U;
+    } else if (microros_transport_write_timeouts > 0U ||
+               microros_transport_write_failures > 0U ||
+               microros_transport_last_write_status != (uint32_t)HAL_OK) {
+      transport_diag = 2U;
+    } else if (microros_transport_read_success_bytes == 0U) {
+      transport_diag = 3U;
+    }
+
     StatusLed_BlinkCount(
-        (uint32_t)ros_init_fail_stage,
+        transport_diag,
         ROS_INIT_FAIL_BLINK_ON_MS,
         ROS_INIT_FAIL_BLINK_OFF_MS,
         ROS_INIT_FAIL_GAP_MS);
-
-    if (ros_init_fail_stage == 1) {
-      uint32_t transport_diag = 4U;
-      if (microros_transport_open_failures > 0U ||
-          microros_transport_last_open_status != (uint32_t)HAL_OK) {
-        transport_diag = 1U;
-      } else if (microros_transport_write_success_bytes == 0U) {
-        transport_diag = 2U;
-      } else if (microros_transport_read_success_bytes == 0U) {
-        transport_diag = 3U;
-      }
-
-      StatusLed_BlinkCount(
-          transport_diag,
-          ROS_INIT_FAIL_BLINK_ON_MS,
-          ROS_INIT_FAIL_BLINK_OFF_MS,
-          ROS_INIT_FAIL_GAP_MS);
-    }
-#if ROS_INIT_AUTO_RESET
-    osDelay(ROS_INIT_RETRY_DELAY_MS);
-    NVIC_SystemReset();
-#else
-    osDelay(ROS_INIT_FAIL_GAP_MS);
-#endif
   }
+
+  Ros_DestroyEntities();
+  goto ros_reconnect;
   /* USER CODE END StartRosPubTask */
 }
 
