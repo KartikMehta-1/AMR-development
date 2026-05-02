@@ -22,15 +22,15 @@ public:
   AmrLinkWatchdog()
   : Node("amr_link_watchdog")
   {
-    wheel_state_topic_ = declare_parameter<std::string>("wheel_state_topic", "/amr/wheel_state");
+    wheel_state_topic_ = declare_parameter<std::string>("wheel_state_topic", "/amr_stm/wheel_state");
     startup_timeout_sec_ = declare_parameter<double>("startup_timeout_sec", 5.0);
     stale_timeout_sec_ = declare_parameter<double>("stale_timeout_sec", 1.0);
     publish_period_sec_ = declare_parameter<double>("publish_period_sec", 0.5);
 
-    comm_ok_pub_ = create_publisher<std_msgs::msg::Bool>("/amr/comm_ok", 10);
-    comm_fault_pub_ = create_publisher<std_msgs::msg::Bool>("/amr/comm_fault", 10);
-    comm_fault_mask_pub_ = create_publisher<std_msgs::msg::UInt32>("/amr/comm_fault_mask", 10);
-    comm_status_pub_ = create_publisher<std_msgs::msg::String>("/amr/comm_status", 10);
+    comm_ok_pub_ = create_publisher<std_msgs::msg::Bool>("/amr_stm/comm_ok", 10);
+    comm_fault_pub_ = create_publisher<std_msgs::msg::Bool>("/amr_stm/comm_fault", 10);
+    comm_fault_mask_pub_ = create_publisher<std_msgs::msg::UInt32>("/amr_stm/comm_fault_mask", 10);
+    comm_status_pub_ = create_publisher<std_msgs::msg::String>("/amr_stm/comm_status", 10);
 
     wheel_state_sub_ = create_subscription<sensor_msgs::msg::JointState>(
       wheel_state_topic_,

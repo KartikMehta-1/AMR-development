@@ -17,7 +17,8 @@
 #define CONTROL_LOOP_DT_S       (1.0f / (float)CONTROL_LOOP_HZ)
 #define TELEMETRY_DECIMATION    10U     // send telemetry every N control ticks (100 Hz / 10 = 10 Hz)
 #define SAMPLE_INTERVAL_MS      100U    // legacy/telemetry period reference (ms)
-#define ROS_PUB_PERIOD_MS       200U    // publish period for ROS topics (ms)
+#define ROS_CRITICAL_PUB_PERIOD_MS 100U // wheel_state/fault/duty/safety publish period (ms)
+#define ROS_DIAG_PUB_PERIOD_MS     500U // current/ADC diagnostic publish period (ms)
 #define ROS_EXEC_DELAY_MS       10U     // executor loop delay to service subscriptions (ms)
 #define SERIAL_TELEMETRY_ENABLE 0       // set to 1 to disable ROS pub task and stream UART telemetry
 #define SERIAL_TELEMETRY_PERIOD_MS SAMPLE_INTERVAL_MS // UART telemetry period (ms)

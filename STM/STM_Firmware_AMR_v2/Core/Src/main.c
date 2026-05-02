@@ -1393,7 +1393,7 @@ ros_reconnect:
     ros_wheel_state_msg_initialized = true;
   }
 
-  if (rclc_subscription_init_default(
+  if (rclc_subscription_init_best_effort(
           &sub_wheel_cmd_left,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
@@ -1402,7 +1402,7 @@ ros_reconnect:
     goto ros_init_fail;
   }
 
-  if (rclc_subscription_init_default(
+  if (rclc_subscription_init_best_effort(
           &sub_wheel_cmd_right,
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
@@ -1473,7 +1473,8 @@ ros_reconnect:
 
   /* Infinite loop */
   bool led_state = false;
-  uint32_t last_pub_ms = 0U;
+  uint32_t last_critical_pub_ms = 0U;
+  uint32_t last_diag_pub_ms = 0U;
   uint32_t consecutive_pub_failures = 0U;
   uint32_t runtime_ping_failures = 0U;
   uint32_t last_runtime_ping_ms = HAL_GetTick();
@@ -1504,9 +1505,9 @@ ros_reconnect:
       }
     }
 
-    if ((last_pub_ms == 0U) || ((now - last_pub_ms) >= ROS_PUB_PERIOD_MS)) {
-      last_pub_ms = now;
-      // Publish wheel state and safety status
+    if ((last_critical_pub_ms == 0U) || ((now - last_critical_pub_ms) >= ROS_CRITICAL_PUB_PERIOD_MS)) {
+      last_critical_pub_ms = now;
+      // Publish control-critical state separately from slower diagnostics so odom is responsive.
       uint32_t fault_mask = ControlState_GetFaultMask(&ctrl_state);
       // safety_state: upper 16 bits = ControlState, lower 16 bits = fault mask.
       uint32_t safety_state = ((uint32_t)ControlState_GetState(&ctrl_state) << 16) | (fault_mask & 0xFFFFu);
@@ -1514,12 +1515,6 @@ ros_reconnect:
       const double rpm_to_rad_s = two_pi / 60.0;
       const double counts_to_rad = two_pi / (double)ENCODER_COUNTS_PER_REV;
       msg_fault_mask.data = (int32_t)fault_mask;
-      msg_current_left.data = sense.curr_l_mA;
-      msg_current_right.data = sense.curr_r_mA;
-      msg_current_left_adc.data = (uint32_t)sense.adc_l_counts;
-      msg_current_right_adc.data = (uint32_t)sense.adc_r_counts;
-      msg_current_left_zero.data = (uint32_t)sense.zero_l_counts;
-      msg_current_right_zero.data = (uint32_t)sense.zero_r_counts;
       msg_safety_state.data = safety_state;
       msg_duty_left.data = duty_cmd_l_pub;
       msg_duty_right.data = duty_cmd_r_pub;
@@ -1532,23 +1527,48 @@ ros_reconnect:
       msg_wheel_state.velocity.data[1] = (double)sense.rpm_r * rpm_to_rad_s;
 
       rcl_ret_t rc1 = rcl_publish(&pub_fault_mask, &msg_fault_mask, NULL);
-      rcl_ret_t rc2 = rcl_publish(&pub_current_left, &msg_current_left, NULL);
-      rcl_ret_t rc3 = rcl_publish(&pub_current_right, &msg_current_right, NULL);
-      rcl_ret_t rc4 = rcl_publish(&pub_current_left_adc, &msg_current_left_adc, NULL);
-      rcl_ret_t rc5 = rcl_publish(&pub_current_right_adc, &msg_current_right_adc, NULL);
-      rcl_ret_t rc6 = rcl_publish(&pub_current_left_zero, &msg_current_left_zero, NULL);
-      rcl_ret_t rc7 = rcl_publish(&pub_current_right_zero, &msg_current_right_zero, NULL);
-      rcl_ret_t rc8 = rcl_publish(&pub_duty_left, &msg_duty_left, NULL);
-      rcl_ret_t rc9 = rcl_publish(&pub_duty_right, &msg_duty_right, NULL);
-      rcl_ret_t rc10 = rcl_publish(&pub_wheel_state, &msg_wheel_state, NULL);
-      rcl_ret_t rc11 = rcl_publish(&pub_safety_state, &msg_safety_state, NULL);
+      rcl_ret_t rc2 = rcl_publish(&pub_duty_left, &msg_duty_left, NULL);
+      rcl_ret_t rc3 = rcl_publish(&pub_duty_right, &msg_duty_right, NULL);
+      rcl_ret_t rc4 = rcl_publish(&pub_wheel_state, &msg_wheel_state, NULL);
+      rcl_ret_t rc5 = rcl_publish(&pub_safety_state, &msg_safety_state, NULL);
 
       // Blink LED when publish succeeds; hold solid ON if any publish fails
-      bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) && (rc3 == RCL_RET_OK) &&
-                    (rc4 == RCL_RET_OK) && (rc5 == RCL_RET_OK) &&
-                    (rc6 == RCL_RET_OK) && (rc7 == RCL_RET_OK) &&
-                    (rc8 == RCL_RET_OK) && (rc9 == RCL_RET_OK) &&
-                    (rc10 == RCL_RET_OK) && (rc11 == RCL_RET_OK);
+      bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) &&
+                    (rc3 == RCL_RET_OK) && (rc4 == RCL_RET_OK) &&
+                    (rc5 == RCL_RET_OK);
+      if (pub_ok) {
+        consecutive_pub_failures = 0U;
+        led_state = !led_state;
+        StatusLed_Set(led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+      } else {
+        consecutive_pub_failures++;
+        StatusLed_Set(GPIO_PIN_SET);
+        if (consecutive_pub_failures >= ROS_PUBLISH_FAIL_RESET_COUNT) {
+          osDelay(ROS_PUBLISH_FAIL_RESET_DELAY_MS);
+          goto ros_reconnect;
+        }
+      }
+    }
+
+    if ((last_diag_pub_ms == 0U) || ((now - last_diag_pub_ms) >= ROS_DIAG_PUB_PERIOD_MS)) {
+      last_diag_pub_ms = now;
+      msg_current_left.data = sense.curr_l_mA;
+      msg_current_right.data = sense.curr_r_mA;
+      msg_current_left_adc.data = (uint32_t)sense.adc_l_counts;
+      msg_current_right_adc.data = (uint32_t)sense.adc_r_counts;
+      msg_current_left_zero.data = (uint32_t)sense.zero_l_counts;
+      msg_current_right_zero.data = (uint32_t)sense.zero_r_counts;
+
+      rcl_ret_t rc1 = rcl_publish(&pub_current_left, &msg_current_left, NULL);
+      rcl_ret_t rc2 = rcl_publish(&pub_current_right, &msg_current_right, NULL);
+      rcl_ret_t rc3 = rcl_publish(&pub_current_left_adc, &msg_current_left_adc, NULL);
+      rcl_ret_t rc4 = rcl_publish(&pub_current_right_adc, &msg_current_right_adc, NULL);
+      rcl_ret_t rc5 = rcl_publish(&pub_current_left_zero, &msg_current_left_zero, NULL);
+      rcl_ret_t rc6 = rcl_publish(&pub_current_right_zero, &msg_current_right_zero, NULL);
+
+      bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) &&
+                    (rc3 == RCL_RET_OK) && (rc4 == RCL_RET_OK) &&
+                    (rc5 == RCL_RET_OK) && (rc6 == RCL_RET_OK);
       if (pub_ok) {
         consecutive_pub_failures = 0U;
         led_state = !led_state;

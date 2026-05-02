@@ -15,6 +15,7 @@ default_agent_dev() {
 }
 
 AGENT_DEV="${AMR_AGENT_DEV:-$(default_agent_dev)}"
+STM_NS="${AMR_STM_NS:-/amr_stm}"
 
 ensure_container() {
   local running
@@ -23,7 +24,14 @@ ensure_container() {
     if docker ps -a --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
       docker rm -f "${CONTAINER_NAME}" >/dev/null
     fi
+    local plugdev_gid
+    plugdev_gid="$(getent group plugdev | cut -d: -f3 || true)"
+    local docker_group_args=()
+    if [[ -n "${plugdev_gid}" ]]; then
+      docker_group_args+=(--group-add "${plugdev_gid}")
+    fi
     docker run -d --name "${CONTAINER_NAME}" --net=host --privileged --runtime nvidia \
+      "${docker_group_args[@]}" \
       -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID_VALUE}" \
       -e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY_VALUE}" \
       -v "${REMOTE_ROS_WS}:/workspaces/ros_ws" \
@@ -71,6 +79,13 @@ class BenchMonitor(Node):
         self.current_ma = None
         self.current_adc = None
         self.current_zero = None
+        self.safety_age = None
+        self.fault_age = None
+        self.wheel_age = None
+        self.duty_age = None
+        self.current_ma_age = None
+        self.current_adc_age = None
+        self.current_zero_age = None
 
         qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -79,39 +94,53 @@ class BenchMonitor(Node):
         )
 
         if mode == 'state':
-            self.create_subscription(UInt32, '/amr/safety_state', self.safety_cb, qos)
-            self.create_subscription(Int32, '/amr/fault_mask', self.fault_cb, qos)
+            self.create_subscription(UInt32, '${STM_NS}/safety_state', self.safety_cb, qos)
+            self.create_subscription(Int32, '${STM_NS}/fault_mask', self.fault_cb, qos)
         else:
             side = mode
             self.side_index = 0 if side == 'left' else 1
-            self.create_subscription(JointState, '/amr/wheel_state', self.wheel_cb, qos)
-            self.create_subscription(Float32, f'/amr/duty_cmd_{side}', self.duty_cb, qos)
-            self.create_subscription(Int32, f'/amr/current_{side}_ma', self.current_ma_cb, qos)
-            self.create_subscription(UInt32, f'/amr/current_{side}_adc', self.current_adc_cb, qos)
-            self.create_subscription(UInt32, f'/amr/current_{side}_zero', self.current_zero_cb, qos)
+            self.create_subscription(JointState, '${STM_NS}/wheel_state', self.wheel_cb, qos)
+            self.create_subscription(Float32, f'${STM_NS}/duty_cmd_{side}', self.duty_cb, qos)
+            self.create_subscription(Int32, f'${STM_NS}/current_{side}_ma', self.current_ma_cb, qos)
+            self.create_subscription(UInt32, f'${STM_NS}/current_{side}_adc', self.current_adc_cb, qos)
+            self.create_subscription(UInt32, f'${STM_NS}/current_{side}_zero', self.current_zero_cb, qos)
 
     def safety_cb(self, msg: UInt32) -> None:
         self.safety_state = msg.data
+        self.safety_age = time.monotonic()
 
     def fault_cb(self, msg: Int32) -> None:
         self.fault_mask = msg.data
+        self.fault_age = time.monotonic()
 
     def wheel_cb(self, msg: JointState) -> None:
         self.wheel_names = list(msg.name)
         self.wheel_positions = list(msg.position)
         self.wheel_velocities = list(msg.velocity)
+        self.wheel_age = time.monotonic()
 
     def duty_cb(self, msg: Float32) -> None:
         self.duty = msg.data
+        self.duty_age = time.monotonic()
 
     def current_ma_cb(self, msg: Int32) -> None:
         self.current_ma = msg.data
+        self.current_ma_age = time.monotonic()
 
     def current_adc_cb(self, msg: UInt32) -> None:
         self.current_adc = msg.data
+        self.current_adc_age = time.monotonic()
 
     def current_zero_cb(self, msg: UInt32) -> None:
         self.current_zero = msg.data
+        self.current_zero_age = time.monotonic()
+
+    def age_text(self, stamp) -> str:
+        if stamp is None:
+            return 'never'
+        age = time.monotonic() - stamp
+        stale = ' STALE' if age > 1.0 else ''
+        return f'{age:.2f}s ago{stale}'
 
     def render(self) -> None:
         sys.stdout.write('\033[2J\033[H')
@@ -119,8 +148,8 @@ class BenchMonitor(Node):
         if self.mode == 'state':
             print('== safety_fault ==', flush=True)
             print('', flush=True)
-            print(f'safety_state: {self.safety_state}', flush=True)
-            print(f'fault_mask:   {self.fault_mask}', flush=True)
+            print(f'safety_state: {self.safety_state} ({self.age_text(self.safety_age)})', flush=True)
+            print(f'fault_mask:   {self.fault_mask} ({self.age_text(self.fault_age)})', flush=True)
             return
 
         side = self.mode
@@ -132,13 +161,13 @@ class BenchMonitor(Node):
         print(f'== {side}_summary ==', flush=True)
         print('', flush=True)
         print(f'joint:    {joint}', flush=True)
-        print(f'position: {pos}', flush=True)
-        print(f'velocity: {vel}', flush=True)
+        print(f'position: {pos} ({self.age_text(self.wheel_age)})', flush=True)
+        print(f'velocity: {vel} ({self.age_text(self.wheel_age)})', flush=True)
         print('', flush=True)
-        print(f'duty:     {self.duty}', flush=True)
-        print(f'current:  {self.current_ma} mA', flush=True)
-        print(f'adc:      {self.current_adc}', flush=True)
-        print(f'zero:     {self.current_zero}', flush=True)
+        print(f'duty:     {self.duty} ({self.age_text(self.duty_age)})', flush=True)
+        print(f'current:  {self.current_ma} mA ({self.age_text(self.current_ma_age)})', flush=True)
+        print(f'adc:      {self.current_adc} ({self.age_text(self.current_adc_age)})', flush=True)
+        print(f'zero:     {self.current_zero} ({self.age_text(self.current_zero_age)})', flush=True)
 
 
 def main() -> None:
@@ -170,8 +199,8 @@ run_topics_status() {
     out=\"\$( \
       printf '== topics ==\n\n'; \
       printf 'container: ${CONTAINER_NAME} (connected)\n\n'; \
-      printf 'AMR topics:\n'; \
-      ros2 topic list 2>/dev/null | grep '^/amr/' || true; \
+      printf 'STM topics:\n'; \
+      ros2 topic list 2>/dev/null | grep '^${STM_NS}/' || true; \
       printf '\nCore topics:\n'; \
       ros2 topic list 2>/dev/null | grep -E '^/(scan|odom|tf|tf_static|joint_states|dynamic_joint_states|robot_description|parameter_events|rosout)$|^/diff_drive_controller/' || true; \
     )\"; \
@@ -192,47 +221,64 @@ run_nodes_status() {
   done"
 }
 
+cleanup_monitor_processes() {
+  run_in_container "current_pid=\$\$; parent_pid=\$PPID; \
+    ps -eo pid=,args= | while read -r pid args; do \
+      case \"\$args\" in \
+        *'/tmp/amr_live_monitor.py'*|*'/tmp/amr_monitor_teleop.py'*|*'/opt/ros/foxy/lib/teleop_twist_keyboard/teleop_twist_keyboard'*) \
+          if [ \"\$pid\" != \"\$current_pid\" ] && [ \"\$pid\" != \"\$parent_pid\" ]; then \
+            kill \"\$pid\" 2>/dev/null || true; \
+          fi; \
+          ;; \
+      esac; \
+    done; \
+    sleep 0.3"
+}
+
 ensure_container
 
 case "${MODE}" in
+  cleanup_monitor)
+    cleanup_monitor_processes
+    ;;
   agent_log)
     run_in_container "printf '== agent_log ==\n'; printf 'Waiting for agent log output...\n\n'; tail -f ${AGENT_LOG}"
     ;;
   safety)
-    run_in_container "printf '== safety ==\n'; printf 'Waiting for /amr/safety_state ...\n\n'; ros2 topic echo /amr/safety_state std_msgs/msg/UInt32 --qos-reliability best_effort"
+    run_in_container "printf '== safety ==\n'; printf 'Waiting for ${STM_NS}/safety_state ...\n\n'; ros2 topic echo ${STM_NS}/safety_state std_msgs/msg/UInt32 --qos-reliability best_effort"
     ;;
   fault)
-    run_in_container "printf '== fault ==\n'; printf 'Waiting for /amr/fault_mask ...\n\n'; ros2 topic echo /amr/fault_mask std_msgs/msg/Int32 --qos-reliability best_effort"
+    run_in_container "printf '== fault ==\n'; printf 'Waiting for ${STM_NS}/fault_mask ...\n\n'; ros2 topic echo ${STM_NS}/fault_mask std_msgs/msg/Int32 --qos-reliability best_effort"
     ;;
   wheel_state)
-    run_in_container "printf '== wheel_state ==\n'; printf 'Waiting for /amr/wheel_state ...\n\n'; ros2 topic echo /amr/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort"
+    run_in_container "printf '== wheel_state ==\n'; printf 'Waiting for ${STM_NS}/wheel_state ...\n\n'; ros2 topic echo ${STM_NS}/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort"
     ;;
   current_left_ma)
-    run_in_container "printf '== current_left_ma ==\n'; printf 'Waiting for /amr/current_left_ma ...\n\n'; ros2 topic echo /amr/current_left_ma std_msgs/msg/Int32 --qos-reliability best_effort"
+    run_in_container "printf '== current_left_ma ==\n'; printf 'Waiting for ${STM_NS}/current_left_ma ...\n\n'; ros2 topic echo ${STM_NS}/current_left_ma std_msgs/msg/Int32 --qos-reliability best_effort"
     ;;
   current_right_ma)
-    run_in_container "printf '== current_right_ma ==\n'; printf 'Waiting for /amr/current_right_ma ...\n\n'; ros2 topic echo /amr/current_right_ma std_msgs/msg/Int32 --qos-reliability best_effort"
+    run_in_container "printf '== current_right_ma ==\n'; printf 'Waiting for ${STM_NS}/current_right_ma ...\n\n'; ros2 topic echo ${STM_NS}/current_right_ma std_msgs/msg/Int32 --qos-reliability best_effort"
     ;;
   current_left_adc)
-    run_in_container "printf '== current_left_adc ==\n'; printf 'Waiting for /amr/current_left_adc ...\n\n'; ros2 topic echo /amr/current_left_adc std_msgs/msg/UInt32 --qos-reliability best_effort"
+    run_in_container "printf '== current_left_adc ==\n'; printf 'Waiting for ${STM_NS}/current_left_adc ...\n\n'; ros2 topic echo ${STM_NS}/current_left_adc std_msgs/msg/UInt32 --qos-reliability best_effort"
     ;;
   current_right_adc)
-    run_in_container "printf '== current_right_adc ==\n'; printf 'Waiting for /amr/current_right_adc ...\n\n'; ros2 topic echo /amr/current_right_adc std_msgs/msg/UInt32 --qos-reliability best_effort"
+    run_in_container "printf '== current_right_adc ==\n'; printf 'Waiting for ${STM_NS}/current_right_adc ...\n\n'; ros2 topic echo ${STM_NS}/current_right_adc std_msgs/msg/UInt32 --qos-reliability best_effort"
     ;;
   current_left_zero)
-    run_in_container "printf '== current_left_zero ==\n'; printf 'Waiting for /amr/current_left_zero ...\n\n'; ros2 topic echo /amr/current_left_zero std_msgs/msg/UInt32 --qos-reliability best_effort"
+    run_in_container "printf '== current_left_zero ==\n'; printf 'Waiting for ${STM_NS}/current_left_zero ...\n\n'; ros2 topic echo ${STM_NS}/current_left_zero std_msgs/msg/UInt32 --qos-reliability best_effort"
     ;;
   current_right_zero)
-    run_in_container "printf '== current_right_zero ==\n'; printf 'Waiting for /amr/current_right_zero ...\n\n'; ros2 topic echo /amr/current_right_zero std_msgs/msg/UInt32 --qos-reliability best_effort"
+    run_in_container "printf '== current_right_zero ==\n'; printf 'Waiting for ${STM_NS}/current_right_zero ...\n\n'; ros2 topic echo ${STM_NS}/current_right_zero std_msgs/msg/UInt32 --qos-reliability best_effort"
     ;;
   duty_left)
-    run_in_container "printf '== duty_left ==\n'; printf 'Waiting for /amr/duty_cmd_left ...\n\n'; ros2 topic echo /amr/duty_cmd_left std_msgs/msg/Float32 --qos-reliability best_effort"
+    run_in_container "printf '== duty_left ==\n'; printf 'Waiting for ${STM_NS}/duty_cmd_left ...\n\n'; ros2 topic echo ${STM_NS}/duty_cmd_left std_msgs/msg/Float32 --qos-reliability best_effort"
     ;;
   duty_right)
-    run_in_container "printf '== duty_right ==\n'; printf 'Waiting for /amr/duty_cmd_right ...\n\n'; ros2 topic echo /amr/duty_cmd_right std_msgs/msg/Float32 --qos-reliability best_effort"
+    run_in_container "printf '== duty_right ==\n'; printf 'Waiting for ${STM_NS}/duty_cmd_right ...\n\n'; ros2 topic echo ${STM_NS}/duty_cmd_right std_msgs/msg/Float32 --qos-reliability best_effort"
     ;;
   drive_shell)
-    run_in_container_tty "printf 'safe reset:\n'; printf 'ros2 topic pub --once /amr/enable std_msgs/msg/Bool \"{data: false}\"\n'; printf 'ros2 topic pub --once /amr/clear_fault std_msgs/msg/Empty \"{}\"\n'; printf '\n'; bash"
+    run_in_container_tty "printf 'safe reset:\n'; printf 'ros2 topic pub --once ${STM_NS}/enable std_msgs/msg/Bool \"{data: false}\"\n'; printf 'ros2 topic pub --once ${STM_NS}/clear_fault std_msgs/msg/Empty \"{}\"\n'; printf '\n'; bash"
     ;;
   launch_status|topics_status)
     run_topics_status

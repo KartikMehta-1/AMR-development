@@ -89,6 +89,7 @@ open_gnome_tabs() {
 }
 
 copy_remote_helper
+eval "$(remote_mode_cmd cleanup_monitor)" >/dev/null 2>&1 || true
 
 if ! command -v tmux >/dev/null 2>&1; then
   if command -v terminator >/dev/null 2>&1; then
@@ -113,11 +114,11 @@ left_pane="$(tmux display-message -p -t "${SESSION_NAME}:bench.0" '#{pane_id}')"
 middle_pane="$(tmux split-window -h -p 67 -P -F '#{pane_id}' -t "${left_pane}" "$(remote_mode_cmd nodes_status)")"
 right_pane="$(tmux split-window -h -p 50 -P -F '#{pane_id}' -t "${middle_pane}" "$(remote_mode_cmd left_summary)")"
 
-middle_bottom="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${middle_pane}" "$(remote_mode_cmd agent_log)")"
-tmux split-window -v -p 33 -P -F '#{pane_id}' -t "${middle_bottom}" "$(remote_mode_cmd state_summary)" >/dev/null
+tmux split-window -v -p 35 -P -F '#{pane_id}' -t "${middle_pane}" "$(remote_mode_cmd state_summary)" >/dev/null
 
-right_bottom="$(tmux split-window -v -p 67 -P -F '#{pane_id}' -t "${right_pane}" "$(remote_mode_cmd right_summary)")"
-drive_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${right_bottom}" "$(remote_mode_cmd_tty drive_shell)")"
+right_bottom="$(tmux split-window -v -p 75 -P -F '#{pane_id}' -t "${right_pane}" "$(remote_mode_cmd right_summary)")"
+agent_pane="$(tmux split-window -v -p 67 -P -F '#{pane_id}' -t "${right_bottom}" "$(remote_mode_cmd agent_log)")"
+drive_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${agent_pane}" "$(remote_mode_cmd_tty drive_shell)")"
 
 tmux select-pane -t "${drive_pane}"
 
