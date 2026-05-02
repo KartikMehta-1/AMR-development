@@ -24,13 +24,13 @@ hardware_interface::return_type AMRHardware::configure(
 
   left_cmd_topic_ = info_.hardware_parameters.count("left_cmd_topic")
                         ? info_.hardware_parameters.at("left_cmd_topic")
-                        : std::string("/amr/wheel_cmd_left");
+                        : std::string("/amr_stm/wheel_cmd_left");
   right_cmd_topic_ = info_.hardware_parameters.count("right_cmd_topic")
                          ? info_.hardware_parameters.at("right_cmd_topic")
-                         : std::string("/amr/wheel_cmd_right");
+                         : std::string("/amr_stm/wheel_cmd_right");
   state_topic_ = info_.hardware_parameters.count("state_topic")
                      ? info_.hardware_parameters.at("state_topic")
-                     : std::string("/amr/wheel_state");
+                     : std::string("/amr_stm/wheel_state");
 
   hw_positions_ = std::vector<double>(2, 0.0);
   hw_velocities_ = std::vector<double>(2, 0.0);
@@ -39,8 +39,11 @@ hardware_interface::return_type AMRHardware::configure(
   ensure_ros();
 
   node_ = std::make_shared<rclcpp::Node>("amr_hardware");
-  left_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(left_cmd_topic_, 10);
-  right_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(right_cmd_topic_, 10);
+  auto wheel_cmd_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+  left_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(
+      left_cmd_topic_, wheel_cmd_qos);
+  right_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(
+      right_cmd_topic_, wheel_cmd_qos);
   state_sub_ = node_->create_subscription<sensor_msgs::msg::JointState>(
       state_topic_, rclcpp::QoS(10).best_effort(),
       std::bind(&AMRHardware::handle_joint_state, this, std::placeholders::_1));

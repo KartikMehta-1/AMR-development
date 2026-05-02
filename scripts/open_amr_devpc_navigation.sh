@@ -17,10 +17,12 @@ AGENT_DEV="${AMR_AGENT_DEV:-/dev/ttyACM0}"
 AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
 START_LIDAR="${AMR_START_LIDAR:-true}"
 START_CAMERA="${AMR_START_CAMERA:-false}"
+START_LINK_WATCHDOG="${AMR_START_LINK_WATCHDOG:-true}"
 STM_RESET_DELAY_SEC="${AMR_STM_RESET_DELAY_SEC:-3}"
 JETSON_READY_TIMEOUT_SEC="${AMR_JETSON_READY_TIMEOUT_SEC:-45}"
 STM_POST_RESET_TIMEOUT_SEC="${AMR_STM_POST_RESET_TIMEOUT_SEC:-30}"
-JETSON_CONTROLLERS_TIMEOUT_SEC="${AMR_JETSON_CONTROLLERS_TIMEOUT_SEC:-30}"
+JETSON_CONTROLLERS_TIMEOUT_SEC="${AMR_JETSON_CONTROLLERS_TIMEOUT_SEC:-45}"
+STM_AUTO_RESET="${AMR_STM_AUTO_RESET:-true}"
 
 usage() {
   cat >&2 <<'EOF'
@@ -39,6 +41,7 @@ This starts:
   - Nav2 localization + navigation on the given saved map
   - mission_server
   - live mission status pane
+  - safety_supervisor and live safety status pane
   - a mission command shell for mission_cli actions
   - keyboard teleop for fallback checks
 EOF
@@ -88,6 +91,27 @@ require_cmd ssh
 [[ $# -ge 1 ]] || usage
 resolve_map_paths "$1"
 
+check_jetson_workspace_namespace() {
+  ssh "${JETSON_HOST}" bash -s -- "${REMOTE_REPO}" <<'EOF'
+set -euo pipefail
+
+remote_repo="$1"
+if [[ ! -d "${remote_repo}/ros_ws/src" ]]; then
+  echo "Jetson repo is missing: ${remote_repo}/ros_ws/src" >&2
+  exit 1
+fi
+
+if ! grep -R "/amr_stm/wheel_state" \
+    "${remote_repo}/ros_ws/src/amr_hardware" \
+    "${remote_repo}/ros_ws/src/amr_description" \
+    >/dev/null 2>&1; then
+  echo "Jetson workspace is stale: ${remote_repo}/ros_ws/src still does not use /amr_stm/wheel_state." >&2
+  echo "Sync the current branch to the Jetson before launching navigation." >&2
+  exit 1
+fi
+EOF
+}
+
 start_jetson_hardware() {
   ssh "${JETSON_HOST}" bash -s -- \
     "${JETSON_CONTAINER}" \
@@ -97,7 +121,8 @@ start_jetson_hardware() {
     "${AGENT_DEV}" \
     "${AGENT_BAUD}" \
     "${START_LIDAR}" \
-    "${START_CAMERA}" <<'EOF'
+    "${START_CAMERA}" \
+    "${START_LINK_WATCHDOG}" <<'EOF'
 set -euo pipefail
 
 container_name="$1"
@@ -108,6 +133,7 @@ agent_dev="$5"
 agent_baud="$6"
 start_lidar="$7"
 start_camera="$8"
+start_link_watchdog="$9"
 plugdev_gid="$(getent group plugdev | cut -d: -f3 || true)"
 docker_group_args=()
 if [[ -n "${plugdev_gid}" ]]; then
@@ -120,9 +146,12 @@ docker run -d --name "${container_name}" --net=host --privileged --runtime nvidi
   "${docker_group_args[@]}" \
   -e ROS_DOMAIN_ID="${ros_domain_id}" \
   -e ROS_LOCALHOST_ONLY="${ros_localhost_only}" \
+  -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   -v "${remote_repo}/ros_ws:/workspaces/ros_ws" \
   amr/ros2-foxy-jetson:arm64 \
   bash -lc "
+unset CYCLONEDDS_URI
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 cd /workspaces/ros_ws
 [ -f /opt/ros/driver_ws/install/setup.bash ] && source /opt/ros/driver_ws/install/setup.bash
 colcon build --merge-install --symlink-install --packages-select amr_hardware amr_description
@@ -132,7 +161,8 @@ ros2 launch amr_description hardware.launch.py \
   agent_dev:=${agent_dev} \
   agent_baud:=${agent_baud} \
   start_lidar:=${start_lidar} \
-  start_camera:=${start_camera}
+  start_camera:=${start_camera} \
+  start_link_watchdog:=${start_link_watchdog}
 " >/dev/null
 EOF
 }
@@ -144,7 +174,8 @@ reset_stm_via_stlink() {
     "${STM_RESET_DELAY_SEC}" \
     "${JETSON_READY_TIMEOUT_SEC}" \
     "${STM_POST_RESET_TIMEOUT_SEC}" \
-    "${JETSON_CONTROLLERS_TIMEOUT_SEC}" <<'EOF'
+    "${JETSON_CONTROLLERS_TIMEOUT_SEC}" \
+    "${STM_AUTO_RESET}" <<'EOF'
 set -euo pipefail
 
 container_name="$1"
@@ -153,6 +184,7 @@ delay_sec="$3"
 ready_timeout="$4"
 post_reset_timeout="$5"
 controllers_timeout="$6"
+auto_reset="$7"
 
 wait_for_agent() {
   local deadline=$((SECONDS + ready_timeout))
@@ -182,14 +214,45 @@ wait_for_controllers() {
 wait_for_wheel_state() {
   local deadline=$((SECONDS + post_reset_timeout))
   while (( SECONDS < deadline )); do
-    if docker exec "${container_name}" /entrypoint.sh bash -lc \
-      "ros2 topic info -v /amr/wheel_state 2>/dev/null | grep -q 'Publisher count: 1\\|Publisher count: 2\\|Publisher count: 3\\|Publisher count: 4\\|Publisher count: 5\\|Publisher count: 6\\|Publisher count: 7\\|Publisher count: 8\\|Publisher count: 9'" \
-      >/dev/null 2>&1; then
+    if docker exec -i "${container_name}" /entrypoint.sh python3 - >/dev/null 2>&1 <<'PY'
+import time
+
+import rclpy
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+from sensor_msgs.msg import JointState
+
+rclpy.init()
+node = rclpy.create_node("amr_wheel_state_probe")
+qos = QoSProfile(depth=10)
+qos.reliability = ReliabilityPolicy.BEST_EFFORT
+seen = {"ok": False}
+
+def on_wheel_state(_msg):
+    seen["ok"] = True
+
+node.create_subscription(JointState, "/amr_stm/wheel_state", on_wheel_state, qos)
+deadline = time.monotonic() + 4.0
+while rclpy.ok() and not seen["ok"] and time.monotonic() < deadline:
+    rclpy.spin_once(node, timeout_sec=0.1)
+
+node.destroy_node()
+rclpy.shutdown()
+raise SystemExit(0 if seen["ok"] else 1)
+PY
+    then
       return 0
     fi
     sleep 1
   done
   return 1
+}
+
+restart_agent() {
+  docker exec "${container_name}" bash -lc \
+    "pkill -f '[m]icro_ros_agent.*serial --dev ${agent_dev}' || true" \
+    >/dev/null 2>&1 || true
+  sleep 3
+  wait_for_agent
 }
 
 do_reset() {
@@ -211,6 +274,17 @@ if ! wait_for_controllers; then
   exit 1
 fi
 
+if wait_for_wheel_state; then
+  exit 0
+fi
+
+echo "/amr_stm/wheel_state did not appear after startup; resetting STM..." >&2
+if [[ "${auto_reset}" != "true" ]]; then
+  echo "STM auto-reset is disabled. Set AMR_STM_AUTO_RESET=true to allow ST-LINK reset." >&2
+  echo "Check/power-cycle the STM manually, then verify:" >&2
+  echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 topic info -v /amr_stm/wheel_state\"" >&2
+  exit 1
+fi
 sleep "${delay_sec}"
 do_reset
 
@@ -218,14 +292,25 @@ if wait_for_wheel_state; then
   exit 0
 fi
 
-echo "First STM reset did not produce /amr/wheel_state, retrying once..." >&2
+echo "First STM reset did not produce /amr_stm/wheel_state, restarting micro-ROS agent and retrying..." >&2
+if ! restart_agent; then
+  echo "micro_ros_agent did not restart cleanly in ${container_name}" >&2
+  exit 1
+fi
+do_reset
+
+if wait_for_wheel_state; then
+  exit 0
+fi
+
+echo "Agent restart did not produce /amr_stm/wheel_state, retrying STM reset once..." >&2
 sleep 2
 do_reset
 
 if ! wait_for_wheel_state; then
-  echo "STM reset completed but /amr/wheel_state still has no publisher." >&2
+  echo "STM reset completed but /amr_stm/wheel_state still has no messages." >&2
   echo "Check on Jetson:" >&2
-  echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 topic info -v /amr/wheel_state\"" >&2
+  echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 topic info -v /amr_stm/wheel_state\"" >&2
   echo "  docker exec -it ${container_name} /entrypoint.sh bash -lc \"ros2 control list_controllers\"" >&2
   exit 1
 fi
@@ -235,12 +320,14 @@ EOF
 container_cmd() {
   local command_text="$1"
   printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q bash -lc %q' \
-    "${DISPLAY_VALUE}" "${CONTAINER_NAME}" "${command_text}"
+    "${DISPLAY_VALUE}" "${CONTAINER_NAME}" \
+    "unset CYCLONEDDS_URI; export RMW_IMPLEMENTATION=rmw_fastrtps_cpp; ${command_text}"
 }
 
 xhost +local:root >/dev/null 2>&1 || true
 
 printf 'Starting Jetson hardware stack on %s...\n' "${JETSON_HOST}" >&2
+check_jetson_workspace_namespace
 start_jetson_hardware
 printf 'Resetting STM over ST-LINK...\n' >&2
 reset_stm_via_stlink
@@ -250,6 +337,7 @@ docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 docker run -d --name "${CONTAINER_NAME}" --net=host \
   -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
   -e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}" \
+  -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   -e DISPLAY="${DISPLAY_VALUE}" \
   -e QT_X11_NO_MITSHM=1 \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
@@ -267,13 +355,22 @@ fi
 
 tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_NAME}" -n navigation \
   "$(container_cmd "source /opt/ros/foxy/setup.bash; export LIBGL_ALWAYS_SOFTWARE=1; rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz")"
+tmux set-option -t "${SESSION_NAME}" mouse on
+tmux set-option -t "${SESSION_NAME}" history-limit 50000
 
 rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
+build_ready_file="/tmp/amr_nav_colcon_ready"
+wait_for_build="while [ ! -f ${build_ready_file} ]; do sleep 1; done"
+wait_for_mission_services="until ros2 service list | grep -qx /amr_missions/state && ros2 service list | grep -qx /amr_missions/go_to && ros2 service list | grep -qx /amr_missions/cancel; do sleep 1; done"
 nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false map:=${MAP_PATH_CONTAINER}")")"
 teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
-mission_server_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select amr_missions_msgs amr_missions; source install/setup.bash; ros2 run amr_missions mission_server")")"
-mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; while [ ! -f install/setup.bash ]; do sleep 1; done; source install/setup.bash; ros2 topic echo /amr_missions/status")")"
-mission_shell_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_status_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; while [ ! -f install/setup.bash ]; do sleep 1; done; source install/setup.bash; echo Mission shell ready.; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")")"
+select_build_packages="build_packages='amr_missions_msgs amr_missions'; [ -f src/amr_safety/package.xml ] && build_packages=\"\${build_packages} amr_safety\"; [ -f src/amr_voice/package.xml ] && build_packages=\"\${build_packages} amr_voice\""
+mission_server_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; ros2 run amr_missions mission_server")")"
+mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ros2 topic echo /amr_missions/status")")"
+safety_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${teleop_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then ros2 run amr_safety safety_supervisor --ros-args -p odom_topic:=/odom -p auto_reenable_when_safe:=true; else echo 'amr_safety package not present; safety pane disabled.'; exec bash -i; fi")")"
+safety_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then ros2 topic echo /amr/safety_supervisor/status; else echo 'amr_safety package not present; no safety status topic.'; exec bash -i; fi")")"
+mission_shell_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_status_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_mission_services}; echo Mission shell ready.; echo 'Click panes to switch focus, or use Ctrl-b then arrow keys.'; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")")"
+voice_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then ros2 run amr_voice voice_command_node --input-mode text; else echo 'amr_voice package not present; voice pane disabled.'; exec bash -i; fi")")"
 
 tmux select-layout -t "${SESSION_NAME}:navigation" tiled
 tmux select-pane -t "${mission_shell_pane}"
