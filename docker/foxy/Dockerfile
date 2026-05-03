@@ -40,7 +40,11 @@ RUN set -eux; \
       curl \
       gnupg; \
     OS_CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
-    if [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; then \
+    HAVE_ROS_SNAPSHOT=0; \
+    if grep -R "snapshots.ros.org/${ROS_DISTRO}/final" /etc/apt/sources.list /etc/apt/sources.list.d >/dev/null 2>&1; then \
+      HAVE_ROS_SNAPSHOT=1; \
+    fi; \
+    if { [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; } && [ "${HAVE_ROS_SNAPSHOT}" != "1" ]; then \
       curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
         | gpg --dearmor --yes --batch --no-tty -o /usr/share/keyrings/ros-archive-keyring.gpg; \
       echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] https://packages.ros.org/ros2/ubuntu ${OS_CODENAME} main" \
@@ -75,9 +79,12 @@ RUN set -eux; \
       git \
       curl \
       wget \
+      alsa-utils \
+      libportaudio2 \
       pkg-config \
       iproute2 \
       python3-colcon-common-extensions \
+      python3-pip \
       python3-rosdep \
       python3-vcstool \
       python3-argcomplete \
@@ -100,6 +107,8 @@ RUN set -eux; \
       udev \
       ${ROS_DEBS} \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir sounddevice vosk
 
 RUN rosdep init || true
 

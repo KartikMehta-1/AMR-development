@@ -337,7 +337,16 @@ reset_stm_via_stlink
 printf 'Jetson hardware stack started and STM reset completed.\n' >&2
 
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+audio_gid="$(getent group audio | cut -d: -f3 || true)"
+docker_audio_args=()
+if [[ -d /dev/snd ]]; then
+  docker_audio_args+=(--device /dev/snd)
+  if [[ -n "${audio_gid}" ]]; then
+    docker_audio_args+=(--group-add "${audio_gid}")
+  fi
+fi
 docker run -d --name "${CONTAINER_NAME}" --net=host \
+  "${docker_audio_args[@]}" \
   -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
   -e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}" \
   -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
