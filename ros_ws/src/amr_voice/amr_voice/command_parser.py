@@ -191,7 +191,10 @@ def _matches_any(text: str, phrases: Union[Sequence[str], Set[str]]) -> bool:
 def _match_place(text: str, known_places: Set[str]) -> Optional[str]:
     tokens = set(text.split())
     for place in sorted(known_places, key=len, reverse=True):
-        if place in text.split() or place == text:
+        place_forms = {place}
+        if not place.endswith("s"):
+            place_forms.add(f"{place}s")
+        if place_forms & tokens or place == text:
             return place
         aliases = _PLACE_ALIASES.get(place, set())
         if place == "home" and "home" in tokens:

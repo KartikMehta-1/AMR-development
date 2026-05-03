@@ -22,6 +22,7 @@ setup(
         "console_scripts": [
             "voice_text_cli = amr_voice.voice_text_cli:main",
             "voice_command_node = amr_voice.voice_text_cli:main",
+            "voice_asr_node = amr_voice.voice_asr_node:main",
         ],
     },
 )

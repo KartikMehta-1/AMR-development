@@ -116,6 +116,33 @@ One-shot dry run, useful before enabling motion:
 ros2 run amr_voice voice_text_cli --wake-gated --dry-run --command "lovely go to the kitchen"
 ```
 
+Laptop microphone ASR setup:
+
+```bash
+mkdir -p /workspaces/AMR-development/models
+cd /workspaces/AMR-development/models
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+```
+
+List microphone devices:
+
+```bash
+ros2 run amr_voice voice_asr_node --list-devices
+```
+
+Run ASR in dry-run mode:
+
+```bash
+ros2 run amr_voice voice_asr_node --dry-run --device plughw:1,7
+```
+
+Run ASR against mission commands:
+
+```bash
+ros2 run amr_voice voice_asr_node --device plughw:1,7
+```
+
 Current named places:
 - `home`
 - `door`
