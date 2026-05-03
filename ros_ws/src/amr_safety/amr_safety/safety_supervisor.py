@@ -10,6 +10,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool, Int32, String, UInt32
+from std_srvs.srv import Trigger
 
 
 STM_FAULTS = [
@@ -120,6 +121,7 @@ class SafetySupervisor(Node):
         self.create_subscription(Odometry, self.odom_topic, self.handle_odom, rel)
         self.create_subscription(LaserScan, self.scan_topic, self.handle_scan, be)
         self.create_subscription(PoseWithCovarianceStamped, self.amcl_topic, self.handle_amcl_pose, rel)
+        self.create_service(Trigger, "/amr/safety_supervisor/reset_intervention", self.handle_reset_intervention)
 
         self.last_seen = {}
         self.fault_mask = None
@@ -145,6 +147,25 @@ class SafetySupervisor(Node):
         if self.auto_reenable_when_safe:
             self.get_logger().warn("auto_reenable_when_safe is not enabled in Step 4; manual re-enable is required after intervention.")
         self.get_logger().info("AMR safety supervisor running in %s mode." % ("enforce" if self.action_authority else "monitor-only"))
+
+    def handle_reset_intervention(self, _request, response):
+        now = time.monotonic()
+        _ages, _stale, reasons, observed_reasons, healthy = self.evaluate_health(now)
+        if not healthy:
+            response.success = False
+            response.message = "cannot reset intervention while unsafe: %s" % (
+                ",".join(reasons or observed_reasons) or "unknown"
+            )
+            return response
+
+        was_active = self.intervention_active
+        self.intervention_active = False
+        self.last_intervention_reasons = []
+        self.first_seen_reasons.clear()
+        self.last_summary_key = None
+        response.success = True
+        response.message = "intervention reset" if was_active else "intervention already clear"
+        return response
 
     def mark(self, name):
         self.last_seen[name] = time.monotonic()
