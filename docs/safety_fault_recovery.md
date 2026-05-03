@@ -21,7 +21,7 @@ Control states:
 Decode a live value:
 
 ```bash
-docker exec amr_devpc /entrypoint.sh bash -lc 'cd /workspaces/AMR-development/ros_ws && source install/setup.bash && ros2 topic echo --once /amr_stm/safety_state'
+docker exec amr_devpc /entrypoint.sh bash -lc 'cd /workspaces/AMR-development/ros_ws && source install/setup.bash && timeout 5 ros2 topic echo /amr_stm/safety_state'
 python3 scripts/amr_decode_faults.py --safety-state 131072
 ```
 
@@ -46,7 +46,7 @@ python3 scripts/amr_decode_faults.py --safety-state 131072
 Decode a live value:
 
 ```bash
-docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && ros2 topic echo --once /amr_stm/fault_mask'
+docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && timeout 5 ros2 topic echo /amr_stm/fault_mask'
 python3 scripts/amr_decode_faults.py --fault-mask 24
 ```
 
@@ -128,8 +128,8 @@ docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-developmen
 3. Capture and decode fault state before clearing it.
 
 ```bash
-docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && ros2 topic echo --once /amr_stm/fault_mask'
-docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && ros2 topic echo --once /amr_stm/safety_state'
+docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && timeout 5 ros2 topic echo /amr_stm/fault_mask'
+docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && timeout 5 ros2 topic echo /amr_stm/safety_state'
 python3 scripts/amr_decode_faults.py --fault-mask <value>
 ```
 
@@ -146,7 +146,7 @@ docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-developmen
 6. Confirm the mask is zero.
 
 ```bash
-docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && ros2 topic echo --once /amr_stm/fault_mask'
+docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && timeout 5 ros2 topic echo /amr_stm/fault_mask'
 ```
 
 7. Re-enable STM motor output.
