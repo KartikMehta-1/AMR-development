@@ -95,7 +95,7 @@ EOF
 
 container_cmd() {
   local command_text="$1"
-  printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q bash -lc %q' \
+  printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q /entrypoint.sh bash -lc %q' \
     "${DISPLAY_VALUE}" "${CONTAINER_NAME}" "${command_text}"
 }
 
