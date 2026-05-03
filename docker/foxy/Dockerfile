@@ -58,7 +58,7 @@ RUN set -eux; \
     OPENCV_DEB="libopencv-dev"; \
     BUILD_RS="${BUILD_REALSENSE}"; \
     if [ "${INSTALL_ROS_DEBS}" = "1" ] || { [ "${INSTALL_ROS_DEBS}" = "auto" ] && [ "${OS_CODENAME}" != "bionic" ]; }; then \
-      ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-xacro"; \
+      ROS_DEBS="ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-diagnostic-updater ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-navigation2 ros-${ROS_DISTRO}-nav2-bringup ros-${ROS_DISTRO}-rviz2 ros-${ROS_DISTRO}-xacro"; \
     fi; \
     if [ "${BUILD_RS}" = "auto" ]; then \
       if [ "${OS_CODENAME}" = "bionic" ] && [ "${TARGETARCH}" = "arm64" ]; then BUILD_RS=1; \
