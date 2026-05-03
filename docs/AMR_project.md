@@ -30,6 +30,7 @@
   - Promoted `amr_missions` into a persistent mission runtime with `mission_server`, typed `MissionStatus`, `/amr_missions/state`, and a command topic; the one-shot navigation launcher now includes mission-server, mission-status, and mission-command panes.
   - Revalidated named-place navigation and patrol flows on real hardware with the persistent mission runtime; current saved places are `home`, `door`, `kitchen`, and `hall`.
   - Hardened the mission/Nav2 command path so mission CLI calls use unique ROS node names, wait only for the required service, and time out cleanly instead of hanging; `go_to kitchen` was revalidated through the mission server on real hardware.
+  - Completed the real motor-driver power-cut safety recovery validation without restarting the safety supervisor; reset is rejected while STM fault bits are active, succeeds after fault clear, and STM re-enable remains manual.
   - Integrated SO-101 into the active project stack and completed the main AMR mechanical assembly.
   - Ran an ACT policy that successfully picked up an object and placed it into a bag.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live (wheel_state + duty topics visible); UART telemetry disabled to avoid contention.
@@ -127,6 +128,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 ---
 
 ## Project Log
+- 2026-05-03: Completed Safety Step 10: repeated the real motor-driver power-cut fault while moving, confirmed STM latched `STALL_LEFT|STALL_RIGHT` (`fault_mask=24`) with comms healthy, verified `/amr/safety_supervisor/reset_intervention` rejects while unsafe, restored motor-driver power, cleared STM faults, reset the supervisor without restarting it, manually re-enabled STM, and finished with a passing 30 second baseline probe.
 - 2026-05-03: Hardened the mission/Nav2 command path after CLI calls intermittently hung or failed service discovery. `mission_cli` now uses a unique ROS node name per invocation, waits only for the service required by the requested command, and bounds service-response waits. `mission_server` now clears stale action goal handles on idle cancel requests. Rebuilt/restarted the mission server and validated `status`, `cancel`, and `go_to kitchen` on real hardware. Follow-up: improve localization/AMCL behavior because mission validation still showed large AMCL pose steps during motion while low-level comms and safety remained healthy.
 - 2026-04-27: Updated the canonical roadmap to split near-term work and post-Orin work more cleanly. Short-term milestones are now EKF state estimation, persistent mission runtime, safety supervision, and voice I/O scaffolding. Perception-heavy autonomy and manipulator runtime migration are explicitly deferred to the Jetson Orin NX phase.
 - 2026-04-27: Added one-shot dev-PC workflows for SLAM and navigation that first bring up the Jetson hardware stack, then reset the STM over ST-LINK via `openocd`, then launch the desktop-side session. Validated noninteractive reset with `sudo -n openocd -s /usr/share/openocd/scripts -f interface/stlink-v2-1.cfg -f target/stm32f4x.cfg -c "init; reset run; shutdown"`.
