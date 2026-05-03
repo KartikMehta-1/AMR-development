@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 
 import json
-import math
 import time
 
 import rclpy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Int32, String, UInt32
+from std_msgs.msg import Bool, Int32, String, UInt32
 
 
 STM_FAULTS = [
@@ -78,6 +77,9 @@ class SafetySupervisor(Node):
         self.declare_parameter("max_scan_age_sec", 0.5)
         self.declare_parameter("max_amcl_age_sec", 2.0)
         self.declare_parameter("publish_period_sec", 1.0)
+        self.declare_parameter("startup_grace_sec", 3.0)
+        self.declare_parameter("cmd_vel_topic", "/diff_drive_controller/cmd_vel_unstamped")
+        self.declare_parameter("enable_topic", "/amr_stm/enable")
 
         self.monitor_only = bool(self.get_parameter("monitor_only").value)
         self.enforce = bool(self.get_parameter("enforce").value)
@@ -86,6 +88,10 @@ class SafetySupervisor(Node):
         self.scan_topic = str(self.get_parameter("scan_topic").value)
         self.amcl_topic = str(self.get_parameter("amcl_topic").value)
         self.require_amcl = bool(self.get_parameter("require_amcl").value)
+        self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
+        self.enable_topic = str(self.get_parameter("enable_topic").value)
+        self.startup_grace_sec = float(self.get_parameter("startup_grace_sec").value)
+        self.action_authority = self.enforce
 
         self.max_ages = {
             "stm": float(self.get_parameter("max_stm_age_sec").value),
@@ -96,6 +102,12 @@ class SafetySupervisor(Node):
         }
 
         self.status_pub = self.create_publisher(String, "/amr/safety_supervisor/status", 10)
+        self.stop_pub = None
+        self.enable_pub = None
+        if self.action_authority:
+            self.stop_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
+            self.enable_pub = self.create_publisher(Bool, self.enable_topic, 10)
+
         be = best_effort_qos()
         rel = reliable_qos()
 
@@ -114,15 +126,22 @@ class SafetySupervisor(Node):
         self.comm_fault_mask = None
         self.odom_speed = None
         self.last_summary_key = None
+        self.start_time = time.monotonic()
+        self.intervention_active = False
+        self.intervention_count = 0
+        self.last_intervention_reasons = []
 
         period = float(self.get_parameter("publish_period_sec").value)
         self.timer = self.create_timer(period, self.publish_status)
 
-        if self.enforce or not self.monitor_only:
-            self.get_logger().warn("Safety supervisor enforcement requested, but Step 3 is monitor-only; no stop/enable commands will be published.")
+        if self.action_authority:
+            self.monitor_only = False
+            self.get_logger().warn("AMR safety supervisor enforcement is ACTIVE. Unsafe state will publish zero cmd_vel and /amr_stm/enable=false.")
+        elif not self.monitor_only:
+            self.get_logger().warn("monitor_only=false was requested without enforce=true; no stop/enable commands will be published.")
         if self.auto_reenable_when_safe:
-            self.get_logger().warn("auto_reenable_when_safe is ignored in Step 3 monitor-only mode.")
-        self.get_logger().info("AMR safety supervisor running in monitor-only mode.")
+            self.get_logger().warn("auto_reenable_when_safe is not enabled in Step 4; manual re-enable is required after intervention.")
+        self.get_logger().info("AMR safety supervisor running in %s mode." % ("enforce" if self.action_authority else "monitor-only"))
 
     def mark(self, name):
         self.last_seen[name] = time.monotonic()
@@ -182,26 +201,59 @@ class SafetySupervisor(Node):
             "faults": decode_bits(fault_mask, STM_FAULTS),
         }
 
-    def publish_status(self):
-        now = time.monotonic()
+    def evaluate_health(self, now):
         ages = {name: self.age(name, now) for name in ["stm", "comm", "odom", "scan", "amcl"]}
         stale = self.stale_flags(now)
+        reasons = []
+
+        in_startup_grace = (now - self.start_time) < self.startup_grace_sec
+        if self.fault_mask is None or self.comm_status is None:
+            if not in_startup_grace:
+                reasons.append("missing_stm_or_comm_status")
+
+        for name, is_stale in stale.items():
+            if is_stale and not (in_startup_grace and name in ("stm", "comm")):
+                reasons.append(f"stale_{name}")
+
+        if self.fault_mask not in (None, 0):
+            reasons.append("stm_fault_mask_nonzero")
+        if self.comm_fault_mask not in (None, 0):
+            reasons.append("comm_fault_mask_nonzero")
+        if self.comm_status not in (None, "stm_link_ok"):
+            reasons.append(f"comm_status_{self.comm_status}")
+
+        healthy = not reasons and self.fault_mask is not None and self.comm_status is not None
+        return ages, stale, reasons, healthy
+
+    def apply_intervention(self, reasons):
+        if not self.action_authority or not reasons:
+            return
+
+        zero = Twist()
+        disable = Bool()
+        disable.data = False
+        self.stop_pub.publish(zero)
+        self.enable_pub.publish(disable)
+        self.intervention_active = True
+        self.intervention_count += 1
+        self.last_intervention_reasons = list(reasons)
+
+    def publish_status(self):
+        now = time.monotonic()
+        ages, stale, reasons, healthy = self.evaluate_health(now)
         stm_faults = decode_bits(self.fault_mask or 0, STM_FAULTS)
         comm_faults = decode_bits(self.comm_fault_mask or 0, COMM_FAULTS)
-
-        healthy = (
-            not any(stale.values())
-            and (self.fault_mask in (None, 0))
-            and (self.comm_fault_mask in (None, 0))
-            and (self.comm_status in (None, "stm_link_ok"))
-        )
-        if self.fault_mask is None or self.comm_status is None:
-            healthy = False
+        if not healthy:
+            self.apply_intervention(reasons)
 
         status = {
-            "mode": "monitor_only",
+            "mode": "enforce" if self.action_authority else "monitor_only",
             "healthy": healthy,
-            "action_authority": False,
+            "action_authority": self.action_authority,
+            "intervention_active": self.intervention_active,
+            "intervention_count": self.intervention_count,
+            "intervention_reasons": reasons,
+            "last_intervention_reasons": self.last_intervention_reasons,
             "stale": stale,
             "ages_sec": {name: (None if value is None else round(value, 3)) for name, value in ages.items()},
             "fault_mask": self.fault_mask,
@@ -224,15 +276,19 @@ class SafetySupervisor(Node):
             self.fault_mask,
             self.comm_fault_mask,
             self.comm_status,
+            tuple(reasons),
+            self.intervention_active,
         )
         if summary_key != self.last_summary_key:
             self.last_summary_key = summary_key
             if healthy:
                 self.get_logger().info("Safety monitor healthy.")
             else:
-                self.get_logger().warn(
-                    "Safety monitor unhealthy: stale=%s fault_mask=%s comm_status=%s comm_fault_mask=%s"
+                log_fn = self.get_logger().error if self.action_authority else self.get_logger().warn
+                log_fn(
+                    "Safety monitor unhealthy: reasons=%s stale=%s fault_mask=%s comm_status=%s comm_fault_mask=%s"
                     % (
+                        ",".join(reasons) or "none",
                         ",".join(name for name, value in stale.items() if value) or "none",
                         self.fault_mask,
                         self.comm_status,

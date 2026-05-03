@@ -37,7 +37,7 @@ mode: monitor_only
 action_authority: false
 ```
 
-The following parameters are accepted for compatibility, but Step 3 ignores enforcement:
+The following parameters keep Step 3 passive:
 
 ```text
 monitor_only=true
@@ -45,7 +45,7 @@ enforce=false
 auto_reenable_when_safe=false
 ```
 
-If `enforce` or `auto_reenable_when_safe` is passed, the node logs a warning and still publishes no stop/enable commands.
+Step 4 adds an explicit opt-in enforcement mode with `enforce:=true`; see `docs/safety_supervisor_step4.md`.
 
 ## Observed Inputs
 
