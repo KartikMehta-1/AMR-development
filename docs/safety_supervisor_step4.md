@@ -65,8 +65,11 @@ Default thresholds:
 | Scan | `0.5 s` |
 | AMCL pose | `2.0 s` |
 | Startup grace | `3.0 s` |
+| Stale intervention dwell | `3.0 s` |
 
 During startup grace, missing or stale inputs are reported in status but do not trigger intervention. This avoids disabling the STM during normal launch ordering before odom, scan, STM diagnostics, and communication status have all started publishing.
+
+After startup, stale input conditions must persist for `stale_intervention_dwell_sec` before the supervisor intervenes. This filters short scheduling or DDS gaps. STM fault bits, communication fault masks, and non-OK communication status still trigger immediately.
 
 ## Status Fields
 
@@ -79,6 +82,7 @@ action_authority
 intervention_active
 intervention_count
 intervention_reasons
+observed_reasons
 last_intervention_reasons
 fault_mask
 comm_status

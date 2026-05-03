@@ -78,6 +78,7 @@ class SafetySupervisor(Node):
         self.declare_parameter("max_amcl_age_sec", 2.0)
         self.declare_parameter("publish_period_sec", 1.0)
         self.declare_parameter("startup_grace_sec", 3.0)
+        self.declare_parameter("stale_intervention_dwell_sec", 3.0)
         self.declare_parameter("cmd_vel_topic", "/diff_drive_controller/cmd_vel_unstamped")
         self.declare_parameter("enable_topic", "/amr_stm/enable")
 
@@ -91,6 +92,7 @@ class SafetySupervisor(Node):
         self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
         self.enable_topic = str(self.get_parameter("enable_topic").value)
         self.startup_grace_sec = float(self.get_parameter("startup_grace_sec").value)
+        self.stale_intervention_dwell_sec = float(self.get_parameter("stale_intervention_dwell_sec").value)
         self.action_authority = self.enforce
 
         self.max_ages = {
@@ -130,6 +132,7 @@ class SafetySupervisor(Node):
         self.intervention_active = False
         self.intervention_count = 0
         self.last_intervention_reasons = []
+        self.first_seen_reasons = {}
 
         period = float(self.get_parameter("publish_period_sec").value)
         self.timer = self.create_timer(period, self.publish_status)
@@ -211,19 +214,34 @@ class SafetySupervisor(Node):
             if not in_startup_grace:
                 reasons.append("missing_stm_or_comm_status")
 
+        immediate_reasons = []
+        dwell_reasons = []
+
         for name, is_stale in stale.items():
             if is_stale and not in_startup_grace:
-                reasons.append(f"stale_{name}")
+                dwell_reasons.append(f"stale_{name}")
 
         if self.fault_mask not in (None, 0):
-            reasons.append("stm_fault_mask_nonzero")
+            immediate_reasons.append("stm_fault_mask_nonzero")
         if self.comm_fault_mask not in (None, 0):
-            reasons.append("comm_fault_mask_nonzero")
+            immediate_reasons.append("comm_fault_mask_nonzero")
         if self.comm_status not in (None, "stm_link_ok"):
-            reasons.append(f"comm_status_{self.comm_status}")
+            immediate_reasons.append(f"comm_status_{self.comm_status}")
+
+        active_reason_set = set(reasons + immediate_reasons + dwell_reasons)
+        for old_reason in list(self.first_seen_reasons):
+            if old_reason not in active_reason_set:
+                del self.first_seen_reasons[old_reason]
+
+        reasons.extend(immediate_reasons)
+        for reason in dwell_reasons:
+            first_seen = self.first_seen_reasons.setdefault(reason, now)
+            if now - first_seen >= self.stale_intervention_dwell_sec:
+                reasons.append(reason)
 
         healthy = not reasons and self.fault_mask is not None and self.comm_status is not None
-        return ages, stale, reasons, healthy
+        observed_reasons = sorted(active_reason_set)
+        return ages, stale, reasons, observed_reasons, healthy
 
     def apply_intervention(self, reasons):
         if not self.action_authority or not reasons:
@@ -240,7 +258,7 @@ class SafetySupervisor(Node):
 
     def publish_status(self):
         now = time.monotonic()
-        ages, stale, reasons, healthy = self.evaluate_health(now)
+        ages, stale, reasons, observed_reasons, healthy = self.evaluate_health(now)
         stm_faults = decode_bits(self.fault_mask or 0, STM_FAULTS)
         comm_faults = decode_bits(self.comm_fault_mask or 0, COMM_FAULTS)
         if not healthy:
@@ -253,6 +271,7 @@ class SafetySupervisor(Node):
             "intervention_active": self.intervention_active,
             "intervention_count": self.intervention_count,
             "intervention_reasons": reasons,
+            "observed_reasons": observed_reasons,
             "last_intervention_reasons": self.last_intervention_reasons,
             "stale": stale,
             "ages_sec": {name: (None if value is None else round(value, 3)) for name, value in ages.items()},
@@ -277,6 +296,7 @@ class SafetySupervisor(Node):
             self.comm_fault_mask,
             self.comm_status,
             tuple(reasons),
+            tuple(observed_reasons),
             self.intervention_active,
         )
         if summary_key != self.last_summary_key:

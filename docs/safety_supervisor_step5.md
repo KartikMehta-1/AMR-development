@@ -33,6 +33,7 @@ With enforced mode active:
 - `healthy` is `true`.
 - `intervention_active` is `false`.
 - `intervention_count` remains `0`.
+- brief observed stale samples may appear, but `intervention_reasons` must remain empty unless a condition persists beyond the stale dwell.
 - `/amr_stm/fault_mask` remains `0`.
 - `/amr_stm/comm_status` remains `stm_link_ok`.
 - `/amr_stm/comm_fault_mask` remains `0`.
