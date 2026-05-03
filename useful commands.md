@@ -26,6 +26,19 @@ cd ~/AMR-development
 ./scripts/open_amr_monitor.sh
 ```
 
+### Safety recovery after a fault
+Use this after a safety intervention or STM fault, after the physical cause is fixed or ready to be inspected:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash -lc '
+cd /workspaces/AMR-development
+source ros_ws/install/setup.bash
+python3 scripts/amr_safety_recover.py
+'
+```
+
+The helper stops mission/Nav2 motion, publishes zero velocity, disables STM, shows decoded fault state, prompts before clearing a nonzero STM fault, resets the safety supervisor, and asks separately before re-enabling STM.
+
 ### 1) Jetson: AMR hardware-only bringup (motors + lidar, no Nav2)
 Run from the dev PC:
 ```bash
@@ -417,7 +430,7 @@ Pass condition:
 - `/amr_stm/wheel_state` streaming
 - `odom -> base_footprint` exists
 
-### AMR fault clear / safe state
+### AMR safety recovery / fault clear
 Preferred guarded recovery from inside the dev-PC container:
 
 ```bash
