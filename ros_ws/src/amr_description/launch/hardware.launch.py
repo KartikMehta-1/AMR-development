@@ -46,7 +46,7 @@ def generate_launch_description():
             {
                 "wheel_state_topic": "/amr_stm/wheel_state",
                 "startup_timeout_sec": 5.0,
-                "stale_timeout_sec": 1.0,
+                "stale_timeout_sec": 2.0,
                 "publish_period_sec": 0.5,
             }
         ],
