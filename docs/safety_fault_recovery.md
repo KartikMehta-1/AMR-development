@@ -109,9 +109,42 @@ Healthy communication is:
 
 Launch-time `PIN` or `SOFT` can be expected if the launch script, ST-LINK, or reset button reset the STM. A reset cause becomes a failure when `boot_ms` drops during runtime.
 
-## Recovery Procedure
+## Guarded Recovery Tool
 
-Use this sequence after any STM fault:
+Use the guarded recovery helper for normal operator recovery:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash -lc '
+cd /workspaces/AMR-development
+source ros_ws/install/setup.bash
+python3 scripts/amr_safety_recover.py
+'
+```
+
+The helper performs the validated recovery sequence:
+
+- cancels the mission server if active
+- requests Nav2 goal cancellation if available
+- publishes zero velocity
+- disables STM motor output
+- captures and decodes STM fault state
+- asks for confirmation before clearing a nonzero STM fault
+- clears `/amr_stm/clear_fault`
+- verifies `fault_mask` returns to `0`
+- calls `/amr/safety_supervisor/reset_intervention`
+- asks separately before publishing `/amr_stm/enable=true`
+
+For scripted use after the physical fault source is definitely fixed:
+
+```bash
+python3 scripts/amr_safety_recover.py --assume-fixed --reenable
+```
+
+Do not use `--assume-fixed` unless the physical cause is gone.
+
+## Manual Recovery Procedure
+
+Use this sequence after any STM fault if the guarded helper is unavailable:
 
 1. Stop motion commands.
 

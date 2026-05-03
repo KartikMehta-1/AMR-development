@@ -418,8 +418,29 @@ Pass condition:
 - `odom -> base_footprint` exists
 
 ### AMR fault clear / safe state
+Preferred guarded recovery from inside the dev-PC container:
+
+```bash
+cd /workspaces/AMR-development
+source ros_ws/install/setup.bash
+python3 scripts/amr_safety_recover.py
+```
+
+From the laptop host:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash -lc '
+cd /workspaces/AMR-development
+source ros_ws/install/setup.bash
+python3 scripts/amr_safety_recover.py
+'
+```
+
+Manual fallback:
+
 ```bash
 ros2 topic pub --once /amr_stm/enable std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /amr_stm/estop std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /amr_stm/clear_fault std_msgs/msg/Empty "{}"
+ros2 service call /amr/safety_supervisor/reset_intervention std_srvs/srv/Trigger "{}"
 ```
