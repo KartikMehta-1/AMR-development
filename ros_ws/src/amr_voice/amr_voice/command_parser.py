@@ -9,6 +9,8 @@ CANCEL = "cancel"
 STATUS = "status"
 LIST_PLACES = "list_places"
 WAKE = "wake"
+CONFIRM = "confirm"
+REJECT = "reject"
 UNKNOWN = "unknown"
 
 
@@ -50,6 +52,30 @@ _LIST_PHRASES = {
     "where can you go",
     "available places",
     "locations",
+}
+
+_CONFIRM_PHRASES = {
+    "yes",
+    "yeah",
+    "yep",
+    "confirm",
+    "confirmed",
+    "correct",
+    "do it",
+    "go ahead",
+    "proceed",
+}
+
+_REJECT_PHRASES = {
+    "no",
+    "nope",
+    "cancel that",
+    "reject",
+    "wrong",
+    "do not",
+    "dont",
+    "don't",
+    "never mind",
 }
 
 _GO_PREFIXES = (
@@ -109,6 +135,12 @@ def parse_text_command(
 
     if _matches_any(command_text, _STOP_PHRASES):
         return ParsedCommand(CANCEL, confidence=0.95, detail="stop/cancel command", wake_word_detected=wake_detected)
+
+    if _matches_any(command_text, _CONFIRM_PHRASES):
+        return ParsedCommand(CONFIRM, confidence=0.95, detail="confirmation", wake_word_detected=wake_detected)
+
+    if _matches_any(command_text, _REJECT_PHRASES):
+        return ParsedCommand(REJECT, confidence=0.95, detail="rejection", wake_word_detected=wake_detected)
 
     if require_wake_word and not wake_detected:
         return ParsedCommand(

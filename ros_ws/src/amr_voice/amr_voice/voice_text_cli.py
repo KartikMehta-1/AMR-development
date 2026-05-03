@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import time
+from dataclasses import dataclass
 from typing import Iterable, Optional, Tuple
 
 import rclpy
@@ -12,14 +13,22 @@ from amr_missions.common import default_places_path, load_places
 from amr_missions_msgs.srv import GetMissionState, GoToNamedPose, ListPlaces
 from amr_voice.command_parser import (
     CANCEL,
+    CONFIRM,
     GO_TO,
     LIST_PLACES,
+    REJECT,
     STATUS,
     UNKNOWN,
     WAKE,
     ParsedCommand,
     parse_text_command,
 )
+
+
+@dataclass
+class PendingCommand:
+    command: ParsedCommand
+    expires_at: float
 
 
 class VoiceTextCommandNode(Node):
@@ -57,6 +66,16 @@ class VoiceTextCommandNode(Node):
             return self._list_places(server_timeout=server_timeout)
         self.get_logger().warn(command.detail or "Unknown command")
         return False
+
+    @staticmethod
+    def requires_confirmation(command: ParsedCommand) -> bool:
+        return command.action == GO_TO
+
+    @staticmethod
+    def confirmation_prompt(command: ParsedCommand) -> str:
+        if command.action == GO_TO and command.place:
+            return f"confirm: go to {command.place}? say yes or no"
+        return "confirm command? say yes or no"
 
     def _wait_for_response(self, future, service_name: str, timeout_sec: float):
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
@@ -159,6 +178,9 @@ def parse_args() -> argparse.Namespace:
         help="Compatibility alias for --wake-gated.",
     )
     parser.add_argument("--wake-window-sec", type=float, default=12.0)
+    parser.add_argument("--confirm-motion", action="store_true", default=True)
+    parser.add_argument("--no-confirm-motion", dest="confirm_motion", action="store_false")
+    parser.add_argument("--confirm-window-sec", type=float, default=8.0)
     parser.add_argument("--server-timeout", type=float, default=10.0)
     parser.add_argument("--goal-timeout", type=float, default=180.0)
     parser.add_argument("--command", help="Run one command and exit instead of starting the interactive prompt")
@@ -181,30 +203,64 @@ def _handle_line(
     args: argparse.Namespace,
     line: str,
     wake_until: float,
-) -> Tuple[bool, float]:
+    pending: Optional[PendingCommand],
+) -> Tuple[bool, float, Optional[PendingCommand]]:
     command = node.parse(line)
     now = time.monotonic()
     gate_enabled = _wake_gate_enabled(args)
 
+    if pending is not None and now > pending.expires_at:
+        print("confirmation expired")
+        pending = None
+
     if command.action == WAKE:
         wake_until = now + max(0.0, args.wake_window_sec)
         print(f"wake: listening for {args.wake_window_sec:.0f}s")
-        return True, wake_until
+        return True, wake_until, pending
+
+    if command.action == CONFIRM:
+        if pending is None:
+            print("nothing to confirm")
+            return False, wake_until, pending
+        place_text = f" place={pending.command.place}" if pending.command.place else ""
+        print(f"confirmed: {pending.command.action}{place_text}")
+        if args.dry_run:
+            return True, wake_until, None
+        return (
+            node.execute(pending.command, server_timeout=args.server_timeout, goal_timeout=args.goal_timeout),
+            wake_until,
+            None,
+        )
+
+    if command.action == REJECT:
+        if pending is not None:
+            print("rejected")
+            return True, wake_until, None
+        print("nothing to reject")
+        return False, wake_until, pending
 
     if command.action == UNKNOWN:
         print(f"unrecognized: {command.detail}")
-        return False, wake_until
+        return False, wake_until, pending
 
     if gate_enabled and command.action != CANCEL and not command.wake_word_detected and now > wake_until:
         print(f"ignored: say '{args.wake_word}' first")
-        return False, wake_until
+        return False, wake_until, pending
 
     place_text = f" place={command.place}" if command.place else ""
     wake_text = " wake=yes" if command.wake_word_detected else " wake=no"
     print(f"intent: {command.action}{place_text} confidence={command.confidence:.2f}{wake_text}")
+    if args.confirm_motion and node.requires_confirmation(command):
+        pending = PendingCommand(command=command, expires_at=now + max(0.0, args.confirm_window_sec))
+        print(node.confirmation_prompt(command))
+        return True, wake_until, pending
     if args.dry_run:
-        return True, wake_until
-    return node.execute(command, server_timeout=args.server_timeout, goal_timeout=args.goal_timeout), wake_until
+        return True, wake_until, pending
+    return (
+        node.execute(command, server_timeout=args.server_timeout, goal_timeout=args.goal_timeout),
+        wake_until,
+        None if command.action == CANCEL else pending,
+    )
 
 
 def main() -> None:
@@ -215,8 +271,9 @@ def main() -> None:
     try:
         node = VoiceTextCommandNode(args.places_file, wake_word=args.wake_word)
         wake_until = 0.0
+        pending: Optional[PendingCommand] = None
         if args.command:
-            handled, wake_until = _handle_line(node, args, args.command, wake_until)
+            handled, wake_until, pending = _handle_line(node, args, args.command, wake_until, pending)
             exit_code = 0 if handled else 1
             return
 
@@ -230,7 +287,7 @@ def main() -> None:
                 continue
             if text in {"q", "quit", "exit"}:
                 break
-            _, wake_until = _handle_line(node, args, text, wake_until)
+            _, wake_until, pending = _handle_line(node, args, text, wake_until, pending)
     except KeyboardInterrupt:
         pass
     finally:

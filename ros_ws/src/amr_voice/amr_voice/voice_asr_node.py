@@ -11,8 +11,8 @@ import rclpy
 from std_msgs.msg import String
 
 from amr_missions.common import default_places_path
-from amr_voice.command_parser import CANCEL, UNKNOWN, WAKE
-from amr_voice.voice_text_cli import VoiceTextCommandNode
+from amr_voice.command_parser import CANCEL, CONFIRM, REJECT, UNKNOWN, WAKE
+from amr_voice.voice_text_cli import PendingCommand, VoiceTextCommandNode
 
 
 DEFAULT_MODEL_PATH = "/workspaces/AMR-development/models/vosk-model-small-en-us-0.15"
@@ -23,6 +23,7 @@ class VoiceAsrNode(VoiceTextCommandNode):
         super().__init__(args.places_file, wake_word=args.wake_word)
         self._args = args
         self._wake_until = 0.0
+        self._pending: Optional[PendingCommand] = None
         self._transcript_pub = self.create_publisher(String, "/amr_voice/transcript", 10)
         self._partial_pub = self.create_publisher(String, "/amr_voice/partial_transcript", 10)
 
@@ -35,11 +36,38 @@ class VoiceAsrNode(VoiceTextCommandNode):
 
         command = self.parse(text)
         now = time.monotonic()
+        if self._pending is not None and now > self._pending.expires_at:
+            self.get_logger().info("confirmation expired")
+            self._pending = None
 
         if command.action == WAKE:
             self._wake_until = now + max(0.0, self._args.wake_window_sec)
             self.get_logger().info(f"wake: listening for {self._args.wake_window_sec:.0f}s")
             return True
+
+        if command.action == CONFIRM:
+            if self._pending is None:
+                self.get_logger().info("nothing to confirm")
+                return False
+            pending = self._pending
+            self._pending = None
+            place_text = f" place={pending.command.place}" if pending.command.place else ""
+            self.get_logger().info(f"confirmed: {pending.command.action}{place_text}")
+            if self._args.dry_run:
+                return True
+            return self.execute(
+                pending.command,
+                server_timeout=self._args.server_timeout,
+                goal_timeout=self._args.goal_timeout,
+            )
+
+        if command.action == REJECT:
+            if self._pending is not None:
+                self._pending = None
+                self.get_logger().info("rejected")
+                return True
+            self.get_logger().info("nothing to reject")
+            return False
 
         if command.action == UNKNOWN:
             if command.wake_word_detected or now <= self._wake_until:
@@ -61,8 +89,17 @@ class VoiceAsrNode(VoiceTextCommandNode):
         self.get_logger().info(
             f"intent: {command.action}{place_text} confidence={command.confidence:.2f}"
         )
+        if self._args.confirm_motion and self.requires_confirmation(command):
+            self._pending = PendingCommand(
+                command=command,
+                expires_at=now + max(0.0, self._args.confirm_window_sec),
+            )
+            self.get_logger().info(self.confirmation_prompt(command))
+            return True
         if self._args.dry_run:
             return True
+        if command.action == CANCEL:
+            self._pending = None
         return self.execute(
             command,
             server_timeout=self._args.server_timeout,
@@ -88,6 +125,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wake-gated", action="store_true", default=True)
     parser.add_argument("--no-wake-gated", dest="wake_gated", action="store_false")
     parser.add_argument("--wake-window-sec", type=float, default=12.0)
+    parser.add_argument("--confirm-motion", action="store_true", default=True)
+    parser.add_argument("--no-confirm-motion", dest="confirm_motion", action="store_false")
+    parser.add_argument("--confirm-window-sec", type=float, default=8.0)
     parser.add_argument("--server-timeout", type=float, default=10.0)
     parser.add_argument("--goal-timeout", type=float, default=180.0)
     parser.add_argument("--model", default=os.environ.get("VOSK_MODEL_PATH", DEFAULT_MODEL_PATH))

@@ -109,6 +109,7 @@ list places
 ```
 
 In wake-gated mode, `lovely` opens a short listening window for the next command. `stop` / `cancel` is still accepted without the wake word.
+Motion commands now require confirmation by default. After `lovely go kitchen`, say or type `yes` to start the mission, or `no` to discard it. Use `--no-confirm-motion` only for controlled testing.
 
 One-shot dry run, useful before enabling motion:
 
@@ -141,6 +142,14 @@ Run ASR against mission commands:
 
 ```bash
 ros2 run amr_voice voice_asr_node --device plughw:1,7
+```
+
+ASR motion-command flow:
+
+```text
+lovely
+go to kitchen
+yes
 ```
 
 Current named places:
