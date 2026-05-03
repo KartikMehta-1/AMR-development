@@ -34,6 +34,7 @@
 #include <std_msgs/msg/bool.h>
 #include <std_msgs/msg/empty.h>
 #include <std_msgs/msg/u_int32.h>
+#include <std_msgs/msg/u_int32_multi_array.h>
 #include <geometry_msgs/msg/twist.h>
 #include <sensor_msgs/msg/joint_state.h>
 #include <uxr/client/transport.h>
@@ -77,9 +78,18 @@ typedef StaticTask_t osStaticThreadDef_t;
 #define ROS_AGENT_PING_RETRY_MS 250U
 #define ROS_AGENT_RUNTIME_PING_PERIOD_MS 1000U
 #define ROS_AGENT_RUNTIME_PING_FAIL_LIMIT 3U
+#define ROS_AGENT_RUNTIME_PING_ENABLE 0
+#define ROS_TRANSPORT_COUNTER_RECONNECT_ENABLE 0
 #define ROS_RECONNECT_DELAY_MS 500U
 #define ROS_PUBLISH_FAIL_RESET_COUNT 5U
 #define ROS_PUBLISH_FAIL_RESET_DELAY_MS 100U
+#define RESET_CAUSE_BOR   (1U << 0)
+#define RESET_CAUSE_PIN   (1U << 1)
+#define RESET_CAUSE_POR   (1U << 2)
+#define RESET_CAUSE_SOFT  (1U << 3)
+#define RESET_CAUSE_IWDG  (1U << 4)
+#define RESET_CAUSE_WWDG  (1U << 5)
+#define RESET_CAUSE_LPWR  (1U << 6)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -198,6 +208,7 @@ static rcl_publisher_t pub_duty_left;
 static rcl_publisher_t pub_duty_right;
 static rcl_publisher_t pub_wheel_state;
 static rcl_publisher_t pub_safety_state;
+static rcl_publisher_t pub_ros_diag;
 static rcl_subscription_t sub_wheel_cmd_left;
 static rcl_subscription_t sub_wheel_cmd_right;
 static rcl_subscription_t sub_enable;
@@ -216,12 +227,17 @@ static std_msgs__msg__Float32 msg_wheel_cmd_left;
 static std_msgs__msg__Float32 msg_wheel_cmd_right;
 static sensor_msgs__msg__JointState msg_wheel_state;
 static std_msgs__msg__UInt32 msg_safety_state;
+static std_msgs__msg__UInt32MultiArray msg_ros_diag;
 static std_msgs__msg__Bool msg_enable;
 static std_msgs__msg__Bool msg_estop;
 static std_msgs__msg__Empty msg_clear_fault;
 static volatile bool ros_ready = false;
 static volatile bool ros_entities_created = false;
 static bool ros_wheel_state_msg_initialized = false;
+static bool ros_diag_msg_initialized = false;
+static uint32_t ros_diag_data[20];
+static volatile uint32_t boot_reset_csr = 0U;
+static volatile uint32_t boot_reset_cause = 0U;
 static volatile int ros_init_fail_stage = 0;
 static volatile uint32_t ros_agent_ping_failures = 0U;
 static volatile float wheel_cmd_l_rad_s = 0.0f;
@@ -278,6 +294,40 @@ extern volatile uint32_t microros_transport_read_calls;
 extern volatile uint32_t microros_transport_read_nonzero_calls;
 extern volatile uint32_t microros_transport_read_success_bytes;
 
+static void CaptureAndClearResetCause(void);
+
+static void CaptureAndClearResetCause(void)
+{
+  uint32_t csr = RCC->CSR;
+  uint32_t cause = 0U;
+
+  if ((csr & RCC_CSR_BORRSTF) != 0U) {
+    cause |= RESET_CAUSE_BOR;
+  }
+  if ((csr & RCC_CSR_PINRSTF) != 0U) {
+    cause |= RESET_CAUSE_PIN;
+  }
+  if ((csr & RCC_CSR_PORRSTF) != 0U) {
+    cause |= RESET_CAUSE_POR;
+  }
+  if ((csr & RCC_CSR_SFTRSTF) != 0U) {
+    cause |= RESET_CAUSE_SOFT;
+  }
+  if ((csr & RCC_CSR_IWDGRSTF) != 0U) {
+    cause |= RESET_CAUSE_IWDG;
+  }
+  if ((csr & RCC_CSR_WWDGRSTF) != 0U) {
+    cause |= RESET_CAUSE_WWDG;
+  }
+  if ((csr & RCC_CSR_LPWRRSTF) != 0U) {
+    cause |= RESET_CAUSE_LPWR;
+  }
+
+  boot_reset_csr = csr;
+  boot_reset_cause = cause;
+  __HAL_RCC_CLEAR_RESET_FLAGS();
+}
+
 static void Ros_ResetEntityHandles(void)
 {
   memset(&ros_support, 0, sizeof(ros_support));
@@ -295,6 +345,7 @@ static void Ros_ResetEntityHandles(void)
   pub_duty_right = rcl_get_zero_initialized_publisher();
   pub_wheel_state = rcl_get_zero_initialized_publisher();
   pub_safety_state = rcl_get_zero_initialized_publisher();
+  pub_ros_diag = rcl_get_zero_initialized_publisher();
 
   sub_wheel_cmd_left = rcl_get_zero_initialized_subscription();
   sub_wheel_cmd_right = rcl_get_zero_initialized_subscription();
@@ -323,6 +374,7 @@ static void Ros_DestroyEntities(void)
     (void)rcl_subscription_fini(&sub_wheel_cmd_right, &ros_node);
     (void)rcl_subscription_fini(&sub_wheel_cmd_left, &ros_node);
 
+    (void)rcl_publisher_fini(&pub_ros_diag, &ros_node);
     (void)rcl_publisher_fini(&pub_safety_state, &ros_node);
     (void)rcl_publisher_fini(&pub_wheel_state, &ros_node);
     (void)rcl_publisher_fini(&pub_duty_right, &ros_node);
@@ -419,6 +471,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  CaptureAndClearResetCause();
 
   /* USER CODE END 1 */
 
@@ -1363,34 +1416,58 @@ ros_reconnect:
     goto ros_init_fail;
   }
 
+  if (rclc_publisher_init_best_effort(
+          &pub_ros_diag,
+          &ros_node,
+          ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, UInt32MultiArray),
+          "/amr_stm/ros_diag") != RCL_RET_OK) {
+    ros_init_fail_stage = 16;
+    goto ros_init_fail;
+  }
+
   if (!ros_wheel_state_msg_initialized) {
     if (!sensor_msgs__msg__JointState__init(&msg_wheel_state)) {
-      ros_init_fail_stage = 16;
-      goto ros_init_fail;
-    }
-
-    if (!rosidl_runtime_c__String__Sequence__init(&msg_wheel_state.name, 2)) {
       ros_init_fail_stage = 17;
       goto ros_init_fail;
     }
 
-    if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.position, 2)) {
+    if (!rosidl_runtime_c__String__Sequence__init(&msg_wheel_state.name, 2)) {
       ros_init_fail_stage = 18;
       goto ros_init_fail;
     }
 
-    if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.velocity, 2)) {
+    if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.position, 2)) {
       ros_init_fail_stage = 19;
+      goto ros_init_fail;
+    }
+
+    if (!rosidl_runtime_c__double__Sequence__init(&msg_wheel_state.velocity, 2)) {
+      ros_init_fail_stage = 20;
       goto ros_init_fail;
     }
 
     if (!rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[0], "left_wheel_joint") ||
         !rosidl_runtime_c__String__assign(&msg_wheel_state.name.data[1], "right_wheel_joint")) {
-      ros_init_fail_stage = 20;
+      ros_init_fail_stage = 21;
       goto ros_init_fail;
     }
 
     ros_wheel_state_msg_initialized = true;
+  }
+
+  if (!ros_diag_msg_initialized) {
+    if (!std_msgs__msg__UInt32MultiArray__init(&msg_ros_diag)) {
+      ros_init_fail_stage = 22;
+      goto ros_init_fail;
+    }
+    msg_ros_diag.data.data = ros_diag_data;
+    msg_ros_diag.data.size = sizeof(ros_diag_data) / sizeof(ros_diag_data[0]);
+    msg_ros_diag.data.capacity = sizeof(ros_diag_data) / sizeof(ros_diag_data[0]);
+    msg_ros_diag.layout.dim.data = NULL;
+    msg_ros_diag.layout.dim.size = 0U;
+    msg_ros_diag.layout.dim.capacity = 0U;
+    msg_ros_diag.layout.data_offset = 0U;
+    ros_diag_msg_initialized = true;
   }
 
   if (rclc_subscription_init_best_effort(
@@ -1398,7 +1475,7 @@ ros_reconnect:
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
           "/amr_stm/wheel_cmd_left") != RCL_RET_OK) {
-    ros_init_fail_stage = 21;
+    ros_init_fail_stage = 23;
     goto ros_init_fail;
   }
 
@@ -1407,7 +1484,7 @@ ros_reconnect:
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
           "/amr_stm/wheel_cmd_right") != RCL_RET_OK) {
-    ros_init_fail_stage = 22;
+    ros_init_fail_stage = 24;
     goto ros_init_fail;
   }
 
@@ -1416,7 +1493,7 @@ ros_reconnect:
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
           "/amr_stm/enable") != RCL_RET_OK) {
-    ros_init_fail_stage = 23;
+    ros_init_fail_stage = 25;
     goto ros_init_fail;
   }
 
@@ -1425,7 +1502,7 @@ ros_reconnect:
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
           "/amr_stm/estop") != RCL_RET_OK) {
-    ros_init_fail_stage = 24;
+    ros_init_fail_stage = 26;
     goto ros_init_fail;
   }
 
@@ -1434,37 +1511,37 @@ ros_reconnect:
           &ros_node,
           ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Empty),
           "/amr_stm/clear_fault") != RCL_RET_OK) {
-    ros_init_fail_stage = 25;
-    goto ros_init_fail;
-  }
-
-  if (rclc_executor_init(&ros_executor, &ros_support.context, 5, &ros_allocator) != RCL_RET_OK) {
-    ros_init_fail_stage = 26;
-    goto ros_init_fail;
-  }
-
-  if (rclc_executor_add_subscription(&ros_executor, &sub_wheel_cmd_left, &msg_wheel_cmd_left, WheelCmdLeftCallback, ON_NEW_DATA) != RCL_RET_OK) {
     ros_init_fail_stage = 27;
     goto ros_init_fail;
   }
 
-  if (rclc_executor_add_subscription(&ros_executor, &sub_wheel_cmd_right, &msg_wheel_cmd_right, WheelCmdRightCallback, ON_NEW_DATA) != RCL_RET_OK) {
+  if (rclc_executor_init(&ros_executor, &ros_support.context, 5, &ros_allocator) != RCL_RET_OK) {
     ros_init_fail_stage = 28;
     goto ros_init_fail;
   }
 
-  if (rclc_executor_add_subscription(&ros_executor, &sub_enable, &msg_enable, EnableCallback, ON_NEW_DATA) != RCL_RET_OK) {
+  if (rclc_executor_add_subscription(&ros_executor, &sub_wheel_cmd_left, &msg_wheel_cmd_left, WheelCmdLeftCallback, ON_NEW_DATA) != RCL_RET_OK) {
     ros_init_fail_stage = 29;
     goto ros_init_fail;
   }
 
-  if (rclc_executor_add_subscription(&ros_executor, &sub_estop, &msg_estop, EstopCallback, ON_NEW_DATA) != RCL_RET_OK) {
+  if (rclc_executor_add_subscription(&ros_executor, &sub_wheel_cmd_right, &msg_wheel_cmd_right, WheelCmdRightCallback, ON_NEW_DATA) != RCL_RET_OK) {
     ros_init_fail_stage = 30;
     goto ros_init_fail;
   }
 
-  if (rclc_executor_add_subscription(&ros_executor, &sub_clear_fault, &msg_clear_fault, ClearFaultCallback, ON_NEW_DATA) != RCL_RET_OK) {
+  if (rclc_executor_add_subscription(&ros_executor, &sub_enable, &msg_enable, EnableCallback, ON_NEW_DATA) != RCL_RET_OK) {
     ros_init_fail_stage = 31;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_estop, &msg_estop, EstopCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 32;
+    goto ros_init_fail;
+  }
+
+  if (rclc_executor_add_subscription(&ros_executor, &sub_clear_fault, &msg_clear_fault, ClearFaultCallback, ON_NEW_DATA) != RCL_RET_OK) {
+    ros_init_fail_stage = 33;
     goto ros_init_fail;
   }
 
@@ -1476,25 +1553,50 @@ ros_reconnect:
   uint32_t last_critical_pub_ms = 0U;
   uint32_t last_diag_pub_ms = 0U;
   uint32_t consecutive_pub_failures = 0U;
+  uint32_t pub_failure_total = 0U;
+  uint32_t spin_failure_total = 0U;
+  uint32_t critical_pub_failure_total = 0U;
+  uint32_t diag_pub_failure_total = 0U;
+  uint32_t ros_loop_last_ms = HAL_GetTick();
+  uint32_t ros_loop_period_max_ms = 0U;
+  uint32_t critical_pub_elapsed_max_ms = 0U;
+  uint32_t diag_pub_elapsed_max_ms = 0U;
+#if ROS_AGENT_RUNTIME_PING_ENABLE
   uint32_t runtime_ping_failures = 0U;
+#endif
   uint32_t last_runtime_ping_ms = HAL_GetTick();
+#if ROS_TRANSPORT_COUNTER_RECONNECT_ENABLE
   uint32_t last_write_failures = microros_transport_write_failures;
   uint32_t last_write_timeouts = microros_transport_write_timeouts;
+#endif
   for(;;)
   {
+    uint32_t loop_now = HAL_GetTick();
+    uint32_t loop_period_ms = loop_now - ros_loop_last_ms;
+    ros_loop_last_ms = loop_now;
+    if (loop_period_ms > ros_loop_period_max_ms) {
+      ros_loop_period_max_ms = loop_period_ms;
+    }
+
     // Pump executor to receive command topics
     rcl_ret_t spin_rc = rclc_executor_spin_some(&ros_executor, 1000000ULL); // 1 ms
     if (spin_rc != RCL_RET_OK) {
       consecutive_pub_failures++;
+      spin_failure_total++;
     }
 
     uint32_t now = HAL_GetTick();
     if ((now - last_runtime_ping_ms) >= ROS_AGENT_RUNTIME_PING_PERIOD_MS) {
       last_runtime_ping_ms = now;
+#if ROS_TRANSPORT_COUNTER_RECONNECT_ENABLE
       if ((microros_transport_write_failures != last_write_failures) ||
           (microros_transport_write_timeouts != last_write_timeouts)) {
         goto ros_reconnect;
       }
+      last_write_failures = microros_transport_write_failures;
+      last_write_timeouts = microros_transport_write_timeouts;
+#endif
+#if ROS_AGENT_RUNTIME_PING_ENABLE
       if (rmw_uros_ping_agent(ROS_AGENT_PING_TIMEOUT_MS, ROS_AGENT_PING_ATTEMPTS) == RMW_RET_OK) {
         runtime_ping_failures = 0U;
       } else {
@@ -1503,10 +1605,12 @@ ros_reconnect:
           goto ros_reconnect;
         }
       }
+#endif
     }
 
     if ((last_critical_pub_ms == 0U) || ((now - last_critical_pub_ms) >= ROS_CRITICAL_PUB_PERIOD_MS)) {
       last_critical_pub_ms = now;
+      uint32_t pub_start_ms = HAL_GetTick();
       // Publish control-critical state separately from slower diagnostics so odom is responsive.
       uint32_t fault_mask = ControlState_GetFaultMask(&ctrl_state);
       // safety_state: upper 16 bits = ControlState, lower 16 bits = fault mask.
@@ -1536,12 +1640,18 @@ ros_reconnect:
       bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) &&
                     (rc3 == RCL_RET_OK) && (rc4 == RCL_RET_OK) &&
                     (rc5 == RCL_RET_OK);
+      uint32_t pub_elapsed_ms = HAL_GetTick() - pub_start_ms;
+      if (pub_elapsed_ms > critical_pub_elapsed_max_ms) {
+        critical_pub_elapsed_max_ms = pub_elapsed_ms;
+      }
       if (pub_ok) {
         consecutive_pub_failures = 0U;
         led_state = !led_state;
         StatusLed_Set(led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
       } else {
         consecutive_pub_failures++;
+        pub_failure_total++;
+        critical_pub_failure_total++;
         StatusLed_Set(GPIO_PIN_SET);
         if (consecutive_pub_failures >= ROS_PUBLISH_FAIL_RESET_COUNT) {
           osDelay(ROS_PUBLISH_FAIL_RESET_DELAY_MS);
@@ -1552,6 +1662,7 @@ ros_reconnect:
 
     if ((last_diag_pub_ms == 0U) || ((now - last_diag_pub_ms) >= ROS_DIAG_PUB_PERIOD_MS)) {
       last_diag_pub_ms = now;
+      uint32_t pub_start_ms = HAL_GetTick();
       msg_current_left.data = sense.curr_l_mA;
       msg_current_right.data = sense.curr_r_mA;
       msg_current_left_adc.data = (uint32_t)sense.adc_l_counts;
@@ -1569,18 +1680,49 @@ ros_reconnect:
       bool pub_ok = (rc1 == RCL_RET_OK) && (rc2 == RCL_RET_OK) &&
                     (rc3 == RCL_RET_OK) && (rc4 == RCL_RET_OK) &&
                     (rc5 == RCL_RET_OK) && (rc6 == RCL_RET_OK);
+      uint32_t pub_elapsed_ms = HAL_GetTick() - pub_start_ms;
+      if (pub_elapsed_ms > diag_pub_elapsed_max_ms) {
+        diag_pub_elapsed_max_ms = pub_elapsed_ms;
+      }
       if (pub_ok) {
         consecutive_pub_failures = 0U;
         led_state = !led_state;
         StatusLed_Set(led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
       } else {
         consecutive_pub_failures++;
+        pub_failure_total++;
+        diag_pub_failure_total++;
         StatusLed_Set(GPIO_PIN_SET);
         if (consecutive_pub_failures >= ROS_PUBLISH_FAIL_RESET_COUNT) {
           osDelay(ROS_PUBLISH_FAIL_RESET_DELAY_MS);
           goto ros_reconnect;
         }
       }
+
+      ros_diag_data[0] = now;
+      ros_diag_data[1] = ros_loop_period_max_ms;
+      ros_diag_data[2] = critical_pub_elapsed_max_ms;
+      ros_diag_data[3] = diag_pub_elapsed_max_ms;
+      ros_diag_data[4] = spin_failure_total;
+      ros_diag_data[5] = pub_failure_total;
+      ros_diag_data[6] = critical_pub_failure_total;
+      ros_diag_data[7] = diag_pub_failure_total;
+      ros_diag_data[8] = microros_transport_write_calls;
+      ros_diag_data[9] = microros_transport_write_failures;
+      ros_diag_data[10] = microros_transport_write_timeouts;
+      ros_diag_data[11] = microros_transport_last_write_status;
+      ros_diag_data[12] = microros_transport_read_calls;
+      ros_diag_data[13] = microros_transport_read_nonzero_calls;
+      ros_diag_data[14] = microros_transport_read_success_bytes;
+      ros_diag_data[15] = control_loop_max_ms;
+      ros_diag_data[16] = control_tick_lag_max;
+      ros_diag_data[17] = consecutive_pub_failures;
+      ros_diag_data[18] = boot_reset_cause;
+      ros_diag_data[19] = boot_reset_csr;
+      (void)rcl_publish(&pub_ros_diag, &msg_ros_diag, NULL);
+      ros_loop_period_max_ms = 0U;
+      critical_pub_elapsed_max_ms = 0U;
+      diag_pub_elapsed_max_ms = 0U;
     }
 
     osDelay(ROS_EXEC_DELAY_MS);
