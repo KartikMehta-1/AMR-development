@@ -1,33 +1,98 @@
 # Useful Commands
 
-## Quick Start (Top 4)
+This file is ordered by day-to-day usefulness. Prefer the one-command launchers first; use the manual sections only when debugging.
 
-STM serial-access note:
-- On this Jetson, `/dev/ttyACM0` is owned by `root:plugdev`, not `dialout`.
-- Any Jetson-side `amr_foxy` container that needs the STM port must include the host `plugdev` group with `--group-add "$(getent group plugdev | cut -d: -f3)"`.
-- The repo scripts already patched for this are:
-  - `scripts/open_amr_devpc_navigation.sh`
-  - `scripts/open_amr_devpc_slam.sh`
-  - `scripts/open_amr_devpc_localization.sh`
+## 1. Navigation Bringup
 
-### One-command AMR monitor (from dev PC)
-This runs the bench monitor from the desktop over SSH. It opens a local tmux session when `tmux` is installed, otherwise it falls back to terminal tabs. On the Jetson side it reuses `amr_foxy` if it is already running, or starts an agent-only container if needed. The monitor watches the STM firmware namespace `/amr_stm/*`.
+Start the full navigation workflow from the laptop/dev PC:
 
-Layout:
-- left column: launch status
-- middle column: node status over safety/fault state
-- right column: wheel summaries, agent log, and command shell
-
-
-If the layout gets stale or broken, recreate it:
 ```bash
-tmux kill-session -t amr_bench 2>/dev/null || true
 cd ~/AMR-development
-./scripts/open_amr_monitor.sh
+AMR_SAFETY_ENFORCE=true ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
-### Safety recovery after a fault
-Use this after a safety intervention or STM fault, after the physical cause is fixed or ready to be inspected:
+This starts:
+- Jetson hardware stack in `amr_foxy`
+- STM reset over ST-LINK/OpenOCD
+- dev-PC container `amr_devpc`
+- RViz
+- Nav2 localization/navigation
+- mission server/status panes
+- safety supervisor/status panes
+- teleop fallback pane
+
+After RViz opens:
+- Set the AMR pose with `2D Pose Estimate`.
+- Wait for the Nav2 pane to report that AMCL localization is ready.
+- Then use mission commands.
+
+Map arguments:
+
+```bash
+./scripts/open_amr_devpc_navigation.sh my_new_map
+./scripts/open_amr_devpc_navigation.sh my_new_map.yaml
+./scripts/open_amr_devpc_navigation.sh /workspaces/AMR-development/ros_ws/maps/my_new_map.yaml
+```
+
+## 2. Mission Commands
+
+Run these inside `amr_devpc`, or through `docker exec` from the laptop.
+
+Open a ROS shell:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash
+cd /workspaces/AMR-development/ros_ws
+source install/setup.bash
+```
+
+Mission status:
+
+```bash
+ros2 run amr_missions mission_cli status
+```
+
+List named places:
+
+```bash
+ros2 run amr_missions mission_cli list
+```
+
+Go to a named place:
+
+```bash
+ros2 run amr_missions mission_cli go_to kitchen
+ros2 run amr_missions mission_cli go_to hall
+ros2 run amr_missions mission_cli go_to home
+```
+
+Patrol:
+
+```bash
+ros2 run amr_missions mission_cli patrol home hall door --return-home home
+```
+
+Cancel active mission:
+
+```bash
+ros2 run amr_missions mission_cli cancel
+```
+
+Watch structured mission status:
+
+```bash
+ros2 topic echo /amr_missions/status
+```
+
+Current named places:
+- `home`
+- `door`
+- `kitchen`
+- `hall`
+
+## 3. Safety Recovery
+
+Use this after a safety intervention or STM fault, once the physical fault source is fixed or ready to be inspected:
 
 ```bash
 docker exec -it amr_devpc /entrypoint.sh bash -lc '
@@ -37,10 +102,158 @@ python3 scripts/amr_safety_recover.py
 '
 ```
 
-The helper stops mission/Nav2 motion, publishes zero velocity, disables STM, shows decoded fault state, prompts before clearing a nonzero STM fault, resets the safety supervisor, and asks separately before re-enabling STM.
+The helper:
+- cancels mission/Nav2 motion
+- publishes zero velocity
+- disables STM motor output
+- prints decoded STM/comm/supervisor state
+- prompts before clearing a nonzero STM fault
+- calls `/amr/safety_supervisor/reset_intervention`
+- asks separately before re-enabling STM
 
-### 1) Jetson: AMR hardware-only bringup (motors + lidar, no Nav2)
-Run from the dev PC:
+Scripted mode, only after the physical fault source is definitely fixed:
+
+```bash
+docker exec amr_devpc /entrypoint.sh bash -lc '
+cd /workspaces/AMR-development
+source ros_ws/install/setup.bash
+python3 scripts/amr_safety_recover.py --assume-fixed --reenable --no-prompt-reenable
+'
+```
+
+Manual fallback:
+
+```bash
+ros2 run amr_missions mission_cli cancel
+ros2 service call /navigate_to_pose/_action/cancel_goal action_msgs/srv/CancelGoal \
+  "{goal_info: {goal_id: {uuid: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, stamp: {sec: 0, nanosec: 0}}}"
+ros2 topic pub --once /diff_drive_controller/cmd_vel_unstamped geometry_msgs/msg/Twist "{}"
+ros2 topic pub --once /amr_stm/enable std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /amr_stm/clear_fault std_msgs/msg/Empty "{}"
+ros2 service call /amr/safety_supervisor/reset_intervention std_srvs/srv/Trigger "{}"
+ros2 topic pub --once /amr_stm/enable std_msgs/msg/Bool "{data: true}"
+```
+
+## 4. Health Checks
+
+Short baseline probe:
+
+```bash
+docker exec amr_devpc /entrypoint.sh bash -lc '
+cd /workspaces/AMR-development
+source ros_ws/install/setup.bash
+python3 scripts/amr_baseline_probe.py --duration 30
+'
+```
+
+Quick graph checks:
+
+```bash
+docker exec amr_devpc /entrypoint.sh bash -lc '
+source /workspaces/AMR-development/ros_ws/install/setup.bash
+ros2 node list | sort
+ros2 control list_controllers
+ros2 action info /navigate_to_pose
+ros2 topic info /amr_stm/wheel_state
+ros2 topic info /amr/safety_supervisor/status
+'
+```
+
+Decode a fault mask:
+
+```bash
+python3 scripts/amr_decode_faults.py --fault-mask 24
+python3 scripts/amr_decode_faults.py --safety-state 65560
+python3 scripts/amr_decode_faults.py --comm-fault-mask 2
+```
+
+ROS daemon refresh when discovery looks stale:
+
+```bash
+docker exec amr_devpc /entrypoint.sh bash -lc '
+source /workspaces/AMR-development/ros_ws/install/setup.bash
+ros2 daemon stop
+ros2 daemon start
+ros2 node list
+'
+```
+
+## 5. AMR Monitor
+
+Open the live monitor from the laptop/dev PC:
+
+```bash
+cd ~/AMR-development
+./scripts/open_amr_monitor.sh
+```
+
+If the layout is stale or broken:
+
+```bash
+tmux kill-session -t amr_bench 2>/dev/null || true
+cd ~/AMR-development
+./scripts/open_amr_monitor.sh
+```
+
+Monitor layout:
+- left column: launch/status
+- middle column: node and safety/fault state
+- right column: wheel summaries, agent log, and command shell
+
+## 6. Teleop
+
+Teleop from the laptop Docker container:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash
+unset CYCLONEDDS_URI
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+source /workspaces/AMR-development/ros_ws/install/setup.bash
+
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+  --ros-args \
+  -r cmd_vel:=/diff_drive_controller/cmd_vel_unstamped \
+  -p speed:=0.1 \
+  -p turn:=0.15
+```
+
+Repo teleop fallback:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash -lc '
+source /workspaces/AMR-development/ros_ws/install/setup.bash
+python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py \
+  --speed 0.1 \
+  --turn 0.15 \
+  --topic /diff_drive_controller/cmd_vel_unstamped
+'
+```
+
+## 7. SLAM And Map Save
+
+Start SLAM workflow:
+
+```bash
+cd ~/AMR-development
+./scripts/open_amr_devpc_slam.sh
+```
+
+Save map from inside `amr_devpc`:
+
+```bash
+docker exec -it amr_devpc /entrypoint.sh bash
+source /workspaces/AMR-development/ros_ws/install/setup.bash
+
+ros2 run nav2_map_server map_saver_cli \
+  -t /map \
+  -f /workspaces/AMR-development/ros_ws/maps/my_new_map \
+  --ros-args -p save_map_timeout:=10000
+```
+
+## 8. Hardware-Only Bringup
+
+Use this when validating STM, motors, odom, and LiDAR without Nav2.
+
 ```bash
 ssh kartik@192.168.1.9 bash -s <<'EOF'
 set -euo pipefail
@@ -84,6 +297,7 @@ EOF
 ```
 
 Verify:
+
 ```bash
 ssh kartik@192.168.1.9 "docker exec amr_foxy /entrypoint.sh bash -lc '
 source /workspaces/ros_ws/install/setup.bash
@@ -100,128 +314,9 @@ Pass condition:
 - `/amr_stm/wheel_state` has `Publisher count: 1`.
 - `/amr_stm/fault_mask` stays at `0` while idle.
 
-### 2) Dev PC: One-command SLAM launcher
-This starts:
-- the Jetson hardware stack (`amr_foxy`)
-- Jetson ST-LINK reset of the STM after startup
-- the `amr_devpc` container
-- RViz
-- `slam_toolbox`
-- keyboard teleop
+## 9. Manual Dev PC Container
 
-```bash
-cd ~/AMR-development
-./scripts/open_amr_devpc_slam.sh
-```
-
-Save the map from inside the `amr_devpc` container once SLAM looks good:
-
-```bash
-docker exec -it amr_devpc /entrypoint.sh bash
-ros2 run nav2_map_server map_saver_cli \
-  -t /map \
-  -f /workspaces/AMR-development/ros_ws/maps/my_new_map \
-  --ros-args -p save_map_timeout:=10000
-```
-
-### 3) Dev PC: One-command navigation launcher
-This starts:
-- the Jetson hardware stack (`amr_foxy`)
-- Jetson ST-LINK reset of the STM after startup
-- the `amr_devpc` container
-- RViz
-- Nav2 localization on a saved map
-- Nav2 navigation after AMCL has a valid initial pose
-- `mission_server`
-- live mission status pane
-- mission command shell
-- keyboard teleop for fallback checks
-
-```bash
-cd ~/AMR-development
-./scripts/open_amr_devpc_navigation.sh my_new_map
-```
-
-Important startup step:
-- After RViz opens, use `2D Pose Estimate` to set the AMR pose on the map.
-- The Nav2 pane waits for AMCL to publish `map -> odom`; only then does it start planner/controller navigation.
-- Do not send a mission until the Nav2 pane prints `AMCL pose is active; starting Nav2 navigation lifecycle.`
-
-You can pass:
-- `my_new_map`
-- `my_new_map.yaml`
-- `/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml`
-
-### 4) Mission layer: persistent runtime (inside `amr_devpc`)
-Build and source the mission packages:
-
-```bash
-docker exec -it amr_devpc /entrypoint.sh bash
-cd /workspaces/AMR-development/ros_ws
-colcon build --merge-install --packages-select amr_missions_msgs amr_missions
-source install/setup.bash
-```
-
-Start the mission server:
-
-```bash
-ros2 run amr_missions mission_server
-```
-
-Query mission runtime state:
-
-```bash
-ros2 run amr_missions mission_cli status
-ros2 service call /amr_missions/state amr_missions_msgs/srv/GetMissionState "{}"
-```
-
-List named places:
-
-```bash
-ros2 run amr_missions mission_cli list
-```
-
-Go to a named place:
-
-```bash
-ros2 run amr_missions mission_cli go_to kitchen
-ros2 run amr_missions mission_cli go_to hall
-```
-
-Run a simple patrol and return home:
-
-```bash
-ros2 run amr_missions mission_cli patrol home hall door --return-home home
-```
-
-Cancel the active mission:
-
-```bash
-ros2 run amr_missions mission_cli cancel
-```
-
-Watch structured mission status:
-
-```bash
-ros2 topic echo /amr_missions/status
-```
-
-Topic-command interface:
-
-```bash
-ros2 topic pub --once /amr_missions/command std_msgs/msg/String "{data: 'go_to:kitchen'}"
-ros2 topic pub --once /amr_missions/command std_msgs/msg/String "{data: 'patrol:home,hall,door'}"
-ros2 topic pub --once /amr_missions/command std_msgs/msg/String "{data: 'cancel'}"
-```
-
-Current named places:
-- `home`
-- `door`
-- `kitchen`
-- `hall`
-
-### 5) Dev PC: Manual container + tool commands (fallback)
-Use this on the laptop when you want a ROS 2 shell that can see the Jetson ROS graph.
+Use only when the one-command launchers are not appropriate.
 
 ```bash
 pkill -f rviz2 || true
@@ -238,91 +333,58 @@ docker run -it --name amr_devpc --net=host \
   /entrypoint.sh bash
 ```
 
-### 6) Dev PC: Teleop from laptop Docker
-Start `amr_devpc` with the previous section, then run:
+## 10. Manual Nav2 Launch Fallbacks
+
+Use these only when debugging launch files directly.
+
+RViz:
 
 ```bash
-docker exec -it amr_devpc /entrypoint.sh bash
-unset CYCLONEDDS_URI
-export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-
-ros2 run teleop_twist_keyboard teleop_twist_keyboard \
-  --ros-args \
-  -r cmd_vel:=/diff_drive_controller/cmd_vel_unstamped \
-  -p speed:=0.1 \
-  -p turn:=0.15
+LIBGL_ALWAYS_SOFTWARE=1 rviz2 \
+  -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
 ```
 
-### 7) Dev PC: Launch/Run SLAM toolbox, RViz, AMCL, Nav2 (inside amr_devpc container)
+Localization only:
 
 ```bash
-docker exec -it amr_devpc /entrypoint.sh bash
-
-# RViz (software rendering fallback)
-LIBGL_ALWAYS_SOFTWARE=1 rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
-
-# SLAM Toolbox
-ros2 launch slam_toolbox online_async_launch.py \
-  use_sim_time:=false \
-  params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
-
-```
-
-Important:
-- Do not start `robot_state_publisher` again on the dev PC.
-- `hardware.launch.py` already starts `robot_state_publisher` on the Jetson, which is the correct place for it in this stack.
-
-
-
-### 7) Load saved map (Nav2 AMCL localization)
-Use this after you already have a saved `*.yaml` + `*.pgm` in `ros_ws/maps/`.
-
-Important: don't run AMCL at the same time as slam_toolbox mapping/localization (both publish `map->odom`).
-
-```bash
-# Start map_server + AMCL (publishes /map and the map->odom TF once localized)
 ros2 launch nav2_bringup localization_launch.py \
   use_sim_time:=false \
-  map:=/workspaces/AMR-development/ros_ws/maps/my_hall_save.yaml \
+  map:=/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml \
   params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/nav2_params_amr.yaml
-
-# In RViz: use "2D Pose Estimate" to set the initial pose on the map.
 ```
 
-### 8) Nav2 navigation (AMCL first, then Planner/Controller)
-Start AMCL localization first. Start the planner/controller servers only after RViz `2D Pose Estimate` has made `map -> odom` available.
-
-Important: don't run slam_toolbox while running Nav2 localization/navigation (both publish `map->odom`).
+Navigation after AMCL is localized:
 
 ```bash
-# Option A (recommended): one launch file, localization only by default.
-ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py \
-  use_sim_time:=false \
-  map:=/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml
-
-# In RViz, set initial pose with "2D Pose Estimate", then start navigation:
 ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/nav2_navigation.launch.py \
   use_sim_time:=false
+```
 
-# Option B: only if you already have a valid initial pose and map->odom is present,
-# bring up localization and navigation together:
+Combined bringup when initial pose is already valid:
+
+```bash
 ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py \
   use_sim_time:=false \
   map:=/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml \
   start_navigation:=true
-
-# Option C: if AMCL is already running, start only the navigation servers.
-ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/nav2_navigation.launch.py \
-  use_sim_time:=false
 ```
 
-## Build & Sync
-### Sync docker folder to Jetson
+Important:
+- Do not run slam_toolbox while running Nav2 localization/navigation.
+- Do not start another `robot_state_publisher` on the dev PC; `hardware.launch.py` starts it on the Jetson.
+
+## 11. Build And Sync
+
+Sync Docker files to Jetson:
+
 ```bash
-rsync -av --delete --exclude .git /home/kartik/AMR-development/docker/ kartik@192.168.1.9:~/AMR-development/docker/
+rsync -av --delete --exclude .git \
+  /home/kartik/AMR-development/docker/ \
+  kartik@192.168.1.9:~/AMR-development/docker/
 ```
 
-### Build Jetson images from dev PC
+Build Jetson images from dev PC:
+
 ```bash
 ssh -t jetson '
 cd ~/AMR-development &&
@@ -336,48 +398,80 @@ docker buildx build -f docker/foxy/Dockerfile.jetson \
 '
 ```
 
-### Build Dev PC image
+Build dev-PC image:
+
 ```bash
 cd ~/AMR-development
-
 docker build -f docker/foxy/Dockerfile.devpc \
   -t amr/ros2-foxy-devpc:amd64 .
 ```
 
+Rebuild selected packages inside `amr_devpc`:
 
-
-
-### Rebuild `amr_description` in running Jetson container
 ```bash
-docker exec -it amr_foxy bash -lc '
+docker exec -it amr_devpc /entrypoint.sh bash -lc '
+cd /workspaces/AMR-development/ros_ws
+source /opt/ros/foxy/setup.bash
+colcon build --merge-install --symlink-install --packages-select amr_missions_msgs amr_missions amr_safety
+source install/setup.bash
+'
+```
+
+Rebuild `amr_description` in running Jetson container:
+
+```bash
+ssh jetson "docker exec -it amr_foxy bash -lc '
 source /opt/ros/foxy/install/setup.bash
 [ -f /opt/ros/driver_ws/install/setup.bash ] && source /opt/ros/driver_ws/install/setup.bash
 cd /workspaces/ros_ws
 colcon build --merge-install --symlink-install --packages-select amr_description
 source install/setup.bash
-'
+'"
 ```
 
-## Diagnostics
+## 12. STM And Jetson Handshake
+
+STM serial access note:
+- On this Jetson, `/dev/ttyACM0` is owned by `root:plugdev`, not `dialout`.
+- Jetson-side `amr_foxy` containers that need the STM port must include:
+  `--group-add "$(getent group plugdev | cut -d: -f3)"`.
+- The one-command launchers already include this.
+
+Validate that `micro_ros_agent` can open the STM port:
+
 ```bash
-ros2 daemon stop && ros2 daemon start
-ros2 node list
-ros2 topic list
-ros2 topic hz /scan
-ros2 topic list | grep map
-ros2 control list_controllers
-ros2 control list_hardware_interfaces
+PLUGDEV_GID="$(getent group plugdev | cut -d: -f3)"
+docker run --rm -it --net=host --privileged --runtime nvidia \
+  --group-add "${PLUGDEV_GID}" \
+  --name amr_foxy \
+  amr/ros2-foxy-jetson:arm64 \
+  /entrypoint.sh bash -lc "ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 460800 -v 6"
 ```
 
-### STM firmware topic inventory
-Current STM firmware subscribes to:
+After STM reset or power-cycle, confirm the first required publisher exists:
+
+```bash
+docker exec -it amr_foxy /entrypoint.sh bash -lc "ros2 topic info -v /amr_stm/wheel_state"
+```
+
+Validate base readiness:
+
+```bash
+docker exec -it amr_foxy /entrypoint.sh bash -lc "ros2 control list_controllers"
+docker exec -it amr_foxy /entrypoint.sh bash -lc "timeout 5s ros2 topic echo /amr_stm/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort"
+docker exec -it amr_foxy /entrypoint.sh bash -lc "timeout 5s ros2 run tf2_ros tf2_echo odom base_footprint"
+```
+
+## 13. STM Topic Inventory
+
+STM firmware subscribes to:
 - `/amr_stm/wheel_cmd_left`
 - `/amr_stm/wheel_cmd_right`
 - `/amr_stm/enable`
 - `/amr_stm/estop`
 - `/amr_stm/clear_fault`
 
-Current STM firmware publishes:
+STM firmware publishes:
 - `/amr_stm/wheel_state`
 - `/amr_stm/fault_mask`
 - `/amr_stm/safety_state`
@@ -389,71 +483,3 @@ Current STM firmware publishes:
 - `/amr_stm/current_right_adc`
 - `/amr_stm/current_left_zero`
 - `/amr_stm/current_right_zero`
-
-### STM and Jetson handshake validation
-Use this after changing STM transport behavior or after patching Jetson-side container access.
-
-1. Validate that `micro_ros_agent` can open the STM port:
-
-```bash
-PLUGDEV_GID="$(getent group plugdev | cut -d: -f3)"
-docker run --rm -it --net=host --privileged --runtime nvidia \
-  --group-add "${PLUGDEV_GID}" \
-  --name amr_foxy \
-  amr/ros2-foxy-jetson:arm64 \
-  /entrypoint.sh bash -lc "ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 460800 -v 6"
-```
-
-Pass condition:
-- no immediate `Error while starting serial agent!`
-
-2. After STM reset or power-cycle, confirm the first required publisher exists:
-
-```bash
-docker exec -it amr_foxy /entrypoint.sh bash -lc "ros2 topic info -v /amr_stm/wheel_state"
-```
-
-Pass condition:
-- `Publisher count: 1` or higher
-
-3. Validate full base readiness:
-
-```bash
-docker exec -it amr_foxy /entrypoint.sh bash -lc "ros2 control list_controllers"
-docker exec -it amr_foxy /entrypoint.sh bash -lc "timeout 5s ros2 topic echo /amr_stm/wheel_state sensor_msgs/msg/JointState --qos-reliability best_effort"
-docker exec -it amr_foxy /entrypoint.sh bash -lc "timeout 5s ros2 run tf2_ros tf2_echo odom base_footprint"
-```
-
-Pass condition:
-- `joint_state_broadcaster` active
-- `diff_drive_controller` active
-- `/amr_stm/wheel_state` streaming
-- `odom -> base_footprint` exists
-
-### AMR safety recovery / fault clear
-Preferred guarded recovery from inside the dev-PC container:
-
-```bash
-cd /workspaces/AMR-development
-source ros_ws/install/setup.bash
-python3 scripts/amr_safety_recover.py
-```
-
-From the laptop host:
-
-```bash
-docker exec -it amr_devpc /entrypoint.sh bash -lc '
-cd /workspaces/AMR-development
-source ros_ws/install/setup.bash
-python3 scripts/amr_safety_recover.py
-'
-```
-
-Manual fallback:
-
-```bash
-ros2 topic pub --once /amr_stm/enable std_msgs/msg/Bool "{data: false}"
-ros2 topic pub --once /amr_stm/estop std_msgs/msg/Bool "{data: false}"
-ros2 topic pub --once /amr_stm/clear_fault std_msgs/msg/Empty "{}"
-ros2 service call /amr/safety_supervisor/reset_intervention std_srvs/srv/Trigger "{}"
-```
