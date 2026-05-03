@@ -27,7 +27,7 @@ class MissionClient(Node):
     def refresh_places(self) -> None:
         self._places = load_places(self._places_path)
 
-    def wait_for_server(self, timeout_sec: float) -> bool:
+    def wait_for_mission_services(self, timeout_sec: float) -> bool:
         clients = [
             self._list_client,
             self._go_to_client,
@@ -182,8 +182,8 @@ def main() -> None:
             print(f"detail: {status.detail}")
             return
 
-        if not node.wait_for_server(timeout_sec=args.server_timeout):
-            node.get_logger().error("Nav2 action server 'navigate_to_pose' is not available")
+        if not node.wait_for_mission_services(timeout_sec=args.server_timeout):
+            node.get_logger().error("Mission server services are not available")
             exit_code = 1
             return
 

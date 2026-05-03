@@ -104,8 +104,7 @@ cd ~/AMR-development
 Save the map from inside the `amr_devpc` container once SLAM looks good:
 
 ```bash
-docker exec -it amr_devpc bash
-source /opt/ros/foxy/setup.bash
+docker exec -it amr_devpc /entrypoint.sh bash
 ros2 run nav2_map_server map_saver_cli \
   -t /map \
   -f /workspaces/AMR-development/ros_ws/maps/my_new_map \
@@ -118,7 +117,8 @@ This starts:
 - Jetson ST-LINK reset of the STM after startup
 - the `amr_devpc` container
 - RViz
-- full Nav2 bring-up on a saved map
+- Nav2 localization on a saved map
+- Nav2 navigation after AMCL has a valid initial pose
 - `mission_server`
 - live mission status pane
 - mission command shell
@@ -129,6 +129,11 @@ cd ~/AMR-development
 ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
+Important startup step:
+- After RViz opens, use `2D Pose Estimate` to set the AMR pose on the map.
+- The Nav2 pane waits for AMCL to publish `map -> odom`; only then does it start planner/controller navigation.
+- Do not send a mission until the Nav2 pane prints `AMCL pose is active; starting Nav2 navigation lifecycle.`
+
 You can pass:
 - `my_new_map`
 - `my_new_map.yaml`
@@ -138,9 +143,8 @@ You can pass:
 Build and source the mission packages:
 
 ```bash
-docker exec -it amr_devpc bash
+docker exec -it amr_devpc /entrypoint.sh bash
 cd /workspaces/AMR-development/ros_ws
-source /opt/ros/foxy/setup.bash
 colcon build --merge-install --packages-select amr_missions_msgs amr_missions
 source install/setup.bash
 ```
@@ -218,17 +222,16 @@ docker run -it --name amr_devpc --net=host \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v ~/AMR-development:/workspaces/AMR-development \
   amr/ros2-foxy-devpc:amd64 \
-  bash
+  /entrypoint.sh bash
 ```
 
 ### 6) Dev PC: Teleop from laptop Docker
 Start `amr_devpc` with the previous section, then run:
 
 ```bash
-docker exec -it amr_devpc bash
+docker exec -it amr_devpc /entrypoint.sh bash
 unset CYCLONEDDS_URI
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-source /opt/ros/foxy/setup.bash
 
 ros2 run teleop_twist_keyboard teleop_twist_keyboard \
   --ros-args \
@@ -240,15 +243,12 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard \
 ### 7) Dev PC: Launch/Run SLAM toolbox, RViz, AMCL, Nav2 (inside amr_devpc container)
 
 ```bash
-docker exec -it amr_devpc bash
-source /opt/ros/foxy/setup.bash
+docker exec -it amr_devpc /entrypoint.sh bash
 
 # RViz (software rendering fallback)
-source /opt/ros/foxy/setup.bash
 LIBGL_ALWAYS_SOFTWARE=1 rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
 
 # SLAM Toolbox
-source /opt/ros/foxy/setup.bash
 ros2 launch slam_toolbox online_async_launch.py \
   use_sim_time:=false \
   params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/slam_toolbox_online_async.yaml
@@ -267,8 +267,6 @@ Use this after you already have a saved `*.yaml` + `*.pgm` in `ros_ws/maps/`.
 Important: don't run AMCL at the same time as slam_toolbox mapping/localization (both publish `map->odom`).
 
 ```bash
-source /opt/ros/foxy/setup.bash
-
 # Start map_server + AMCL (publishes /map and the map->odom TF once localized)
 ros2 launch nav2_bringup localization_launch.py \
   use_sim_time:=false \
@@ -278,27 +276,31 @@ ros2 launch nav2_bringup localization_launch.py \
 # In RViz: use "2D Pose Estimate" to set the initial pose on the map.
 ```
 
-### 8) Nav2 navigation (Map + AMCL + Planner/Controller)
-This is the full navigation stack (AMCL localization + global planner + local controller).
+### 8) Nav2 navigation (AMCL first, then Planner/Controller)
+Start AMCL localization first. Start the planner/controller servers only after RViz `2D Pose Estimate` has made `map -> odom` available.
 
 Important: don't run slam_toolbox while running Nav2 localization/navigation (both publish `map->odom`).
 
 ```bash
-source /opt/ros/foxy/setup.bash
-
-# Option A (recommended): launch everything (map_server + AMCL + navigation + RViz)
-# (launch by file path so you don't need to rebuild the workspace just to pick up the new launch file)
+# Option A (recommended): one launch file, localization only by default.
 ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py \
   use_sim_time:=false \
-  map:=/workspaces/AMR-development/ros_ws/maps/my_hall_save.yaml
+  map:=/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml
 
-# Option B: if AMCL is already running, start only the navigation servers (planner/controller)
+# In RViz, set initial pose with "2D Pose Estimate", then start navigation:
 ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/nav2_navigation.launch.py \
   use_sim_time:=false
 
-# In RViz:
-# - Set initial pose ("2D Pose Estimate")
-# - Send goal using the Nav2 Goal tool / Navigation2 panel
+# Option B: only if you already have a valid initial pose and map->odom is present,
+# bring up localization and navigation together:
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py \
+  use_sim_time:=false \
+  map:=/workspaces/AMR-development/ros_ws/maps/my_new_map.yaml \
+  start_navigation:=true
+
+# Option C: if AMCL is already running, start only the navigation servers.
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/nav2_navigation.launch.py \
+  use_sim_time:=false
 ```
 
 ## Build & Sync

@@ -15,6 +15,7 @@ JETSON_CONTAINER="${AMR_JETSON_CONTAINER:-amr_foxy}"
 REMOTE_REPO="${AMR_REMOTE_REPO:-$HOME/AMR-development}"
 AGENT_DEV="${AMR_AGENT_DEV:-/dev/ttyACM0}"
 AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
+PARAMS_PATH_CONTAINER="/workspaces/AMR-development/ros_ws/src/amr_description/config/nav2_params_amr.yaml"
 START_LIDAR="${AMR_START_LIDAR:-true}"
 START_CAMERA="${AMR_START_CAMERA:-false}"
 START_LINK_WATCHDOG="${AMR_START_LINK_WATCHDOG:-true}"
@@ -319,7 +320,7 @@ EOF
 
 container_cmd() {
   local command_text="$1"
-  printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q bash -lc %q' \
+  printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q /entrypoint.sh bash -lc %q' \
     "${DISPLAY_VALUE}" "${CONTAINER_NAME}" \
     "unset CYCLONEDDS_URI; export RMW_IMPLEMENTATION=rmw_fastrtps_cpp; ${command_text}"
 }
@@ -360,17 +361,37 @@ tmux set-option -t "${SESSION_NAME}" history-limit 50000
 
 rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
 build_ready_file="/tmp/amr_nav_colcon_ready"
+localization_ready_file="/tmp/amr_nav_localization_ready"
 wait_for_build="while [ ! -f ${build_ready_file} ]; do sleep 1; done"
+wait_for_localization="while [ ! -f ${localization_ready_file} ]; do echo 'Waiting for AMCL localization to become ready...'; sleep 2; done"
 wait_for_mission_services="until ros2 service list | grep -qx /amr_missions/state && ros2 service list | grep -qx /amr_missions/go_to && ros2 service list | grep -qx /amr_missions/cancel; do sleep 1; done"
-nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false map:=${MAP_PATH_CONTAINER}")")"
+nav_runtime_cmd="source /opt/ros/foxy/setup.bash; \
+rm -f ${localization_ready_file}; \
+cleanup() { [ -n \"\${scan_filter_pid:-}\" ] && kill \"\${scan_filter_pid}\" 2>/dev/null || true; [ -n \"\${nav2_pid:-}\" ] && kill \"\${nav2_pid}\" 2>/dev/null || true; }; \
+trap cleanup EXIT INT TERM; \
+python3 /workspaces/AMR-development/scripts/amr_scan_sanitizer.py & \
+scan_filter_pid=\$!; \
+echo 'Starting full Nav2 bringup. Set the initial pose in RViz with 2D Pose Estimate.'; \
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false autostart:=true map:=${MAP_PATH_CONTAINER} params_file:=${PARAMS_PATH_CONTAINER} cmd_vel_topic:=/diff_drive_controller/cmd_vel_unstamped odom_topic:=/odom & \
+nav2_pid=\$!; \
+echo 'Waiting for fresh AMCL pose and map->odom before enabling mission commands...'; \
+if ! python3 /workspaces/AMR-development/scripts/amr_wait_for_localization.py --timeout 180.0; then \
+  echo 'Localization did not become ready. Leave Nav2 running and set RViz 2D Pose Estimate again.'; \
+  wait \${nav2_pid}; \
+  exit 1; \
+fi; \
+touch ${localization_ready_file}; \
+echo 'AMCL localization is fresh; mission commands are enabled.'; \
+wait \${nav2_pid}"
+nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "${nav_runtime_cmd}")")"
 teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
 select_build_packages="build_packages='amr_missions_msgs amr_missions'; [ -f src/amr_safety/package.xml ] && build_packages=\"\${build_packages} amr_safety\"; [ -f src/amr_voice/package.xml ] && build_packages=\"\${build_packages} amr_voice\""
 mission_server_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; ros2 run amr_missions mission_server")")"
 mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ros2 topic echo /amr_missions/status")")"
 safety_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${teleop_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then ros2 run amr_safety safety_supervisor --ros-args -p odom_topic:=/odom -p auto_reenable_when_safe:=true; else echo 'amr_safety package not present; safety pane disabled.'; exec bash -i; fi")")"
 safety_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then ros2 topic echo /amr/safety_supervisor/status; else echo 'amr_safety package not present; no safety status topic.'; exec bash -i; fi")")"
-mission_shell_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_status_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_mission_services}; echo Mission shell ready.; echo 'Click panes to switch focus, or use Ctrl-b then arrow keys.'; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")")"
-voice_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then ros2 run amr_voice voice_command_node --input-mode text; else echo 'amr_voice package not present; voice pane disabled.'; exec bash -i; fi")")"
+mission_shell_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_status_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; echo Mission shell ready.; echo 'Click panes to switch focus, or use Ctrl-b then arrow keys.'; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")")"
+voice_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then ros2 run amr_voice voice_command_node --input-mode text; else echo 'amr_voice package not present; voice pane disabled.'; exec bash -i; fi")")"
 
 tmux select-layout -t "${SESSION_NAME}:navigation" tiled
 tmux select-pane -t "${mission_shell_pane}"

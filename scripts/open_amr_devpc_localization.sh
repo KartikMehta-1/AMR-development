@@ -147,7 +147,7 @@ EOF
 
 container_cmd() {
   local command_text="$1"
-  printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q bash -lc %q' \
+  printf 'docker exec -e TERM=xterm -e DISPLAY=%q -e QT_X11_NO_MITSHM=1 -it %q /entrypoint.sh bash -lc %q' \
     "${DISPLAY_VALUE}" "${CONTAINER_NAME}" "${command_text}"
 }
 
@@ -182,7 +182,15 @@ tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_N
   "$(container_cmd "source /opt/ros/foxy/setup.bash; export LIBGL_ALWAYS_SOFTWARE=1; rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz")"
 
 rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:localization.0" '#{pane_id}')"
-loc_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; ros2 launch nav2_bringup localization_launch.py use_sim_time:=false map:=${MAP_PATH_CONTAINER} params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/nav2_params_amr.yaml")")"
+loc_runtime_cmd="source /opt/ros/foxy/setup.bash; \
+cleanup() { [ -n \"\${scan_filter_pid:-}\" ] && kill \"\${scan_filter_pid}\" 2>/dev/null || true; [ -n \"\${localization_pid:-}\" ] && kill \"\${localization_pid}\" 2>/dev/null || true; }; \
+trap cleanup EXIT INT TERM; \
+python3 /workspaces/AMR-development/scripts/amr_scan_sanitizer.py & \
+scan_filter_pid=\$!; \
+ros2 launch nav2_bringup localization_launch.py use_sim_time:=false map:=${MAP_PATH_CONTAINER} params_file:=/workspaces/AMR-development/ros_ws/src/amr_description/config/nav2_params_amr.yaml & \
+localization_pid=\$!; \
+wait \${localization_pid}"
+loc_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "${loc_runtime_cmd}")")"
 teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${loc_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
 
 tmux select-pane -t "${teleop_pane}"
