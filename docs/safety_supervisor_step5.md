@@ -88,4 +88,4 @@ intervention_count: 0
 
 ## Next Step
 
-Step 6 should perform controlled fault-injection tests one condition at a time, starting with non-motion conditions such as a deliberately stale test input with outputs remapped, then progressing to carefully controlled hardware faults only when the recovery procedure is ready.
+Step 6 is documented in `docs/safety_supervisor_step6.md`. It validates a stationary enforced intervention using a deliberately stale odom input, followed by manual recovery and a post-recovery baseline probe.
