@@ -1,7 +1,9 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -44,10 +46,17 @@ private:
   std::string left_cmd_topic_;
   std::string right_cmd_topic_;
   std::string state_topic_;
+  double state_stale_timeout_sec_{0.5};
 
   std::vector<double> hw_positions_;
   std::vector<double> hw_velocities_;
   std::vector<double> hw_commands_;
+  std::vector<double> pending_positions_;
+  std::vector<double> pending_velocities_;
+  std::mutex state_mutex_;
+  std::chrono::steady_clock::time_point last_state_time_{};
+  bool have_state_{false};
+  bool stale_command_logged_{false};
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr left_cmd_pub_;
