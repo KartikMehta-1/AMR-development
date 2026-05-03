@@ -22,8 +22,10 @@ uint32_t FaultMonitor_Update(FaultMonitor *fm,
   uint32_t fault_bits = 0U;
 
   // Overcurrent dwell
-  fm->oc_l_accum_ms = (sense->curr_l_mA > FAULT_OC_THRESH_MA) ? (fm->oc_l_accum_ms + dt_ms) : 0U;
-  fm->oc_r_accum_ms = (sense->curr_r_mA > FAULT_OC_THRESH_MA) ? (fm->oc_r_accum_ms + dt_ms) : 0U;
+  int32_t curr_l_abs_mA = (sense->curr_l_mA < 0) ? -sense->curr_l_mA : sense->curr_l_mA;
+  int32_t curr_r_abs_mA = (sense->curr_r_mA < 0) ? -sense->curr_r_mA : sense->curr_r_mA;
+  fm->oc_l_accum_ms = (curr_l_abs_mA > FAULT_OC_THRESH_MA) ? (fm->oc_l_accum_ms + dt_ms) : 0U;
+  fm->oc_r_accum_ms = (curr_r_abs_mA > FAULT_OC_THRESH_MA) ? (fm->oc_r_accum_ms + dt_ms) : 0U;
   if (fm->oc_l_accum_ms >= FAULT_OC_DWELL_MS) fault_bits |= CTRL_FAULT_OC_LEFT;
   if (fm->oc_r_accum_ms >= FAULT_OC_DWELL_MS) fault_bits |= CTRL_FAULT_OC_RIGHT;
 

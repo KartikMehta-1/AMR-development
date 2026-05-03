@@ -129,6 +129,8 @@ Launch-time reset cause bits can reflect the launch script, reset button, or ST-
 - Large AMCL steps during motion with stable odom/scan: localization tuning or TF timing needs investigation.
 - Large AMCL steps during motion with odom or wheel gaps: fix hardware/STM/control data first.
 
+Use `docs/safety_fault_recovery.md` and `scripts/amr_decode_faults.py` to decode nonzero fault masks and follow the clear/re-enable sequence.
+
 ## Before Adding Each Safety Layer
 
 For every new safety feature or threshold change:
