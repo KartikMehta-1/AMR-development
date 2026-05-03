@@ -135,14 +135,16 @@ ros2 run amr_voice voice_asr_node --list-devices
 Run ASR in dry-run mode:
 
 ```bash
-ros2 run amr_voice voice_asr_node --dry-run --device plughw:1,7
+ros2 run amr_voice voice_asr_node --dry-run --device 9
 ```
 
 Run ASR against mission commands:
 
 ```bash
-ros2 run amr_voice voice_asr_node --device plughw:1,7
+ros2 run amr_voice voice_asr_node --device 9
 ```
+
+If recognition becomes poor after a container or laptop audio restart, rerun `ros2 run amr_voice voice_asr_node --list-devices`. Use the digital mic input-only device with a 16 kHz default rate (`hw:1,7`, currently index `9` on this laptop); avoid HDMI output-only devices and the silent headset/analog input path.
 
 ASR motion-command flow:
 

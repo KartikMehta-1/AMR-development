@@ -1,7 +1,9 @@
 import argparse
+import audioop
 import json
 import os
 import queue
+import struct
 import sys
 import time
 from pathlib import Path
@@ -24,6 +26,8 @@ class VoiceAsrNode(VoiceTextCommandNode):
         self._args = args
         self._wake_until = 0.0
         self._pending: Optional[PendingCommand] = None
+        self._last_audio_log = 0.0
+        self._silent_audio_logs = 0
         self._transcript_pub = self.create_publisher(String, "/amr_voice/transcript", 10)
         self._partial_pub = self.create_publisher(String, "/amr_voice/partial_transcript", 10)
 
@@ -110,6 +114,60 @@ class VoiceAsrNode(VoiceTextCommandNode):
         text = text.strip()
         if text:
             self._publish(self._partial_pub, text)
+            if self._args.log_partials:
+                self.get_logger().info(f"partial: {text}")
+
+    def log_audio_level(self, data: bytes) -> None:
+        now = time.monotonic()
+        if not self._args.log_audio_level or now - self._last_audio_log < 1.0:
+            return
+        self._last_audio_log = now
+        if not data:
+            self.get_logger().info("audio: rms=0 peak=0")
+            return
+        samples = struct.unpack(f"<{len(data) // 2}h", data)
+        if not samples:
+            self.get_logger().info("audio: rms=0 peak=0")
+            return
+        rms = int((sum(sample * sample for sample in samples) / len(samples)) ** 0.5)
+        peak = max(abs(sample) for sample in samples)
+        self.get_logger().info(f"audio: rms={rms} peak={peak}")
+        if peak <= 1:
+            self._silent_audio_logs += 1
+            if self._silent_audio_logs == 3:
+                self.get_logger().warn(
+                    "microphone signal is near zero; check the selected --device. "
+                    "On this laptop the 16 kHz digital mic is usually device 9, while device 4 may be a silent headset input."
+                )
+        else:
+            self._silent_audio_logs = 0
+
+    def grammar(self) -> str:
+        phrases = {
+            self._args.wake_word,
+            "status",
+            "mission status",
+            "stop",
+            "cancel",
+            "yes",
+            "yeah",
+            "no",
+            "list places",
+            "where are you",
+        }
+        for place in self.known_places:
+            phrases.update(
+                {
+                    place,
+                    f"go {place}",
+                    f"go to {place}",
+                    f"go to the {place}",
+                    f"navigate to {place}",
+                    f"move to {place}",
+                }
+            )
+        phrases.update({"return home", "come home", "[unk]"})
+        return json.dumps(sorted(phrases))
 
     @staticmethod
     def _publish(publisher, text: str) -> None:
@@ -132,8 +190,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--goal-timeout", type=float, default=180.0)
     parser.add_argument("--model", default=os.environ.get("VOSK_MODEL_PATH", DEFAULT_MODEL_PATH))
     parser.add_argument("--device", default=os.environ.get("AMR_VOICE_DEVICE", None))
-    parser.add_argument("--sample-rate", type=int, default=16000)
-    parser.add_argument("--blocksize", type=int, default=4000)
+    parser.add_argument(
+        "--sample-rate",
+        type=int,
+        default=0,
+        help="Microphone capture sample rate. Use 0 to use the selected device default.",
+    )
+    parser.add_argument("--recognition-rate", type=int, default=16000, help="Sample rate passed to Vosk.")
+    parser.add_argument("--channels", type=int, default=2, help="Microphone capture channel count.")
+    parser.add_argument("--blocksize", type=int, default=12000)
+    parser.add_argument("--grammar", action="store_true", default=True)
+    parser.add_argument("--no-grammar", dest="grammar", action="store_false")
+    parser.add_argument("--log-partials", action="store_true", help="Log Vosk partial transcripts while speaking.")
+    parser.add_argument("--log-audio-level", action="store_true", help="Log captured audio RMS/peak once per second.")
     parser.add_argument("--duration-sec", type=float, default=0.0, help="Stop after N seconds; 0 means run forever.")
     parser.add_argument("--dry-run", action="store_true", help="Recognize and parse, but do not call mission services.")
     parser.add_argument("--list-devices", action="store_true", help="List sounddevice input devices and exit.")
@@ -198,8 +267,6 @@ def main() -> None:
     audio_queue: "queue.Queue[bytes]" = queue.Queue()
 
     def callback(indata, frames, time_info, status):  # pragma: no cover - callback path
-        if status:
-            print(status, file=sys.stderr)
         audio_queue.put(bytes(indata))
 
     rclpy.init()
@@ -208,12 +275,20 @@ def main() -> None:
         node = VoiceAsrNode(args)
         node.get_logger().info(f"loading Vosk model: {model_path}")
         model = vosk.Model(str(model_path))
-        recognizer = vosk.KaldiRecognizer(model, args.sample_rate)
+        if args.grammar:
+            recognizer = vosk.KaldiRecognizer(model, args.recognition_rate, node.grammar())
+        else:
+            recognizer = vosk.KaldiRecognizer(model, args.recognition_rate)
         device = _parse_device(args.device)
+        if args.sample_rate <= 0:
+            device_info = sd.query_devices(device, "input")
+            args.sample_rate = int(device_info["default_samplerate"])
+        rate_state = None
         start = time.monotonic()
         node.get_logger().info(
             f"listening on device={device if device is not None else 'default'} "
-            f"sample_rate={args.sample_rate} wake_gated={args.wake_gated} dry_run={args.dry_run}"
+            f"sample_rate={args.sample_rate} recognition_rate={args.recognition_rate} "
+            f"channels={args.channels} wake_gated={args.wake_gated} dry_run={args.dry_run}"
         )
 
         with sd.RawInputStream(
@@ -221,7 +296,7 @@ def main() -> None:
             blocksize=args.blocksize,
             device=device,
             dtype="int16",
-            channels=1,
+            channels=args.channels,
             callback=callback,
         ):
             while rclpy.ok():
@@ -232,6 +307,20 @@ def main() -> None:
                 except queue.Empty:
                     rclpy.spin_once(node, timeout_sec=0.0)
                     continue
+                if args.channels == 2:
+                    data = audioop.tomono(data, 2, 0.5, 0.5)
+                elif args.channels != 1:
+                    raise RuntimeError(f"Unsupported channel count: {args.channels}")
+                if args.sample_rate != args.recognition_rate:
+                    data, rate_state = audioop.ratecv(
+                        data,
+                        2,
+                        1,
+                        args.sample_rate,
+                        args.recognition_rate,
+                        rate_state,
+                    )
+                node.log_audio_level(data)
                 if recognizer.AcceptWaveform(data):
                     text = _extract_text(recognizer.Result(), key="text")
                     if text:
