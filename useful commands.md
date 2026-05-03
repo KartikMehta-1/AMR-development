@@ -84,6 +84,38 @@ Watch structured mission status:
 ros2 topic echo /amr_missions/status
 ```
 
+Text command interface:
+
+```bash
+ros2 run amr_voice voice_text_cli
+```
+
+Wake-gated text command interface:
+
+```bash
+ros2 run amr_voice voice_text_cli --wake-gated
+```
+
+Example typed commands:
+
+```text
+lovely go kitchen
+lovely
+go hall
+return home
+stop
+status
+list places
+```
+
+In wake-gated mode, `lovely` opens a short listening window for the next command. `stop` / `cancel` is still accepted without the wake word.
+
+One-shot dry run, useful before enabling motion:
+
+```bash
+ros2 run amr_voice voice_text_cli --wake-gated --dry-run --command "lovely go to the kitchen"
+```
+
 Current named places:
 - `home`
 - `door`
