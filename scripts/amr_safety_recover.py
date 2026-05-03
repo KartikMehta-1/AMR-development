@@ -64,7 +64,11 @@ def decode_bits(mask, table):
 
 def yes_no(prompt, default=False):
     suffix = " [y/N]: " if not default else " [Y/n]: "
-    answer = input(prompt + suffix).strip().lower()
+    try:
+        answer = input(prompt + suffix).strip().lower()
+    except EOFError:
+        print("")
+        return default
     if not answer:
         return default
     return answer in ("y", "yes")
