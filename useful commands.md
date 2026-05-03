@@ -84,6 +84,12 @@ Watch structured mission status:
 ros2 topic echo /amr_missions/status
 ```
 
+Watch voice feedback text, which is also the future TTS input:
+
+```bash
+ros2 topic echo /amr_voice/feedback
+```
+
 Text command interface:
 
 ```bash
@@ -110,6 +116,7 @@ list places
 
 In wake-gated mode, `lovely` opens a short listening window for the next command. `stop` / `cancel` is still accepted without the wake word.
 Motion commands now require confirmation by default. After `lovely go kitchen`, say or type `yes` to start the mission, or `no` to discard it. Use `--no-confirm-motion` only for controlled testing.
+Motion commands also require AMCL localization by default. Set RViz `2D Pose Estimate` first; use `--no-require-localization` only for controlled parser/service testing.
 
 One-shot dry run, useful before enabling motion:
 
@@ -135,16 +142,29 @@ ros2 run amr_voice voice_asr_node --list-devices
 Run ASR in dry-run mode:
 
 ```bash
-ros2 run amr_voice voice_asr_node --dry-run --device 9
+ros2 run amr_voice voice_asr_node --dry-run
 ```
 
 Run ASR against mission commands:
 
 ```bash
-ros2 run amr_voice voice_asr_node --device 9
+ros2 run amr_voice voice_asr_node
 ```
 
-If recognition becomes poor after a container or laptop audio restart, rerun `ros2 run amr_voice voice_asr_node --list-devices`. Use the digital mic input-only device with a 16 kHz default rate (`hw:1,7`, currently index `9` on this laptop); avoid HDMI output-only devices and the silent headset/analog input path.
+One-command ASR launcher from the laptop host:
+
+```bash
+./scripts/open_amr_voice_asr.sh
+```
+
+Pass debug flags or an alternate device when needed:
+
+```bash
+./scripts/open_amr_voice_asr.sh --log-audio-level --log-partials
+./scripts/open_amr_voice_asr.sh 8 --dry-run --log-audio-level
+```
+
+If recognition becomes poor after a container or laptop audio restart, rerun `ros2 run amr_voice voice_asr_node --list-devices`. The node defaults to `--device auto`, which prefers the digital mic input-only device with a 16 kHz default rate (`hw:1,7`, often index `9` on this laptop); avoid HDMI output-only devices and the silent headset/analog input path.
 
 ASR motion-command flow:
 

@@ -13,7 +13,7 @@ import rclpy
 from std_msgs.msg import String
 
 from amr_missions.common import default_places_path
-from amr_voice.command_parser import CANCEL, CONFIRM, REJECT, UNKNOWN, WAKE
+from amr_voice.command_parser import CANCEL, CONFIRM, GO_TO, REJECT, UNKNOWN, WAKE
 from amr_voice.voice_text_cli import PendingCommand, VoiceTextCommandNode
 
 
@@ -22,7 +22,11 @@ DEFAULT_MODEL_PATH = "/workspaces/AMR-development/models/vosk-model-small-en-us-
 
 class VoiceAsrNode(VoiceTextCommandNode):
     def __init__(self, args: argparse.Namespace):
-        super().__init__(args.places_file, wake_word=args.wake_word)
+        super().__init__(
+            args.places_file,
+            wake_word=args.wake_word,
+            require_localization=args.require_localization,
+        )
         self._args = args
         self._wake_until = 0.0
         self._pending: Optional[PendingCommand] = None
@@ -46,17 +50,17 @@ class VoiceAsrNode(VoiceTextCommandNode):
 
         if command.action == WAKE:
             self._wake_until = now + max(0.0, self._args.wake_window_sec)
-            self.get_logger().info(f"wake: listening for {self._args.wake_window_sec:.0f}s")
+            self.emit_feedback(f"wake: listening for {self._args.wake_window_sec:.0f}s")
             return True
 
         if command.action == CONFIRM:
             if self._pending is None:
-                self.get_logger().info("nothing to confirm")
+                self.emit_feedback("nothing to confirm")
                 return False
             pending = self._pending
             self._pending = None
             place_text = f" place={pending.command.place}" if pending.command.place else ""
-            self.get_logger().info(f"confirmed: {pending.command.action}{place_text}")
+            self.emit_feedback(f"confirmed: {pending.command.action}{place_text}")
             if self._args.dry_run:
                 return True
             return self.execute(
@@ -68,14 +72,14 @@ class VoiceAsrNode(VoiceTextCommandNode):
         if command.action == REJECT:
             if self._pending is not None:
                 self._pending = None
-                self.get_logger().info("rejected")
+                self.emit_feedback("rejected")
                 return True
-            self.get_logger().info("nothing to reject")
+            self.emit_feedback("nothing to reject")
             return False
 
         if command.action == UNKNOWN:
             if command.wake_word_detected or now <= self._wake_until:
-                self.get_logger().warn(command.detail)
+                self.emit_feedback(command.detail, level="warn")
             else:
                 self.get_logger().debug(command.detail)
             return False
@@ -86,7 +90,7 @@ class VoiceAsrNode(VoiceTextCommandNode):
             and not command.wake_word_detected
             and now > self._wake_until
         ):
-            self.get_logger().info(f"ignored: say '{self._args.wake_word}' first")
+            self.emit_feedback(f"ignored: say '{self._args.wake_word}' first")
             return False
 
         place_text = f" place={command.place}" if command.place else ""
@@ -94,11 +98,22 @@ class VoiceAsrNode(VoiceTextCommandNode):
             f"intent: {command.action}{place_text} confidence={command.confidence:.2f}"
         )
         if self._args.confirm_motion and self.requires_confirmation(command):
+            if (
+                not self._args.dry_run
+                and self._args.require_localization
+                and command.action == GO_TO
+                and not self.localization_ready()
+            ):
+                self.emit_feedback(
+                    "Localization is not ready. Set the 2D pose estimate before starting navigation.",
+                    level="warn",
+                )
+                return False
             self._pending = PendingCommand(
                 command=command,
                 expires_at=now + max(0.0, self._args.confirm_window_sec),
             )
-            self.get_logger().info(self.confirmation_prompt(command))
+            self.emit_feedback(self.confirmation_prompt(command))
             return True
         if self._args.dry_run:
             return True
@@ -186,10 +201,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--confirm-motion", action="store_true", default=True)
     parser.add_argument("--no-confirm-motion", dest="confirm_motion", action="store_false")
     parser.add_argument("--confirm-window-sec", type=float, default=8.0)
+    parser.add_argument("--require-localization", action="store_true", default=True)
+    parser.add_argument("--no-require-localization", dest="require_localization", action="store_false")
     parser.add_argument("--server-timeout", type=float, default=10.0)
     parser.add_argument("--goal-timeout", type=float, default=180.0)
     parser.add_argument("--model", default=os.environ.get("VOSK_MODEL_PATH", DEFAULT_MODEL_PATH))
-    parser.add_argument("--device", default=os.environ.get("AMR_VOICE_DEVICE", None))
+    parser.add_argument(
+        "--device",
+        default=os.environ.get("AMR_VOICE_DEVICE", "auto"),
+        help="Input device index/name, or 'auto' to choose the laptop digital mic.",
+    )
     parser.add_argument(
         "--sample-rate",
         type=int,
@@ -210,12 +231,47 @@ def parse_args() -> argparse.Namespace:
 
 
 def _parse_device(device: Optional[str]):
-    if device is None or device == "":
+    if device is None or device == "" or device == "auto":
         return None
     try:
         return int(device)
     except ValueError:
         return device
+
+
+def _select_input_device(sd, requested: Optional[str]):
+    if requested not in {None, "", "auto"}:
+        device = _parse_device(requested)
+        info = sd.query_devices(device, "input")
+        return device, info
+
+    devices = sd.query_devices()
+    input_devices = [
+        (index, info)
+        for index, info in enumerate(devices)
+        if int(info.get("max_input_channels", 0)) > 0
+    ]
+    if not input_devices:
+        raise RuntimeError("No input audio devices are visible in this container")
+
+    def score(item):
+        _index, info = item
+        name = str(info.get("name", "")).lower()
+        max_output = int(info.get("max_output_channels", 0))
+        default_rate = int(float(info.get("default_samplerate", 0)))
+        score_value = 0
+        if max_output == 0:
+            score_value += 100
+        if default_rate == 16000:
+            score_value += 50
+        if "hdmi" in name:
+            score_value -= 100
+        if "dmic" in name or "sof-hda-dsp" in name:
+            score_value += 10
+        return score_value
+
+    device, info = max(input_devices, key=score)
+    return device, info
 
 
 def _load_audio_modules():
@@ -279,9 +335,8 @@ def main() -> None:
             recognizer = vosk.KaldiRecognizer(model, args.recognition_rate, node.grammar())
         else:
             recognizer = vosk.KaldiRecognizer(model, args.recognition_rate)
-        device = _parse_device(args.device)
+        device, device_info = _select_input_device(sd, args.device)
         if args.sample_rate <= 0:
-            device_info = sd.query_devices(device, "input")
             args.sample_rate = int(device_info["default_samplerate"])
         rate_state = None
         start = time.monotonic()

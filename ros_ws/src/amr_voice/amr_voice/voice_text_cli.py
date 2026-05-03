@@ -6,8 +6,13 @@ from dataclasses import dataclass
 from typing import Iterable, Optional, Tuple
 
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.time import Time
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
+import tf2_ros
 
 from amr_missions.common import default_places_path, load_places
 from amr_missions_msgs.srv import GetMissionState, GoToNamedPose, ListPlaces
@@ -32,15 +37,25 @@ class PendingCommand:
 
 
 class VoiceTextCommandNode(Node):
-    def __init__(self, places_file: str, wake_word: str):
+    def __init__(self, places_file: str, wake_word: str, require_localization: bool = True):
         super().__init__(f"amr_voice_text_{os.getpid()}")
         self._places_file = places_file
         self._wake_word = wake_word
+        self._require_localization = require_localization
         self._places = load_places(places_file)
         self._list_client = self.create_client(ListPlaces, "/amr_missions/list_places")
         self._go_to_client = self.create_client(GoToNamedPose, "/amr_missions/go_to")
         self._state_client = self.create_client(GetMissionState, "/amr_missions/state")
         self._cancel_client = self.create_client(Trigger, "/amr_missions/cancel")
+        feedback_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._feedback_pub = self.create_publisher(String, "/amr_voice/feedback", feedback_qos)
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, self)
 
     @property
     def known_places(self) -> Iterable[str]:
@@ -57,6 +72,9 @@ class VoiceTextCommandNode(Node):
     def execute(self, command: ParsedCommand, server_timeout: float, goal_timeout: float) -> bool:
         if command.action == GO_TO:
             assert command.place is not None
+            if self._require_localization and not self.localization_ready():
+                self.emit_feedback("Localization is not ready. Set the 2D pose estimate before starting navigation.")
+                return False
             return self._go_to(command.place, server_timeout=server_timeout, goal_timeout=goal_timeout)
         if command.action == CANCEL:
             return self._cancel(server_timeout=server_timeout)
@@ -67,15 +85,37 @@ class VoiceTextCommandNode(Node):
         self.get_logger().warn(command.detail or "Unknown command")
         return False
 
+    def emit_feedback(self, text: str, level: str = "info") -> None:
+        msg = String()
+        msg.data = text
+        self._feedback_pub.publish(msg)
+        if level == "warn":
+            self.get_logger().warn(text)
+        elif level == "error":
+            self.get_logger().error(text)
+        else:
+            self.get_logger().info(text)
+
     @staticmethod
     def requires_confirmation(command: ParsedCommand) -> bool:
         return command.action == GO_TO
 
-    @staticmethod
-    def confirmation_prompt(command: ParsedCommand) -> str:
+    def confirmation_prompt(self, command: ParsedCommand) -> str:
         if command.action == GO_TO and command.place:
             return f"confirm: go to {command.place}? say yes or no"
         return "confirm command? say yes or no"
+
+    def localization_ready(self, timeout_sec: float = 0.1) -> bool:
+        try:
+            self._tf_buffer.lookup_transform(
+                "map",
+                "odom",
+                Time(),
+                timeout=Duration(seconds=timeout_sec),
+            )
+            return True
+        except Exception:
+            return False
 
     def _wait_for_response(self, future, service_name: str, timeout_sec: float):
         rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
@@ -102,9 +142,9 @@ class VoiceTextCommandNode(Node):
         if response is None:
             return False
         if response.success:
-            self.get_logger().info(response.message)
+            self.emit_feedback(response.message)
         else:
-            self.get_logger().error(response.message)
+            self.emit_feedback(response.message, level="error")
         return bool(response.success)
 
     def _cancel(self, server_timeout: float) -> bool:
@@ -119,9 +159,9 @@ class VoiceTextCommandNode(Node):
         if response is None:
             return False
         if response.success:
-            self.get_logger().info(response.message)
+            self.emit_feedback(response.message)
         else:
-            self.get_logger().warn(response.message)
+            self.emit_feedback(response.message, level="warn")
         return bool(response.success)
 
     def _status(self, server_timeout: float) -> bool:
@@ -144,6 +184,7 @@ class VoiceTextCommandNode(Node):
         print(f"total_loops: {status.total_loops}")
         print(f"retries_remaining: {status.retries_remaining}")
         print(f"detail: {status.detail}")
+        self.emit_feedback(f"status: {status.state}; {status.detail}")
         return True
 
     def _list_places(self, server_timeout: float) -> bool:
@@ -160,6 +201,7 @@ class VoiceTextCommandNode(Node):
             self._places = load_places(self._places_file)
             places = sorted(self._places.keys())
         print("places: " + ", ".join(places))
+        self.emit_feedback("places: " + ", ".join(places))
         return True
 
 
@@ -181,6 +223,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--confirm-motion", action="store_true", default=True)
     parser.add_argument("--no-confirm-motion", dest="confirm_motion", action="store_false")
     parser.add_argument("--confirm-window-sec", type=float, default=8.0)
+    parser.add_argument("--require-localization", action="store_true", default=True)
+    parser.add_argument("--no-require-localization", dest="require_localization", action="store_false")
     parser.add_argument("--server-timeout", type=float, default=10.0)
     parser.add_argument("--goal-timeout", type=float, default=180.0)
     parser.add_argument("--command", help="Run one command and exit instead of starting the interactive prompt")
@@ -215,15 +259,21 @@ def _handle_line(
 
     if command.action == WAKE:
         wake_until = now + max(0.0, args.wake_window_sec)
-        print(f"wake: listening for {args.wake_window_sec:.0f}s")
+        message = f"wake: listening for {args.wake_window_sec:.0f}s"
+        print(message)
+        node.emit_feedback(message)
         return True, wake_until, pending
 
     if command.action == CONFIRM:
         if pending is None:
-            print("nothing to confirm")
+            message = "nothing to confirm"
+            print(message)
+            node.emit_feedback(message)
             return False, wake_until, pending
         place_text = f" place={pending.command.place}" if pending.command.place else ""
-        print(f"confirmed: {pending.command.action}{place_text}")
+        message = f"confirmed: {pending.command.action}{place_text}"
+        print(message)
+        node.emit_feedback(message)
         if args.dry_run:
             return True, wake_until, None
         return (
@@ -235,24 +285,42 @@ def _handle_line(
     if command.action == REJECT:
         if pending is not None:
             print("rejected")
+            node.emit_feedback("rejected")
             return True, wake_until, None
         print("nothing to reject")
+        node.emit_feedback("nothing to reject")
         return False, wake_until, pending
 
     if command.action == UNKNOWN:
         print(f"unrecognized: {command.detail}")
+        node.emit_feedback(command.detail, level="warn")
         return False, wake_until, pending
 
     if gate_enabled and command.action != CANCEL and not command.wake_word_detected and now > wake_until:
-        print(f"ignored: say '{args.wake_word}' first")
+        message = f"ignored: say '{args.wake_word}' first"
+        print(message)
+        node.emit_feedback(message)
         return False, wake_until, pending
 
     place_text = f" place={command.place}" if command.place else ""
     wake_text = " wake=yes" if command.wake_word_detected else " wake=no"
     print(f"intent: {command.action}{place_text} confidence={command.confidence:.2f}{wake_text}")
     if args.confirm_motion and node.requires_confirmation(command):
+        if (
+            not args.dry_run
+            and args.require_localization
+            and command.action == GO_TO
+            and not node.localization_ready()
+        ):
+            node.emit_feedback(
+                "Localization is not ready. Set the 2D pose estimate before starting navigation.",
+                level="warn",
+            )
+            return False, wake_until, pending
         pending = PendingCommand(command=command, expires_at=now + max(0.0, args.confirm_window_sec))
-        print(node.confirmation_prompt(command))
+        prompt = node.confirmation_prompt(command)
+        print(prompt)
+        node.emit_feedback(prompt)
         return True, wake_until, pending
     if args.dry_run:
         return True, wake_until, pending
@@ -269,7 +337,11 @@ def main() -> None:
     exit_code = 0
     node: Optional[VoiceTextCommandNode] = None
     try:
-        node = VoiceTextCommandNode(args.places_file, wake_word=args.wake_word)
+        node = VoiceTextCommandNode(
+            args.places_file,
+            wake_word=args.wake_word,
+            require_localization=args.require_localization,
+        )
         wake_until = 0.0
         pending: Optional[PendingCommand] = None
         if args.command:
