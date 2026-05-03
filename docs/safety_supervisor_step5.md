@@ -16,7 +16,7 @@ To explicitly start the safety supervisor with action authority:
 AMR_SAFETY_ENFORCE=true ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
-AMCL is optional by default, so hardware-only checks do not trigger intervention when localization is not running. For full navigation safety validation:
+AMCL is optional by default, so hardware-only checks do not trigger intervention when localization is not running or when an old `/amcl_pose` sample is present. For full navigation safety validation:
 
 ```bash
 AMR_SAFETY_ENFORCE=true AMR_SAFETY_REQUIRE_AMCL=true ./scripts/open_amr_devpc_navigation.sh my_new_map

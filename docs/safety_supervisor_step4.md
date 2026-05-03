@@ -50,7 +50,7 @@ The supervisor intervenes when any of these are true after the startup grace per
 - STM communication status is stale.
 - Odometry is stale.
 - Scan is stale.
-- AMCL is stale and `require_amcl:=true`.
+- AMCL is stale and `require_amcl:=true`. When `require_amcl:=false`, AMCL freshness is ignored even if an old `/amcl_pose` sample exists.
 - `/amr_stm/fault_mask` is nonzero.
 - `/amr_stm/comm_fault_mask` is nonzero.
 - `/amr_stm/comm_status` is not `stm_link_ok`.
@@ -65,6 +65,8 @@ Default thresholds:
 | Scan | `0.5 s` |
 | AMCL pose | `2.0 s` |
 | Startup grace | `3.0 s` |
+
+During startup grace, missing or stale inputs are reported in status but do not trigger intervention. This avoids disabling the STM during normal launch ordering before odom, scan, STM diagnostics, and communication status have all started publishing.
 
 ## Status Fields
 

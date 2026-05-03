@@ -183,7 +183,7 @@ class SafetySupervisor(Node):
         flags = {}
         for name, limit in self.max_ages.items():
             age = self.age(name, now)
-            if name == "amcl" and age is None and not self.require_amcl:
+            if name == "amcl" and not self.require_amcl:
                 flags[name] = False
             else:
                 flags[name] = age is None or age > limit
@@ -212,7 +212,7 @@ class SafetySupervisor(Node):
                 reasons.append("missing_stm_or_comm_status")
 
         for name, is_stale in stale.items():
-            if is_stale and not (in_startup_grace and name in ("stm", "comm")):
+            if is_stale and not in_startup_grace:
                 reasons.append(f"stale_{name}")
 
         if self.fault_mask not in (None, 0):
