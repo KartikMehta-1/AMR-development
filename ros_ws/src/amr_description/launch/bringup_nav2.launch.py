@@ -49,7 +49,7 @@ def generate_launch_description():
     #
     # Our base uses ros2_control diff_drive_controller which exposes:
     # - /diff_drive_controller/cmd_vel_unstamped (Twist)
-    # - /diff_drive_controller/odom (nav_msgs/Odometry)
+    # - /odom (nav_msgs/Odometry)
     #
     # These remaps keep Nav2 params close to upstream defaults while wiring it to the AMR base.
     nav2_group = GroupAction(
@@ -104,7 +104,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "odom_topic",
-                default_value="/diff_drive_controller/odom",
+                default_value="/odom",
                 description="Where Nav2 should read odometry (nav_msgs/Odometry)",
             ),
             DeclareLaunchArgument(

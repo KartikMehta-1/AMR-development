@@ -71,7 +71,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "odom_topic",
-                default_value="/diff_drive_controller/odom",
+                default_value="/odom",
                 description="Where Nav2 should read odometry (nav_msgs/Odometry)",
             ),
             DeclareLaunchArgument(
@@ -82,4 +82,3 @@ def generate_launch_description():
             nav2_group,
         ]
     )
-

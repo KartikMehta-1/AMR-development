@@ -1,0 +1,4 @@
+[submodule "STM/STM_Firmware_AMR_v2/micro_ros_stm32cubemx_utils"]
+	path = STM/STM_Firmware_AMR_v2/micro_ros_stm32cubemx_utils
+	url = https://github.com/micro-ROS/micro_ros_stm32cubemx_utils
+	branch = humble

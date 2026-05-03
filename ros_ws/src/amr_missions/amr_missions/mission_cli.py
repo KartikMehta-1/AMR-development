@@ -1,4 +1,5 @@
 import argparse
+import os
 from typing import Optional
 
 import rclpy
@@ -11,7 +12,7 @@ from amr_missions_msgs.srv import GetMissionState, GoToNamedPose, ListPlaces, Pa
 
 class MissionClient(Node):
     def __init__(self, places_path: str):
-        super().__init__("amr_mission_cli")
+        super().__init__(f"amr_mission_cli_{os.getpid()}")
         self._places_path = places_path
         self._places = load_places(places_path)
         self._list_client = self.create_client(ListPlaces, "/amr_missions/list_places")
@@ -27,31 +28,42 @@ class MissionClient(Node):
     def refresh_places(self) -> None:
         self._places = load_places(self._places_path)
 
-    def wait_for_server(self, timeout_sec: float) -> bool:
-        clients = [
-            self._list_client,
-            self._go_to_client,
-            self._patrol_client,
-            self._state_client,
-            self._cancel_client,
-        ]
-        return all(client.wait_for_service(timeout_sec=timeout_sec) for client in clients)
+    def wait_for_service(self, client, service_name: str, timeout_sec: float) -> bool:
+        if client.wait_for_service(timeout_sec=timeout_sec):
+            return True
+        self.get_logger().error(f"Mission service is not available: {service_name}")
+        return False
 
-    def list_places_remote(self) -> Optional[list]:
-        future = self._list_client.call_async(ListPlaces.Request())
-        rclpy.spin_until_future_complete(self, future)
+    def _wait_for_response(self, future, service_name: str, timeout_sec: float):
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
+        if not future.done():
+            self.get_logger().error(f"Timed out waiting for response from {service_name}")
+            return None
         response = future.result()
+        if response is None:
+            self.get_logger().error(f"No response from {service_name}")
+        return response
+
+    def list_places_remote(self, response_timeout_sec: float = 2.0) -> Optional[list]:
+        future = self._list_client.call_async(ListPlaces.Request())
+        response = self._wait_for_response(
+            future,
+            "/amr_missions/list_places",
+            timeout_sec=response_timeout_sec,
+        )
         return None if response is None else list(response.places)
 
-    def go_to(self, place_name: str, timeout_sec: float) -> bool:
+    def go_to(self, place_name: str, timeout_sec: float, response_timeout_sec: float) -> bool:
         request = GoToNamedPose.Request()
         request.place = place_name
         request.timeout_sec = float(timeout_sec)
         future = self._go_to_client.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
-        response = future.result()
+        response = self._wait_for_response(
+            future,
+            "/amr_missions/go_to",
+            timeout_sec=response_timeout_sec,
+        )
         if response is None:
-            self.get_logger().error("No response from mission server")
             return False
         if response.success:
             self.get_logger().info(response.message)
@@ -59,13 +71,24 @@ class MissionClient(Node):
             self.get_logger().error(response.message)
         return response.success
 
-    def mission_state(self):
+    def mission_state(self, response_timeout_sec: float = 2.0):
         future = self._state_client.call_async(GetMissionState.Request())
-        rclpy.spin_until_future_complete(self, future)
-        response = future.result()
+        response = self._wait_for_response(
+            future,
+            "/amr_missions/state",
+            timeout_sec=response_timeout_sec,
+        )
         return None if response is None else response.status
 
-    def patrol(self, places, loops: int, timeout: float, retries: int, return_home: Optional[str]) -> bool:
+    def patrol(
+        self,
+        places,
+        loops: int,
+        timeout: float,
+        retries: int,
+        return_home: Optional[str],
+        response_timeout_sec: float,
+    ) -> bool:
         request = PatrolNamedPoses.Request()
         request.places = list(places)
         request.loops = int(loops)
@@ -73,10 +96,12 @@ class MissionClient(Node):
         request.retries = int(retries)
         request.return_home = return_home or ""
         future = self._patrol_client.call_async(request)
-        rclpy.spin_until_future_complete(self, future)
-        response = future.result()
+        response = self._wait_for_response(
+            future,
+            "/amr_missions/patrol",
+            timeout_sec=response_timeout_sec,
+        )
         if response is None:
-            self.get_logger().error("No response from mission server")
             return False
         if response.success:
             self.get_logger().info(response.message)
@@ -84,12 +109,14 @@ class MissionClient(Node):
             self.get_logger().error(response.message)
         return response.success
 
-    def cancel(self) -> bool:
+    def cancel(self, response_timeout_sec: float) -> bool:
         future = self._cancel_client.call_async(Trigger.Request())
-        rclpy.spin_until_future_complete(self, future)
-        response = future.result()
+        response = self._wait_for_response(
+            future,
+            "/amr_missions/cancel",
+            timeout_sec=response_timeout_sec,
+        )
         if response is None:
-            self.get_logger().error("No response from mission server")
             return False
         if response.success:
             self.get_logger().info(response.message)
@@ -109,7 +136,7 @@ def parse_args() -> argparse.Namespace:
         "--server-timeout",
         type=float,
         default=20.0,
-        help="Seconds to wait for the Nav2 navigate_to_pose action server",
+        help="Seconds to wait for the required mission server service",
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -148,7 +175,7 @@ def main() -> None:
         if args.command == "list":
             places = None
             if node._list_client.wait_for_service(timeout_sec=2.0):
-                places = node.list_places_remote()
+                places = node.list_places_remote(response_timeout_sec=2.0)
             if places is None:
                 node.refresh_places()
                 places = sorted(node.places.keys())
@@ -167,7 +194,7 @@ def main() -> None:
                 node.get_logger().error("Mission state service is not available")
                 exit_code = 1
                 return
-            status = node.mission_state()
+            status = node.mission_state(response_timeout_sec=args.server_timeout)
             if status is None:
                 node.get_logger().error("No response from mission server")
                 exit_code = 1
@@ -182,26 +209,47 @@ def main() -> None:
             print(f"detail: {status.detail}")
             return
 
-        if not node.wait_for_server(timeout_sec=args.server_timeout):
-            node.get_logger().error("Nav2 action server 'navigate_to_pose' is not available")
-            exit_code = 1
-            return
-
         if args.command == "go_to":
-            exit_code = 0 if node.go_to(args.place, timeout_sec=args.timeout) else 1
+            if not node.wait_for_service(
+                node._go_to_client,
+                "/amr_missions/go_to",
+                timeout_sec=args.server_timeout,
+            ):
+                exit_code = 1
+                return
+            exit_code = 0 if node.go_to(
+                args.place,
+                timeout_sec=args.timeout,
+                response_timeout_sec=args.server_timeout,
+            ) else 1
             return
 
         if args.command == "patrol":
+            if not node.wait_for_service(
+                node._patrol_client,
+                "/amr_missions/patrol",
+                timeout_sec=args.server_timeout,
+            ):
+                exit_code = 1
+                return
             exit_code = 0 if node.patrol(
                 args.places,
                 loops=args.loops,
                 timeout=args.timeout,
                 retries=args.retries,
                 return_home=args.return_home,
+                response_timeout_sec=args.server_timeout,
             ) else 1
             return
         if args.command == "cancel":
-            exit_code = 0 if node.cancel() else 1
+            if not node.wait_for_service(
+                node._cancel_client,
+                "/amr_missions/cancel",
+                timeout_sec=args.server_timeout,
+            ):
+                exit_code = 1
+                return
+            exit_code = 0 if node.cancel(response_timeout_sec=args.server_timeout) else 1
             return
     except Exception as exc:  # pragma: no cover - CLI error path
         if node is not None:

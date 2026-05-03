@@ -1,7 +1,7 @@
 # Kartik's AMR Project Tracker (42 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-04-28  
+**Last Updated:** 2026-05-03  
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ---
@@ -29,12 +29,16 @@
   - Added firmware tuning profiles for controlled A/B testing (launch guard, feedforward/static FF, etc.) to avoid “many knobs at once”.
   - Promoted `amr_missions` into a persistent mission runtime with `mission_server`, typed `MissionStatus`, `/amr_missions/state`, and a command topic; the one-shot navigation launcher now includes mission-server, mission-status, and mission-command panes.
   - Revalidated named-place navigation and patrol flows on real hardware with the persistent mission runtime; current saved places are `home`, `door`, `kitchen`, and `hall`.
+  - Hardened the mission/Nav2 command path so mission CLI calls use unique ROS node names, wait only for the required service, and time out cleanly instead of hanging; `go_to kitchen` was revalidated through the mission server on real hardware.
+  - Completed the real motor-driver power-cut safety recovery validation without restarting the safety supervisor; reset is rejected while STM fault bits are active, succeeds after fault clear, and STM re-enable remains manual.
+  - Added a guarded operator recovery helper (`scripts/amr_safety_recover.py`) so the validated safety recovery sequence can be run repeatably without manually typing every ROS command.
   - Integrated SO-101 into the active project stack and completed the main AMR mechanical assembly.
   - Ran an ACT policy that successfully picked up an object and placed it into a bag.
 - micro-ROS: STM32 bring-up on USART2 with full AMR topic set live (wheel_state + duty topics visible); UART telemetry disabled to avoid contention.
 - Safety: Hardware e-stop GPIO integrated with debounce and fault latch.
 - Current Focus (next sprint):
   - Add Jetson-side EKF state estimation (`robot_localization`) using wheel odom plus camera IMU, then retest SLAM/AMCL/Nav2 on filtered odom.
+  - Investigate AMCL/localization jumps during motion; the 2026-05-03 mission validation still showed multiple large AMCL pose steps even though STM comms, wheel state, odom, scan, and safety supervision stayed healthy.
   - Extend the persistent mission runtime with named routes, stronger supervision, and tighter integration with the rest of the autonomy stack.
   - Add safety/health supervision for LiDAR freshness, localization validity, TF/odom staleness, STM comm health, and mission abort/stop behavior.
   - Add a first voice I/O scaffold: speaker on AMR for TTS/status and laptop-mic command intake for a small set of mission commands.
@@ -82,7 +86,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
 | 21 | URDF Modeling (Base AMR) | <span style="color: green">Done</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); LiDAR/camera split into `lidar.xacro` + `camera.xacro`; D455 camera plugin added; base_footprint restored; wheel offsets corrected; caster clearance tuned; Gazebo launch defaults to `obstacles.world`; ros2_control config added; URDF validated in sim. | 2026-03-26 | 2026-02-11 |
 | 22 | Navigation & Mapping Bring-up | <span style="color: green">Done</span> | Mapping: slam_toolbox (2D LiDAR) running on real LiDAR; map save/load + posegraph serialization verified. Localization: AMCL on saved map working. Navigation: Nav2 bring-up working with RViz goals; costmaps wired to ros2_control topics. EKF fusion + odom improvements are tracked separately. | 2026-04-02 | 2026-02-11 |
-| 23 | EKF State Estimation & Nav Validation | Planned | Integrate `robot_localization`; fuse wheel odom + camera IMU; publish filtered odom/TF; retest SLAM, AMCL, and Nav2 on the improved state estimate; run longer battery-powered navigation routes and measure drift. | 2026-04-09 | TBD |
+| 23 | EKF State Estimation & Nav Validation | Planned | Integrate `robot_localization`; fuse wheel odom + camera IMU; publish filtered odom/TF; retest SLAM, AMCL, and Nav2 on the improved state estimate; run longer battery-powered navigation routes and measure drift. Include follow-up for motion-only AMCL/localization jumps seen during 2026-05-03 mission validation. | 2026-04-09 | TBD |
 | 24 | Mission Runtime & Sequencing (v1) | <span style="color: green">Done</span> | Promoted `amr_missions` from CLI-only use into a persistent `mission_server` with typed `MissionStatus`, a `/amr_missions/state` service, topic-command support, request validation, retries/timeouts/return-home handling, and direct integration into the one-shot navigation tmux workflow. | 2026-04-16 | 2026-04-28 |
 | 25 | Safety Supervision & Health Monitoring | Planned | Add watchdogs for LiDAR freshness, localization validity, TF/odom staleness, STM comm health, and Nav2 stuck/timeout detection; add safe-stop / mission-abort behavior and health summary topics. | 2026-04-23 | TBD |
 | 26 | Voice Command MVP | Planned | Add speaker output plus a first voice interface using laptop mic input; offline ASR (Vosk/Whisper) + intent parsing + confirmation prompts; map a small command set (`go home`, `go kitchen`, `stop`, `status`) into mission goals and log transcripts/outcomes. | 2026-04-30 | TBD |
@@ -125,6 +129,9 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 ---
 
 ## Project Log
+- 2026-05-03: Completed Safety Step 10: repeated the real motor-driver power-cut fault while moving, confirmed STM latched `STALL_LEFT|STALL_RIGHT` (`fault_mask=24`) with comms healthy, verified `/amr/safety_supervisor/reset_intervention` rejects while unsafe, restored motor-driver power, cleared STM faults, reset the supervisor without restarting it, manually re-enabled STM, and finished with a passing 30 second baseline probe.
+- 2026-05-03: Added guarded safety recovery tooling. `scripts/amr_safety_recover.py` cancels mission/Nav2 motion, publishes zero velocity, disables STM, decodes live STM/comm/supervisor state, prompts before clearing nonzero STM faults, calls `/amr/safety_supervisor/reset_intervention`, and keeps STM re-enable as an explicit operator step unless requested with `--reenable`. Dry-run validation passed on healthy hardware.
+- 2026-05-03: Hardened the mission/Nav2 command path after CLI calls intermittently hung or failed service discovery. `mission_cli` now uses a unique ROS node name per invocation, waits only for the service required by the requested command, and bounds service-response waits. `mission_server` now clears stale action goal handles on idle cancel requests. Rebuilt/restarted the mission server and validated `status`, `cancel`, and `go_to kitchen` on real hardware. Follow-up: improve localization/AMCL behavior because mission validation still showed large AMCL pose steps during motion while low-level comms and safety remained healthy.
 - 2026-04-27: Updated the canonical roadmap to split near-term work and post-Orin work more cleanly. Short-term milestones are now EKF state estimation, persistent mission runtime, safety supervision, and voice I/O scaffolding. Perception-heavy autonomy and manipulator runtime migration are explicitly deferred to the Jetson Orin NX phase.
 - 2026-04-27: Added one-shot dev-PC workflows for SLAM and navigation that first bring up the Jetson hardware stack, then reset the STM over ST-LINK via `openocd`, then launch the desktop-side session. Validated noninteractive reset with `sudo -n openocd -s /usr/share/openocd/scripts -f interface/stlink-v2-1.cfg -f target/stm32f4x.cfg -c "init; reset run; shutdown"`.
 - 2026-04-27: Added `amr_missions`, a first mission-layer ROS 2 package with YAML-defined named places and a `mission_cli` supporting `list`, `go_to <place>`, and `patrol ... --return-home ...`. Validated named-place navigation on real hardware for `kitchen` and `hall`; current saved places are `home`, `door`, `kitchen`, and `hall`.

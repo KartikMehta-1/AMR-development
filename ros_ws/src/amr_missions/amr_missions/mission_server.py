@@ -451,8 +451,13 @@ class MissionServer(Node):
         del request
         with self._lock:
             running = self._mission_thread is not None and self._mission_thread.is_alive()
-            goal_handle = self._active_goal_handle
             self._cancel_requested.set()
+            if running:
+                goal_handle = self._active_goal_handle
+            else:
+                goal_handle = None
+                self._active_goal_handle = None
+                self._cancel_requested.clear()
 
         if goal_handle is not None:
             cancel_future = goal_handle.cancel_goal_async()

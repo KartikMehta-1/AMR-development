@@ -17,6 +17,7 @@ def generate_launch_description():
     agent_baud = LaunchConfiguration("agent_baud")
     start_lidar = LaunchConfiguration("start_lidar")
     start_camera = LaunchConfiguration("start_camera")
+    start_link_watchdog = LaunchConfiguration("start_link_watchdog")
     lidar_params = LaunchConfiguration("lidar_params")
 
     model_path = PathJoinSubstitution(
@@ -40,11 +41,12 @@ def generate_launch_description():
         package="amr_hardware",
         executable="amr_link_watchdog",
         output="screen",
+        condition=IfCondition(start_link_watchdog),
         parameters=[
             {
-                "wheel_state_topic": "/amr/wheel_state",
+                "wheel_state_topic": "/amr_stm/wheel_state",
                 "startup_timeout_sec": 5.0,
-                "stale_timeout_sec": 1.0,
+                "stale_timeout_sec": 2.0,
                 "publish_period_sec": 0.5,
             }
         ],
@@ -122,6 +124,11 @@ def generate_launch_description():
                 "start_camera",
                 default_value="false",
                 description="Start RealSense camera driver",
+            ),
+            DeclareLaunchArgument(
+                "start_link_watchdog",
+                default_value="true",
+                description="Publish STM link health from /amr_stm/wheel_state freshness",
             ),
             DeclareLaunchArgument(
                 "lidar_params",

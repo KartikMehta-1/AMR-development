@@ -14,6 +14,7 @@
 
 // --- micro-ROS Transports ---
 #define UART_DMA_BUFFER_SIZE 2048
+#define UART_TX_TIMEOUT_MS 20
 
 static uint8_t dma_buffer[UART_DMA_BUFFER_SIZE];
 static size_t dma_head = 0, dma_tail = 0;
@@ -24,13 +25,25 @@ volatile uint32_t microros_transport_last_open_status = 0;
 volatile uint32_t microros_transport_write_calls = 0;
 volatile uint32_t microros_transport_write_failures = 0;
 volatile uint32_t microros_transport_write_success_bytes = 0;
+volatile uint32_t microros_transport_write_timeouts = 0;
+volatile uint32_t microros_transport_last_write_status = 0;
 volatile uint32_t microros_transport_read_calls = 0;
 volatile uint32_t microros_transport_read_nonzero_calls = 0;
 volatile uint32_t microros_transport_read_success_bytes = 0;
 
+void microros_transport_reset(UART_HandleTypeDef * uart)
+{
+    HAL_UART_Abort(uart);
+    HAL_UART_DMAStop(uart);
+    dma_head = 0;
+    dma_tail = 0;
+    memset(dma_buffer, 0, sizeof(dma_buffer));
+}
+
 bool cubemx_transport_open(struct uxrCustomTransport * transport){
     UART_HandleTypeDef * uart = (UART_HandleTypeDef*) transport->args;
     microros_transport_open_calls++;
+    microros_transport_reset(uart);
     HAL_StatusTypeDef ret = HAL_UART_Receive_DMA(uart, dma_buffer, UART_DMA_BUFFER_SIZE);
     microros_transport_last_open_status = (uint32_t)ret;
     if (ret != HAL_OK) {
@@ -54,7 +67,17 @@ size_t cubemx_transport_write(struct uxrCustomTransport* transport, const uint8_
     HAL_StatusTypeDef ret;
     if (uart->gState == HAL_UART_STATE_READY){
         ret = HAL_UART_Transmit_DMA(uart, (uint8_t *)buf, len);
+        microros_transport_last_write_status = (uint32_t)ret;
+
+        uint32_t start = HAL_GetTick();
         while (ret == HAL_OK && uart->gState != HAL_UART_STATE_READY){
+            if ((uint32_t)(HAL_GetTick() - start) >= UART_TX_TIMEOUT_MS) {
+                microros_transport_write_timeouts++;
+                microros_transport_write_failures++;
+                HAL_UART_AbortTransmit(uart);
+                HAL_UART_DMAStop(uart);
+                return 0;
+            }
             osDelay(1);
         }
 

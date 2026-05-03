@@ -24,23 +24,31 @@ hardware_interface::return_type AMRHardware::configure(
 
   left_cmd_topic_ = info_.hardware_parameters.count("left_cmd_topic")
                         ? info_.hardware_parameters.at("left_cmd_topic")
-                        : std::string("/amr/wheel_cmd_left");
+                        : std::string("/amr_stm/wheel_cmd_left");
   right_cmd_topic_ = info_.hardware_parameters.count("right_cmd_topic")
                          ? info_.hardware_parameters.at("right_cmd_topic")
-                         : std::string("/amr/wheel_cmd_right");
+                         : std::string("/amr_stm/wheel_cmd_right");
   state_topic_ = info_.hardware_parameters.count("state_topic")
                      ? info_.hardware_parameters.at("state_topic")
-                     : std::string("/amr/wheel_state");
+                     : std::string("/amr_stm/wheel_state");
+  if (info_.hardware_parameters.count("state_stale_timeout_sec")) {
+    state_stale_timeout_sec_ = std::stod(info_.hardware_parameters.at("state_stale_timeout_sec"));
+  }
 
   hw_positions_ = std::vector<double>(2, 0.0);
   hw_velocities_ = std::vector<double>(2, 0.0);
   hw_commands_ = std::vector<double>(2, 0.0);
+  pending_positions_ = std::vector<double>(2, 0.0);
+  pending_velocities_ = std::vector<double>(2, 0.0);
 
   ensure_ros();
 
   node_ = std::make_shared<rclcpp::Node>("amr_hardware");
-  left_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(left_cmd_topic_, 10);
-  right_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(right_cmd_topic_, 10);
+  auto wheel_cmd_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+  left_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(
+      left_cmd_topic_, wheel_cmd_qos);
+  right_cmd_pub_ = node_->create_publisher<std_msgs::msg::Float32>(
+      right_cmd_topic_, wheel_cmd_qos);
   state_sub_ = node_->create_subscription<sensor_msgs::msg::JointState>(
       state_topic_, rclcpp::QoS(10).best_effort(),
       std::bind(&AMRHardware::handle_joint_state, this, std::placeholders::_1));
@@ -81,6 +89,15 @@ hardware_interface::return_type AMRHardware::start() {
   hw_velocities_[1] = 0.0;
   hw_commands_[0] = 0.0;
   hw_commands_[1] = 0.0;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    pending_positions_[0] = 0.0;
+    pending_positions_[1] = 0.0;
+    pending_velocities_[0] = 0.0;
+    pending_velocities_[1] = 0.0;
+    have_state_ = false;
+    stale_command_logged_ = false;
+  }
 
   start_spinning();
   status_ = hardware_interface::status::STARTED;
@@ -94,6 +111,9 @@ hardware_interface::return_type AMRHardware::stop() {
 }
 
 hardware_interface::return_type AMRHardware::read() {
+  std::lock_guard<std::mutex> lock(state_mutex_);
+  hw_positions_ = pending_positions_;
+  hw_velocities_ = pending_velocities_;
   return hardware_interface::return_type::OK;
 }
 
@@ -102,10 +122,33 @@ hardware_interface::return_type AMRHardware::write() {
     return hardware_interface::return_type::ERROR;
   }
 
+  bool state_is_stale = true;
+  {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (have_state_) {
+      const auto age = std::chrono::duration<double>(
+          std::chrono::steady_clock::now() - last_state_time_).count();
+      state_is_stale = age > state_stale_timeout_sec_;
+    }
+  }
+
+  const double left_command = state_is_stale ? 0.0 : hw_commands_[0];
+  const double right_command = state_is_stale ? 0.0 : hw_commands_[1];
+
+  if (state_is_stale && !stale_command_logged_) {
+    RCLCPP_WARN(node_->get_logger(),
+                "Suppressing wheel commands because %s is stale or missing",
+                state_topic_.c_str());
+    stale_command_logged_ = true;
+  } else if (!state_is_stale && stale_command_logged_) {
+    RCLCPP_INFO(node_->get_logger(), "Wheel state fresh; wheel commands re-enabled");
+    stale_command_logged_ = false;
+  }
+
   std_msgs::msg::Float32 left_msg;
   std_msgs::msg::Float32 right_msg;
-  left_msg.data = static_cast<float>(hw_commands_[0]);
-  right_msg.data = static_cast<float>(hw_commands_[1]);
+  left_msg.data = static_cast<float>(left_command);
+  right_msg.data = static_cast<float>(right_command);
 
   left_cmd_pub_->publish(left_msg);
   right_cmd_pub_->publish(right_msg);
@@ -122,23 +165,26 @@ hardware_interface::status AMRHardware::get_status() const {
 }
 
 void AMRHardware::handle_joint_state(const sensor_msgs::msg::JointState::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(state_mutex_);
   for (size_t i = 0; i < msg->name.size(); ++i) {
     if (msg->name[i] == left_joint_) {
       if (i < msg->position.size()) {
-        hw_positions_[0] = msg->position[i];
+        pending_positions_[0] = msg->position[i];
       }
       if (i < msg->velocity.size()) {
-        hw_velocities_[0] = msg->velocity[i];
+        pending_velocities_[0] = msg->velocity[i];
       }
     } else if (msg->name[i] == right_joint_) {
       if (i < msg->position.size()) {
-        hw_positions_[1] = msg->position[i];
+        pending_positions_[1] = msg->position[i];
       }
       if (i < msg->velocity.size()) {
-        hw_velocities_[1] = msg->velocity[i];
+        pending_velocities_[1] = msg->velocity[i];
       }
     }
   }
+  last_state_time_ = std::chrono::steady_clock::now();
+  have_state_ = true;
 }
 
 void AMRHardware::ensure_ros() {

@@ -1,0 +1,150 @@
+date/time: 2026-05-03T08:38:56+05:30
+top-level branch: fix/safety-supervision-rework
+top-level commit: 050b034
+submodules:
+ 231fb1cf15f45f8752f0399147707d2021236648 STM/STM_Firmware_AMR_v2/micro_ros_stm32cubemx_utils (3.0.2-3-g231fb1c)
+map: my_new_map
+battery level/voltage: 13.2V
+floor / obstacle conditions: tile floor, not many moving obstacles during test
+reset button / NRST wiring state: reset wire connected
+STM 5V/GND/USB cable notes: STM 5V power line was flaky and has been adjusted
+ROS safety supervisor state: checking live node list below
+
+== node/localization precheck ==
+localization: ready
+
+== idle probe ==
+duration_sec: 60.0
+rates_hz:
+  wheel: 9.755 count=583 min=8.000
+  fault: 9.711 count=581 min=8.000
+  diag: 1.979 count=118 min=1.500
+  odom: 49.919 count=2990 min=40.000
+  scan: 9.681 count=580 min=8.000
+  comm: 2.000 count=120 min=1.500
+big_gaps_sec:
+  wheel: count=0 limit=0.500
+  fault: count=0 limit=0.500
+  diag: count=0 limit=1.500
+  safety: count=0 limit=1.500
+  odom: count=0 limit=0.500
+  scan: count=0 limit=0.500
+  amcl: count=0 limit=2.000
+last_values:
+  fault_mask: 0
+  safety_state: 131072
+  comm_status: stm_link_ok
+  comm_fault_mask: 0
+  ros_diag: [1081362, 21, 8, 6, 0, 0, 0, 0, 102321, 0, 0, 0, 164555, 164240, 1856143, 1, 0, 0, 10, 335544320]
+  boot_ms: 1081362
+  reset_cause_mask: 10 (PIN,SOFT)
+  reset_csr_raw: 0x14000000
+  uart_write_failures: 0
+  uart_write_timeouts: 0
+  pub_failures: 0
+ranges:
+  cmd_linear_mps: n/a
+  cmd_angular_radps: n/a
+  duty_left: 0.000..0.000
+  duty_right: 0.000..0.000
+  current_left_ma: 5.0..135.0
+  current_right_ma: -129.0..-12.0
+  wheel_velocity_abs_radps: 0.000..0.000
+amcl_large_steps: count=0 samples=[]
+boot_drops: count=0 samples=[]
+baseline_result: PASS
+
+== motion probe ==
+duration_sec: 240.0
+rates_hz:
+  wheel: 9.763 count=2339 min=8.000
+  fault: 9.729 count=2331 min=8.000
+  diag: 1.980 count=474 min=1.500
+  odom: 49.946 count=11966 min=40.000
+  scan: 9.662 count=2315 min=8.000
+  comm: 2.000 count=479 min=1.500
+big_gaps_sec:
+  wheel: count=0 limit=0.500
+  fault: count=0 limit=0.500
+  diag: count=0 limit=1.500
+  safety: count=0 limit=1.500
+  odom: count=0 limit=0.500
+  scan: count=0 limit=0.500
+  amcl: count=1 limit=2.000 max=34.146 samples=[34.146]
+last_values:
+  fault_mask: 0
+  safety_state: 131072
+  comm_status: stm_link_ok
+  comm_fault_mask: 0
+  ros_diag: [1341502, 21, 8, 6, 0, 0, 0, 0, 126965, 0, 0, 0, 204061, 203713, 2303703, 1, 0, 0, 10, 335544320]
+  boot_ms: 1341502
+  reset_cause_mask: 10 (PIN,SOFT)
+  reset_csr_raw: 0x14000000
+  uart_write_failures: 0
+  uart_write_timeouts: 0
+  pub_failures: 0
+ranges:
+  cmd_linear_mps: 0.000..0.260
+  cmd_angular_radps: -1.000..1.000
+  duty_left: -0.253..0.640
+  duty_right: -0.203..0.429
+  current_left_ma: -379.0..998.0
+  current_right_ma: -684.0..931.0
+  wheel_velocity_abs_radps: 0.000..6.463
+amcl_large_steps: count=22 samples=[(0.266, -0.13), (0.283, 0.153), (0.261, 0.168), (0.289, 0.048), (0.291, -0.157), (0.289, -0.211), (0.258, -0.019), (0.276, -0.002), (0.283, 0.22), (0.255, -0.023), (0.26, -0.028), (0.278, -0.004), (0.25, 0.125), (0.266, 0.085), (0.267, 0.138), (0.266, 0.178), (0.287, 0.095), (0.273, 0.054), (0.265, -0.033), (0.271, 0.062)]
+boot_drops: count=0 samples=[]
+baseline_result: PASS
+
+== post-motion probe ==
+duration_sec: 60.0
+rates_hz:
+  wheel: 9.750 count=584 min=8.000
+  fault: 9.700 count=581 min=8.000
+  diag: 1.982 count=119 min=1.500
+  odom: 49.838 count=2984 min=40.000
+  scan: 9.666 count=579 min=8.000
+  comm: 2.000 count=120 min=1.500
+big_gaps_sec:
+  wheel: count=0 limit=0.500
+  fault: count=0 limit=0.500
+  diag: count=0 limit=1.500
+  safety: count=0 limit=1.500
+  odom: count=0 limit=0.500
+  scan: count=0 limit=0.500
+  amcl: count=0 limit=2.000
+last_values:
+  fault_mask: 0
+  safety_state: 131072
+  comm_status: stm_link_ok
+  comm_fault_mask: 0
+  ros_diag: [1410538, 21, 8, 6, 0, 0, 0, 0, 133500, 0, 0, 0, 214552, 214191, 2422618, 1, 0, 0, 10, 335544320]
+  boot_ms: 1410538
+  reset_cause_mask: 10 (PIN,SOFT)
+  reset_csr_raw: 0x14000000
+  uart_write_failures: 0
+  uart_write_timeouts: 0
+  pub_failures: 0
+ranges:
+  cmd_linear_mps: n/a
+  cmd_angular_radps: n/a
+  duty_left: 0.000..0.000
+  duty_right: 0.000..0.000
+  current_left_ma: 45.0..114.0
+  current_right_ma: -122.0..8.0
+  wheel_velocity_abs_radps: 0.000..0.000
+amcl_large_steps: count=0 samples=[]
+boot_drops: count=0 samples=[]
+baseline_result: PASS
+
+== baseline summary ==
+result: PASS
+idle_probe: PASS
+motion_probe: PASS
+post_motion_probe: PASS
+missions: go_to kitchen reached; go_to hall reached
+notes: motion probe observed AMCL correction steps around 0.25-0.29 m, with no STM/comm/odom/scan failure.
+safety_supervisor: not running
+stm_runtime_reboot: none observed
+fault_mask: 0 throughout probe summaries
+comm_fault_mask: 0 throughout probe summaries
+comm_status: stm_link_ok

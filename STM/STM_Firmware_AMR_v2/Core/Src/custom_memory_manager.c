@@ -26,8 +26,12 @@ task.h is included from an application file. */
 /* Assumes 8bit bytes! */
 #define heapBITS_PER_BYTE		( ( size_t ) 8 )
 
-/* Allocate the memory for the heap. */
-static uint8_t ucHeap[ configTOTAL_HEAP_SIZE ];
+#ifndef MICROROS_HEAP_SIZE
+#define MICROROS_HEAP_SIZE ((size_t)12288)
+#endif
+
+/* Allocate the memory for the micro-ROS heap. */
+static uint8_t ucHeap[ MICROROS_HEAP_SIZE ];
 
 /* Define the linked list structure.  This is used to link free blocks in order
 of their memory address. */
@@ -351,7 +355,7 @@ static void prvHeapInit( void )
 BlockLink_t *pxFirstFreeBlock;
 uint8_t *pucAlignedHeap;
 size_t uxAddress;
-size_t xTotalHeapSize = configTOTAL_HEAP_SIZE;
+size_t xTotalHeapSize = MICROROS_HEAP_SIZE;
 
 	/* Ensure the heap starts on a correctly aligned boundary. */
 	uxAddress = ( size_t ) ucHeap;
