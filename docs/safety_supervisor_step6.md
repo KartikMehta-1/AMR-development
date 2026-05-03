@@ -128,4 +128,4 @@ baseline_result: PASS
 
 ## Next Step
 
-Step 7 should validate controlled intervention during low-speed motion. Start with a short teleop movement and inject one condition at a time. Keep auto re-enable disabled until manual recovery has been proven repeatedly.
+Step 7 is documented in `docs/safety_supervisor_step7.md`. It validates intervention during real low-speed wheel output using a synthetic ROS-level STM fault-mask burst, followed by manual recovery and a post-recovery baseline probe.
