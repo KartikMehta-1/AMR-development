@@ -159,4 +159,4 @@ baseline_result: PASS
 
 ## Next Step
 
-Step 8 should move from synthetic ROS-level injection toward real safety sources one at a time. Start with a controlled STM-reported condition that does not require emergency physical handling, and keep manual recovery until repeated tests are stable.
+Step 8 is documented in `docs/safety_supervisor_step8.md`. It validates a real motor-driver power-cut fault during commanded motion and verifies manual recovery after STM latches stall faults.
