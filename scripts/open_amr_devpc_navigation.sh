@@ -16,6 +16,7 @@ REMOTE_REPO="${AMR_REMOTE_REPO:-$HOME/AMR-development}"
 AGENT_DEV="${AMR_AGENT_DEV:-/dev/ttyACM0}"
 AGENT_BAUD="${AMR_AGENT_BAUD:-460800}"
 PARAMS_PATH_CONTAINER="/workspaces/AMR-development/ros_ws/src/amr_description/config/nav2_params_amr.yaml"
+RVIZ_CONFIG_PATH="${AMR_RVIZ_CONFIG_PATH:-/workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz}"
 START_LIDAR="${AMR_START_LIDAR:-true}"
 START_CAMERA="${AMR_START_CAMERA:-false}"
 START_LINK_WATCHDOG="${AMR_START_LINK_WATCHDOG:-true}"
@@ -26,6 +27,10 @@ JETSON_CONTROLLERS_TIMEOUT_SEC="${AMR_JETSON_CONTROLLERS_TIMEOUT_SEC:-45}"
 STM_AUTO_RESET="${AMR_STM_AUTO_RESET:-true}"
 SAFETY_ENFORCE="${AMR_SAFETY_ENFORCE:-false}"
 SAFETY_REQUIRE_AMCL="${AMR_SAFETY_REQUIRE_AMCL:-false}"
+VOICE_MODE="${AMR_VOICE_MODE:-text}"
+VOICE_DEVICE="${AMR_VOICE_DEVICE:-auto}"
+VOICE_ASR_EXTRA_ARGS="${AMR_VOICE_ASR_EXTRA_ARGS:-}"
+GRAPH_MONITOR_PERIOD="${AMR_GRAPH_MONITOR_PERIOD:-3.0}"
 
 usage() {
   cat >&2 <<'EOF'
@@ -37,6 +42,12 @@ Examples:
   ./scripts/open_amr_devpc_navigation.sh my_new_map.yaml
   ./scripts/open_amr_devpc_navigation.sh /workspaces/AMR-development/ros_ws/maps/my_new_map.yaml
 
+Optional environment:
+  AMR_RVIZ_CONFIG_PATH=/workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
+  AMR_VOICE_MODE=text|asr|both|off
+  AMR_VOICE_DEVICE=auto
+  AMR_GRAPH_MONITOR_PERIOD=3.0
+
 This starts:
   - Jetson hardware stack (amr_foxy)
   - Jetson ST-LINK reset of the STM after startup
@@ -47,6 +58,7 @@ This starts:
   - safety_supervisor and live safety status pane
   - a mission command shell for mission_cli actions
   - keyboard teleop for fallback checks
+  - typed and/or microphone voice command panes, depending on AMR_VOICE_MODE
 EOF
   exit 1
 }
@@ -93,6 +105,14 @@ require_cmd ssh
 
 [[ $# -ge 1 ]] || usage
 resolve_map_paths "$1"
+
+case "${VOICE_MODE}" in
+  text|asr|both|off) ;;
+  *)
+    echo "Invalid AMR_VOICE_MODE='${VOICE_MODE}'. Expected text, asr, both, or off." >&2
+    exit 1
+    ;;
+esac
 
 check_jetson_workspace_namespace() {
   ssh "${JETSON_HOST}" bash -s -- "${REMOTE_REPO}" <<'EOF'
@@ -365,24 +385,32 @@ if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
   fi
 fi
 
-tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_NAME}" -n navigation \
-  "$(container_cmd "source /opt/ros/foxy/setup.bash; export LIBGL_ALWAYS_SOFTWARE=1; rviz2 -d /workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz")"
-tmux set-option -t "${SESSION_NAME}" mouse on
-tmux set-option -t "${SESSION_NAME}" history-limit 50000
-
-rviz_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
 build_ready_file="/tmp/amr_nav_colcon_ready"
 localization_ready_file="/tmp/amr_nav_localization_ready"
 wait_for_build="while [ ! -f ${build_ready_file} ]; do sleep 1; done"
 wait_for_localization="while [ ! -f ${localization_ready_file} ]; do echo 'Waiting for AMCL localization to become ready...'; sleep 2; done"
 wait_for_mission_services="until ros2 service list | grep -qx /amr_missions/state && ros2 service list | grep -qx /amr_missions/go_to && ros2 service list | grep -qx /amr_missions/cancel; do sleep 1; done"
+
+tmux new-session -d -x "${SESSION_WIDTH}" -y "${SESSION_HEIGHT}" -s "${SESSION_NAME}" -n navigation \
+  "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; echo Mission shell ready.; echo 'Click panes to switch focus, or use Ctrl-b then arrow keys.'; echo 'Switch windows with Ctrl-b n / Ctrl-b p, or Ctrl-b 0/1/2.'; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")"
+tmux set-option -t "${SESSION_NAME}" mouse on
+tmux set-option -t "${SESSION_NAME}" history-limit 50000
+tmux set-window-option -t "${SESSION_NAME}:navigation" pane-border-status top
+tmux set-window-option -t "${SESSION_NAME}:navigation" pane-border-format ' #{pane_index}: #{pane_title} '
+
+mission_shell_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" '#{pane_id}')"
+tmux select-pane -t "${mission_shell_pane}" -T "Mission Shell"
 nav_runtime_cmd="source /opt/ros/foxy/setup.bash; \
 rm -f ${localization_ready_file}; \
-cleanup() { [ -n \"\${scan_filter_pid:-}\" ] && kill \"\${scan_filter_pid}\" 2>/dev/null || true; [ -n \"\${nav2_pid:-}\" ] && kill \"\${nav2_pid}\" 2>/dev/null || true; }; \
+cleanup() { [ -n \"\${scan_filter_pid:-}\" ] && kill \"\${scan_filter_pid}\" 2>/dev/null || true; [ -n \"\${nav2_pid:-}\" ] && kill \"\${nav2_pid}\" 2>/dev/null || true; [ -n \"\${rviz_pid:-}\" ] && kill \"\${rviz_pid}\" 2>/dev/null || true; }; \
 trap cleanup EXIT INT TERM; \
 python3 /workspaces/AMR-development/scripts/amr_scan_sanitizer.py & \
 scan_filter_pid=\$!; \
 echo 'Starting full Nav2 bringup. Set the initial pose in RViz with 2D Pose Estimate.'; \
+echo 'Starting RViz in the background. RViz logs: /tmp/amr_rviz.log'; \
+export LIBGL_ALWAYS_SOFTWARE=1; \
+rviz2 -d ${RVIZ_CONFIG_PATH} >/tmp/amr_rviz.log 2>&1 & \
+rviz_pid=\$!; \
 ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false autostart:=true map:=${MAP_PATH_CONTAINER} params_file:=${PARAMS_PATH_CONTAINER} cmd_vel_topic:=/diff_drive_controller/cmd_vel_unstamped odom_topic:=/odom & \
 nav2_pid=\$!; \
 echo 'Waiting for fresh AMCL pose and map->odom before enabling mission commands...'; \
@@ -394,18 +422,57 @@ fi; \
 touch ${localization_ready_file}; \
 echo 'AMCL localization is fresh; mission commands are enabled.'; \
 wait \${nav2_pid}"
-nav_pane="$(tmux split-window -h -p 40 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "${nav_runtime_cmd}")")"
-teleop_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
+nav_pane="$(tmux split-window -h -p 45 -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "${nav_runtime_cmd}")")"
+tmux select-pane -t "${nav_pane}" -T "Nav2 + AMCL"
+teleop_pane="$(tmux split-window -v -p 35 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
+tmux select-pane -t "${teleop_pane}" -T "Teleop"
 select_build_packages="build_packages='amr_missions_msgs amr_missions'; [ -f src/amr_safety/package.xml ] && build_packages=\"\${build_packages} amr_safety\"; [ -f src/amr_voice/package.xml ] && build_packages=\"\${build_packages} amr_voice\""
-mission_server_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${rviz_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; ros2 run amr_missions mission_server")")"
-mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ros2 topic echo /amr_missions/status")")"
-safety_args="-p odom_topic:=/odom -p enforce:=${SAFETY_ENFORCE} -p require_amcl:=${SAFETY_REQUIRE_AMCL} -p auto_reenable_when_safe:=false"
-safety_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${teleop_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then echo 'Starting safety_supervisor with enforce=${SAFETY_ENFORCE}, require_amcl=${SAFETY_REQUIRE_AMCL}'; ros2 run amr_safety safety_supervisor --ros-args ${safety_args}; else echo 'amr_safety package not present; safety pane disabled.'; exec bash -i; fi")")"
-safety_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then ros2 topic echo /amr/safety_supervisor/status; else echo 'amr_safety package not present; no safety status topic.'; exec bash -i; fi")")"
-mission_shell_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_status_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; echo Mission shell ready.; echo 'Click panes to switch focus, or use Ctrl-b then arrow keys.'; echo Examples:; echo ros2 run amr_missions mission_cli status; echo ros2 run amr_missions mission_cli go_to kitchen; echo ros2 run amr_missions mission_cli patrol home hall door --return-home home; echo ros2 run amr_missions mission_cli cancel; exec bash -i")")"
-voice_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then ros2 run amr_voice voice_command_node --input-mode text --wake-gated; else echo 'amr_voice package not present; voice pane disabled.'; exec bash -i; fi")")"
-
 tmux select-layout -t "${SESSION_NAME}:navigation" tiled
+
+topics_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n monitor "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_graph_monitor.py --mode topics --period ${GRAPH_MONITOR_PERIOD}")")"
+tmux set-window-option -t "${SESSION_NAME}:monitor" pane-border-status top
+tmux set-window-option -t "${SESSION_NAME}:monitor" pane-border-format ' #{pane_index}: #{pane_title} '
+tmux select-pane -t "${topics_pane}" -T "Topics"
+nodes_pane="$(tmux split-window -h -p 50 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_graph_monitor.py --mode nodes --period ${GRAPH_MONITOR_PERIOD}")")"
+tmux select-pane -t "${nodes_pane}" -T "Nodes"
+mission_server_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; ros2 run amr_missions mission_server")")"
+tmux select-pane -t "${mission_server_pane}" -T "Mission Server"
+mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; python3 /workspaces/AMR-development/scripts/amr_mission_status_monitor.py")")"
+tmux select-pane -t "${mission_status_pane}" -T "Mission Status"
+safety_args="-p odom_topic:=/odom -p enforce:=${SAFETY_ENFORCE} -p require_amcl:=${SAFETY_REQUIRE_AMCL} -p auto_reenable_when_safe:=false"
+safety_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${nodes_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then echo 'Starting safety_supervisor with enforce=${SAFETY_ENFORCE}, require_amcl=${SAFETY_REQUIRE_AMCL}'; ros2 run amr_safety safety_supervisor --ros-args ${safety_args}; else echo 'amr_safety package not present; safety pane disabled.'; exec bash -i; fi")")"
+tmux select-pane -t "${safety_pane}" -T "Safety"
+safety_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_safety_status_monitor.py")")"
+tmux select-pane -t "${safety_status_pane}" -T "Safety Status"
+
+if [[ "${VOICE_MODE}" != "off" ]]; then
+  voice_text_cmd="cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then echo 'Typed voice commands ready. Examples: lovely status, lovely go kitchen, yes, stop'; ros2 run amr_voice voice_command_node --input-mode text --wake-gated; else echo 'amr_voice package not present; typed voice pane disabled.'; exec bash -i; fi"
+  voice_asr_cmd="cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then echo 'Microphone ASR ready. Say: lovely status, lovely go kitchen, yes, stop'; ros2 run amr_voice voice_asr_node --device ${VOICE_DEVICE} ${VOICE_ASR_EXTRA_ARGS}; status=\$?; echo; echo \"voice_asr_node exited with status \${status}. Check microphone device/model setup if ASR did not start.\"; exec bash -i; else echo 'amr_voice package not present; ASR pane disabled.'; exec bash -i; fi"
+  case "${VOICE_MODE}" in
+    text)
+      voice_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n voice "$(container_cmd "${voice_text_cmd}")")"
+      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-status top
+      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-format ' #{pane_index}: #{pane_title} '
+      tmux select-pane -t "${voice_pane}" -T "Voice Text"
+      ;;
+    asr)
+      voice_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n voice "$(container_cmd "${voice_asr_cmd}")")"
+      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-status top
+      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-format ' #{pane_index}: #{pane_title} '
+      tmux select-pane -t "${voice_pane}" -T "Voice ASR"
+      ;;
+    both)
+      voice_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n voice "$(container_cmd "${voice_text_cmd}")")"
+      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-status top
+      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-format ' #{pane_index}: #{pane_title} '
+      tmux select-pane -t "${voice_pane}" -T "Voice Text"
+      voice_asr_pane="$(tmux split-window -h -p 50 -P -F '#{pane_id}' -t "${voice_pane}" "$(container_cmd "${voice_asr_cmd}")")"
+      tmux select-pane -t "${voice_asr_pane}" -T "Voice ASR"
+      ;;
+  esac
+fi
+
+tmux select-window -t "${SESSION_NAME}:navigation"
 tmux select-pane -t "${mission_shell_pane}"
 
 exec tmux attach -t "${SESSION_NAME}"

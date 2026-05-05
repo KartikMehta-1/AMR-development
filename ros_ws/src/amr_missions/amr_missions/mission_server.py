@@ -87,6 +87,7 @@ class MissionServer(Node):
         self._active_goal_handle = None
         self._mission_state = MissionRuntimeState()
         self._publish_status()
+        self.create_timer(1.0, self._publish_status, callback_group=self._callback_group)
 
     @property
     def places(self) -> Dict[str, NamedPlace]:
@@ -163,11 +164,9 @@ class MissionServer(Node):
 
     def _clear_active_mission(self) -> None:
         with self._lock:
-            last_detail = self._mission_state.detail
             self._mission_thread = None
             self._active_goal_handle = None
             self._cancel_requested.clear()
-            self._mission_state = MissionRuntimeState(detail=last_detail)
         self._publish_status()
 
     def _ensure_server(self) -> bool:

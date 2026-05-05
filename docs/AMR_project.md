@@ -1,7 +1,7 @@
-# Kartik's AMR Project Tracker (42 Weeks)
+# Kartik's AMR Project Tracker (48 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-05-03  
+**Last Updated:** 2026-05-04
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ## Week-by-Week Plan (canonical view)
@@ -49,6 +49,12 @@
 | 40 | Custom Motor Driver / Production Prep | Planned | Begin custom H-bridge integration plan (DRV87xx + MOSFETs) and EMC/ESD prep; outline 4-layer stack, grounds, TVS/CMC, test points, panelization; plan pilot build. | 2026-08-06 | TBD |
 | 41 | Voice I/O Expansion (On-Robot) | Planned | Move voice input/output fully onto the robot; add wake-word, noise suppression, and command queue; integrate mission status feedback; verify latency and reliability on the Jetson Orin NX. | 2026-08-13 | TBD |
 | 42 | Conversational TTS/Dialogue + Safety Guards | Planned | Add TTS responses, multi-turn clarification, and dialogue manager/LLM; explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails on the Orin-based stack. | 2026-08-20 | TBD |
+| 43 | Productization Scope Freeze | Planned | Freeze one product-like showcase workflow: fixed-place indoor delivery/navigation with human load/unload. Define what is in scope, what is explicitly out of scope, known limitations, demo route, operator workflow, and acceptance criteria. Do not add broad autonomy features unless they improve this workflow. | 2026-08-27 | TBD |
+| 44 | Repo Productization Baseline | Planned | Add top-level `README.md`, `Makefile`, `.env.example`, structured docs index, and cleanup plan for generated artifacts/placeholders. Convert `useful commands.md` into documented one-command workflows. Separate dev, ops, diagnostics, calibration, and hardware-acceptance scripts. | 2026-09-03 | TBD |
+| 45 | Automated Test Foundation | Planned | Add unit tests for `amr_voice` parser, mission config loading, mission request validation, and safety-supervisor health evaluation. Add `colcon test` workflow locally. Start with software-only tests that do not need hardware. | 2026-09-10 | TBD |
+| 46 | CI/CD Foundation | Planned | Add GitHub Actions or equivalent CI that runs formatting/lint checks, Python unit tests, ROS package build, and selected launch/config smoke checks on every PR/branch. CI should block regressions before hardware testing; CD remains limited to tagged Docker/image/release artifacts until deployment is safer. | 2026-09-17 | TBD |
+| 47 | Hardware Acceptance & Reliability Report | Planned | Turn baseline probes into a repeatable hardware acceptance suite: idle, motion, post-motion, localization readiness, fault decode, safety recovery, and mission success criteria. Run 20+ repeated delivery/navigation missions and summarize success rate, faults, localization jumps, recovery time, and known limitations. | 2026-09-24 | TBD |
+| 48 | Product-Grade Demo Package | Planned | Produce a polished productization case study: operator demo, deployment guide, safety case, acceptance-test report, architecture diagram, BOM/cost estimate, release tag, and demo video. Present the AMR as a product-grade indoor delivery platform showcase, not a general-purpose robot claim. | 2026-10-01 | TBD |
 
 > Canonical view rule: If the table and task board ever conflict, the table wins for schedule; task board wins for day-to-day details.
 
@@ -56,7 +62,7 @@
 
 ## Status Summary
 - Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); one-shot Jetson+dev-PC bring-up scripts now include STM reset through ST-LINK/OpenOCD; the mission layer now runs as a persistent dev-PC-side runtime on top of Nav2 with typed status/state and integrated tmux panes; SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
-- Progress: 22/42 weeks complete (~52%) (plan is now being executed iteratively vs. strictly week-by-week).
+- Progress: 22/48 weeks complete (~46%) (plan is now being executed iteratively vs. strictly week-by-week, with Weeks 43-48 reserved for productization maturity).
 - Recent:
   - Reflashed `STM_Firmware_AMR_v2`, restored STM32 micro-ROS connectivity, and revalidated live `/amr/*` topics on the Jetson bring-up path.
   - Re-checked wheel encoders on live `/amr/wheel_state`, corrected left/right motor-channel wiring, and fixed wheel direction polarity so individual left/right wheel commands now actuate the intended side.
@@ -89,13 +95,17 @@
   - Keep place-based navigation and mission services as the execution backend for voice commands (`go home`, `go kitchen`, `go hall`, `stop`, `status`).
   - Keep EKF/localization improvement as the next navigation-quality track; the 2026-05-03 mission validation still showed multiple large AMCL pose steps during motion even though STM comms, wheel state, odom, scan, and safety supervision stayed healthy.
   - Keep proximity sensors planned, but do not start proximity bring-up until the current voice-command branch has a usable MVP.
+- Productization Direction:
+  - Use this AMR as a productization case study: show how a prototype robotics workbench becomes a repeatable, testable, operator-friendly indoor delivery/navigation platform.
+  - Product-grade does not mean certified or mass-manufactured yet. For this project phase it means: one-command build/run paths, clean documentation, automated tests, CI, explicit safety behavior, repeatable hardware acceptance, operator-facing workflow, release tags, and known limitations.
+  - Keep the productized showcase narrow: fixed-place indoor delivery/navigation with human load/unload. Manipulation, VLA/VLM autonomy, custom PCB, and general-purpose robot behavior stay as longer-term R&D unless a validated workflow demands them.
 - Control Architecture Direction:
   - Yes, moving toward cascaded control makes sense: inner current/torque limiting (or current loop if feasible) + outer speed loop is the standard industrial structure and will reduce slip/launch transients once current sensing is reliable.
 - Next Focus:
   - Close the loop on traction/launch transients (feedforward + ramp + slip) using current + filtered odom; validate longer battery-powered Nav2 runs with EKF enabled.
   - Promote place-based navigation into a robust mission layer that no longer depends on shell-only workflows.
   - Once the Jetson Orin NX arrives, move on-robot perception, semantic autonomy, and manipulator runtime there.
-- Timeline: Flexible (now a 42-week plan with extensions). Prioritize firmware + ROS; custom PCB is low priority/optional.
+- Timeline: Flexible (now a 48-week plan with extensions). Prioritize firmware + ROS reliability, then productization discipline; custom PCB is low priority/optional unless required for a pilot or repeatable demo.
 
 ## Calendar Baseline (Week Alignment)
 - Week 1 start: 2025-10-17.
@@ -104,6 +114,103 @@
   - Firmware Branching: v1 (bench, L298N + small encoder) is now frozen; all new work proceeds in v2 (Cytron MDD20A + post-gearbox encoder).
 
 Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">In Progress</span>, Partial, Planned, Blocked
+
+---
+
+## Productization Track
+
+The AMR will be used as a productization showcase, not only an R&D platform. The objective is to demonstrate the engineering discipline needed to turn a working robot into something another engineer/operator can build, test, run, debug, and evaluate.
+
+### Productization Goal
+
+Productize one narrow scenario first:
+
+```text
+Indoor fixed-place delivery/navigation robot:
+- map a known indoor environment
+- define named places
+- send the robot to a selected place
+- human loads/unloads payload
+- robot reports status and returns home
+- logs mission result
+- exposes clear safety/recovery behavior
+```
+
+This avoids claiming a general-purpose robot too early while still producing a strong product-grade demo.
+
+### What Product-Grade Means For This Repo
+
+- Clear top-level `README.md`: current capability, hardware assumptions, build/run/test instructions, known limitations.
+- One-command workflows: `make build`, `make test`, `make nav`, `make safety-baseline`, `make hardware-check` or equivalent scripts.
+- Automated software tests for deterministic logic: voice parser, mission config loading, mission validation, safety health-state logic.
+- CI checks on every branch/PR: build, tests, lint/static checks, package metadata, and smoke checks that do not require hardware.
+- Hardware acceptance suite: repeatable idle/motion/post-motion probes, mission success criteria, safety recovery checks, and saved reports.
+- Deployment docs: Jetson/dev-PC setup, map creation, place calibration, startup, shutdown, log collection, recovery.
+- Safety case: hazards, mitigations, current limitations, operator responsibilities, and what is not certified.
+- Release discipline: tag stable demo states, record test results, keep generated logs/build artifacts out of source.
+
+### Productization Guardrails
+
+- Do not add new autonomy features unless they strengthen the fixed-place delivery/navigation showcase.
+- Keep dual-arm manipulation as a future capability until navigation, safety, logging, and operator workflow are repeatable.
+- Treat every recurring manual command as a candidate for a script, Make target, or documented operator procedure.
+- Treat every hardware validation as a future acceptance test with pass/fail criteria.
+- Document limitations honestly. Known limitations increase credibility when they are measured and bounded.
+
+## CI/CD Notes
+
+CI/CD means Continuous Integration and Continuous Delivery/Deployment.
+
+### Continuous Integration
+
+CI is the habit of checking every code change automatically before it reaches the main working branch. In this AMR project, CI should answer:
+
+```text
+Did this change break the ROS workspace build?
+Did parser/mission/safety logic still pass tests?
+Are launch/config files still valid enough for smoke checks?
+Did package metadata or dependencies regress?
+```
+
+CI is needed because robotics systems have many layers: firmware, ROS packages, launch files, YAML configs, Docker images, scripts, maps, and hardware assumptions. A small change to a topic name, QoS profile, service timeout, or YAML key can silently break a real robot. CI catches the software-side mistakes before risking hardware time.
+
+Initial CI for this repo should be software-only:
+
+1. Checkout the repo.
+2. Install/build the ROS dependencies or use the existing Docker image.
+3. Run `colcon build`.
+4. Run `colcon test`.
+5. Run Python unit tests for deterministic packages.
+6. Run lightweight lint/static checks.
+7. Optionally run launch/config smoke checks that do not require Jetson, STM32, LiDAR, or motors.
+
+Hardware-in-the-loop tests come later because they require the physical robot and operator supervision.
+
+### Continuous Delivery
+
+CD means producing a repeatable release artifact after CI passes. For this AMR, early CD should mean:
+
+- tagged Docker images for dev-PC/Jetson runtimes
+- versioned release notes
+- packaged config profiles
+- saved acceptance-test reports
+- release tags such as `v0.1.0-navigation-demo` or `v0.2.0-productized-delivery-demo`
+
+This is safer than automatic deployment. The robot should not auto-update and run on hardware just because code was pushed.
+
+### Continuous Deployment
+
+Continuous Deployment is when passing changes are automatically deployed to production. For this AMR, that should be avoided until the platform has strong rollback, remote supervision, safety gates, and field maturity. Physical robots can damage hardware or create safety risks, so deployment should stay manual and deliberate for now.
+
+### CI/CD Roadmap For AMR
+
+- Phase 1: Add local tests and `make test`.
+- Phase 2: Add CI for unit tests and `colcon build`.
+- Phase 3: Add launch/config smoke checks.
+- Phase 4: Add Docker image build checks.
+- Phase 5: Add tagged release artifacts and release notes.
+- Phase 6: Add hardware acceptance reports, still manually triggered.
+- Phase 7: Consider supervised deployment/update flow only after rollback and safety procedures are mature.
 
 ---
 
@@ -126,6 +233,7 @@ Legend: <span style="color: green">Done</span>, <span style="color: goldenrod">I
 ---
 
 ## Project Log
+- 2026-05-04: Added a productization track to the canonical AMR roadmap. The AMR will be treated as a productization case study for a narrow fixed-place indoor delivery/navigation workflow, with repo maturity milestones for README/Makefile cleanup, automated tests, CI/CD foundation, hardware acceptance, reliability reporting, safety case, deployment docs, and a product-grade demo package. Added CI/CD notes explaining why CI is needed for robotics, how it should start as software-only checks, and why automatic deployment to physical robots should remain manual/supervised until rollback and safety procedures are mature.
 - 2026-05-03: Hardened the Voice Command MVP for no-speaker operation. Voice motion commands now refuse to proceed until `map -> odom` localization is available, `/amr_voice/feedback` publishes operator-facing text for future TTS, and `scripts/open_amr_voice_asr.sh` launches laptop-mic ASR with the correct workspace setup.
 - 2026-05-03: Started Voice Command MVP Step 3. Added `voice_asr_node`, a laptop-microphone Vosk ASR node that publishes `/amr_voice/transcript` and `/amr_voice/partial_transcript`, supports device listing and dry-run mode, and feeds final transcripts through the existing wake-gated mission command handler.
 - 2026-05-03: Started Voice Command MVP Step 4. Motion commands now require an explicit `yes` confirmation before calling mission services, while `stop` / `cancel` still bypass confirmation so safety stops are never blocked. Added rejection handling with `no` / `cancel that` and documented the ASR confirmation flow.
