@@ -11,20 +11,28 @@ cd ~/AMR-development
 AMR_SAFETY_ENFORCE=true ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
+Start the full robot workflow with microphone ASR enabled:
+
+```bash
+cd ~/AMR-development
+./scripts/open_amr_devpc_full.sh my_new_map
+```
+
 This starts:
 - Jetson hardware stack in `amr_foxy`
 - STM reset over ST-LINK/OpenOCD
 - dev-PC container `amr_devpc`
-- RViz
+- RViz with `ros_ws/src/amr_description/config/amr.rviz`
 - Nav2 localization/navigation
 - mission server/status panes
 - safety supervisor/status panes
 - teleop fallback pane
+- voice command pane: typed text by default, microphone ASR in the full launcher
 
 After RViz opens:
 - Set the AMR pose with `2D Pose Estimate`.
 - Wait for the Nav2 pane to report that AMCL localization is ready.
-- Then use mission commands.
+- Then use mission commands or voice commands.
 
 Map arguments:
 
@@ -32,6 +40,68 @@ Map arguments:
 ./scripts/open_amr_devpc_navigation.sh my_new_map
 ./scripts/open_amr_devpc_navigation.sh my_new_map.yaml
 ./scripts/open_amr_devpc_navigation.sh /workspaces/AMR-development/ros_ws/maps/my_new_map.yaml
+```
+
+Use a different RViz config for the one-shot navigation launcher:
+
+```bash
+AMR_RVIZ_CONFIG_PATH=/workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz \
+  ./scripts/open_amr_devpc_navigation.sh my_new_map
+```
+
+Voice modes for the navigation launcher:
+
+```bash
+AMR_VOICE_MODE=text ./scripts/open_amr_devpc_navigation.sh my_new_map
+AMR_VOICE_MODE=asr ./scripts/open_amr_devpc_navigation.sh my_new_map
+AMR_VOICE_MODE=both ./scripts/open_amr_devpc_navigation.sh my_new_map
+AMR_VOICE_MODE=off ./scripts/open_amr_devpc_navigation.sh my_new_map
+```
+
+ASR uses the laptop microphone through `/dev/snd`. Override the microphone when needed:
+
+```bash
+AMR_VOICE_MODE=asr AMR_VOICE_DEVICE=auto ./scripts/open_amr_devpc_navigation.sh my_new_map
+AMR_VOICE_MODE=asr AMR_VOICE_DEVICE=8 ./scripts/open_amr_devpc_navigation.sh my_new_map
+AMR_VOICE_ASR_EXTRA_ARGS="--log-audio-level --log-partials" \
+  ./scripts/open_amr_devpc_full.sh my_new_map
+```
+
+The launcher creates two or three tmux windows, depending on voice mode. Each pane has a title in the top border. RViz starts as a GUI from the Nav2 pane, not as a separate tmux window; RViz logs are written inside the container at `/tmp/amr_rviz.log`.
+
+Window `0:navigation` is selected after launch:
+- `Nav2 + AMCL`: launches Nav2, AMCL, and waits for fresh localization before enabling missions.
+- `Mission Shell`: interactive shell for `mission_cli`; this pane is selected after launch.
+- `Teleop`: keyboard fallback driving on `/diff_drive_controller/cmd_vel_unstamped`.
+
+Window `1:monitor`:
+- `Topics`: ROS graph topic list with publisher and subscriber counts. It refreshes every 3 seconds by default.
+- `Nodes`: ROS graph node list with publisher and subscriber counts. It refreshes every 3 seconds by default.
+- `Mission Server`: builds mission packages and runs `mission_server`.
+- `Mission Status`: clean live mission summary with elapsed time and warnings for navigation that looks stuck, idle, or stale.
+- `Safety`: runs `safety_supervisor`.
+- `Safety Status`: clean live summary of safety health, intervention reasons, STM fault bits, comm state, stale topics, and odom speed.
+
+Window `2:voice`:
+- `Voice Text` and/or `Voice ASR`, depending on `AMR_VOICE_MODE`.
+- Say `lovely status`, `lovely go kitchen`, then `yes` to confirm motion. `stop` works without the wake word.
+
+Tune graph monitor refresh rate if needed:
+
+```bash
+AMR_GRAPH_MONITOR_PERIOD=5.0 ./scripts/open_amr_devpc_full.sh my_new_map
+```
+
+The topic/node counts come from ROS graph metadata, not from `topic echo` or `topic hz`, so the default refresh is lightweight.
+
+Switch panes by clicking, or use `Ctrl-b` then an arrow key. Switch windows with `Ctrl-b n`, `Ctrl-b p`, or `Ctrl-b 0/1/2`.
+
+For direct ROS launch usage, RViz is also available from the Nav2 navigation launch file:
+
+```bash
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/nav2_navigation.launch.py \
+  use_rviz:=true \
+  rviz_config:=/workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
 ```
 
 ## 2. Mission Commands
@@ -82,6 +152,96 @@ Watch structured mission status:
 
 ```bash
 ros2 topic echo /amr_missions/status
+```
+
+Watch voice feedback text, which is also the future TTS input:
+
+```bash
+ros2 topic echo /amr_voice/feedback
+```
+
+Text command interface:
+
+```bash
+ros2 run amr_voice voice_text_cli
+```
+
+Wake-gated text command interface:
+
+```bash
+ros2 run amr_voice voice_text_cli --wake-gated
+```
+
+Example typed commands:
+
+```text
+lovely go kitchen
+lovely
+go hall
+return home
+stop
+status
+list places
+```
+
+In wake-gated mode, `lovely` opens a short listening window for the next command. `stop` / `cancel` is still accepted without the wake word.
+Motion commands now require confirmation by default. After `lovely go kitchen`, say or type `yes` to start the mission, or `no` to discard it. Use `--no-confirm-motion` only for controlled testing.
+Motion commands also require AMCL localization by default. Set RViz `2D Pose Estimate` first; use `--no-require-localization` only for controlled parser/service testing.
+
+One-shot dry run, useful before enabling motion:
+
+```bash
+ros2 run amr_voice voice_text_cli --wake-gated --dry-run --command "lovely go to the kitchen"
+```
+
+Laptop microphone ASR setup:
+
+```bash
+mkdir -p /workspaces/AMR-development/models
+cd /workspaces/AMR-development/models
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+```
+
+List microphone devices:
+
+```bash
+ros2 run amr_voice voice_asr_node --list-devices
+```
+
+Run ASR in dry-run mode:
+
+```bash
+ros2 run amr_voice voice_asr_node --dry-run
+```
+
+Run ASR against mission commands:
+
+```bash
+ros2 run amr_voice voice_asr_node
+```
+
+One-command ASR launcher from the laptop host:
+
+```bash
+./scripts/open_amr_voice_asr.sh
+```
+
+Pass debug flags or an alternate device when needed:
+
+```bash
+./scripts/open_amr_voice_asr.sh --log-audio-level --log-partials
+./scripts/open_amr_voice_asr.sh 8 --dry-run --log-audio-level
+```
+
+If recognition becomes poor after a container or laptop audio restart, rerun `ros2 run amr_voice voice_asr_node --list-devices`. The node defaults to `--device auto`, which prefers the digital mic input-only device with a 16 kHz default rate (`hw:1,7`, often index `9` on this laptop); avoid HDMI output-only devices and the silent headset/analog input path.
+
+ASR motion-command flow:
+
+```text
+lovely
+go to kitchen
+yes
 ```
 
 Current named places:
@@ -238,7 +398,17 @@ cd ~/AMR-development
 ./scripts/open_amr_devpc_slam.sh
 ```
 
-Save map from inside `amr_devpc`:
+For a full-house map, set the output prefix before launch so the map-save pane prints the right command:
+
+```bash
+cd ~/AMR-development
+AMR_MAP_SAVE_PREFIX=/workspaces/AMR-development/ros_ws/maps/full_house_map \
+  ./scripts/open_amr_devpc_slam.sh
+```
+
+Drive slowly with the teleop pane. Revisit already-mapped areas to close loops before saving.
+
+Save map from inside `amr_devpc` or from the map-save pane:
 
 ```bash
 docker exec -it amr_devpc /entrypoint.sh bash
@@ -246,8 +416,21 @@ source /workspaces/AMR-development/ros_ws/install/setup.bash
 
 ros2 run nav2_map_server map_saver_cli \
   -t /map \
-  -f /workspaces/AMR-development/ros_ws/maps/my_new_map \
+  -f /workspaces/AMR-development/ros_ws/maps/full_house_map \
   --ros-args -p save_map_timeout:=10000
+```
+
+After saving the map, tag house areas by adding/updating entries in:
+
+```text
+ros_ws/src/amr_missions/config/places.yaml
+```
+
+Use RViz `Publish Point` or the robot pose in RViz to choose `x`, `y`, and `yaw` values in the `map` frame, then validate each tag with:
+
+```bash
+ros2 run amr_missions mission_cli list
+ros2 run amr_missions mission_cli go_to <place_name>
 ```
 
 ## 8. Hardware-Only Bringup
