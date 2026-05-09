@@ -163,4 +163,4 @@ safety_state: ENABLED
 
 ## Next Step
 
-Step 9 is documented in `docs/safety_supervisor_step9.md`. It adds and validates an explicit supervisor reset service so latched intervention state can be cleared after the fault source is gone, without restarting the supervisor and without auto-enabling STM.
+Step 9 is documented in `docs/safety/safety_supervisor_step9.md`. It adds and validates an explicit supervisor reset service so latched intervention state can be cleared after the fault source is gone, without restarting the supervisor and without auto-enabling STM.

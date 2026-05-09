@@ -75,7 +75,7 @@ Allowed only when the robot/ROS runtime is expected to be running, but these too
 
 Examples:
 
-- `ros2 topic echo /amr/safety_state --once`
+- `ros2 topic echo /amr_stm/safety_state --once`
 - Inspect `/amr_missions/status`.
 - Check whether `map -> odom` exists.
 
@@ -217,4 +217,3 @@ A human operator can request a supervised hardware action, but the agent should 
 - what checks failed or were skipped
 - what physical risk remains
 - what command will be run
-

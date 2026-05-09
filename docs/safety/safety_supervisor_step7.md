@@ -159,4 +159,4 @@ baseline_result: PASS
 
 ## Next Step
 
-Step 8 is documented in `docs/safety_supervisor_step8.md`. It validates a real motor-driver power-cut fault during commanded motion and verifies manual recovery after STM latches stall faults.
+Step 8 is documented in `docs/safety/safety_supervisor_step8.md`. It validates a real motor-driver power-cut fault during commanded motion and verifies manual recovery after STM latches stall faults.

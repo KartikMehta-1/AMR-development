@@ -97,7 +97,7 @@ Step 4 does not auto-recover. After intervention:
 1. Capture `/amr/safety_supervisor/status`.
 2. Capture and decode STM fault state if present.
 3. Fix the physical or communication cause.
-4. Follow `docs/safety_fault_recovery.md`.
+4. Follow `docs/safety/safety_fault_recovery.md`.
 5. Manually re-enable STM only after the baseline probe is healthy.
 
 ## Non-Hardware Enforcement Test

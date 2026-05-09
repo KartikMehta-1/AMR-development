@@ -51,9 +51,9 @@ Legend: Done (âœ“), In Progress (â—), Partial (â—’), Planned (â—‹), Blocked (â–
 ---
 
 ## Detailed Tasks
-The granular task board has been moved to docs/AMR_firmware_tasks.md to keep this file focused on high-level goals and the weekly schedule.
+The granular task board has been moved to docs/project/AMR_firmware_tasks.tmp to keep this file focused on high-level goals and the weekly schedule.
 
-Status: See the “Status Summary” above and task-by-task statuses in docs/AMR_firmware_tasks.md.
+Status: See the “Status Summary” above and task-by-task statuses in docs/project/AMR_firmware_tasks.tmp.
 
 ---
 

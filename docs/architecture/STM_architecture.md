@@ -2,14 +2,14 @@
 
 Owner: Kartik Mehta  
 Status: In progress - dual-motor speed PI with ramp; current used for protection; micro-ROS client active on USART2 with wheel-command + enable/estop/clear subscribers and wheel-state + diagnostic publishers.  
-Last Updated: 2026-04-28
+Last Updated: 2026-05-09
 
 ## Current Implementation Snapshot
 - Control loop: TIM4 at 100 Hz; speed PI per wheel; duty ramp; differential-drive mapping from left/right wheel command topics; command staleness timeout (500 ms).
 - Sensing: encoders TIM3 (left, 16-bit) / TIM2 (right, 32-bit) with RPM LPF; ADC1 CH8/11 current sense (ACS758) with scaling and LPF.
-- Faults: overcurrent, stall, encoder timeout, ADC stuck detection; fault mask latched in ControlState and cleared via /amr/clear_fault when faults/estop are inactive.
-- micro-ROS: USART2 custom transport over the STM32 ST-LINK virtual COM path; subscribers are `/amr/wheel_cmd_left`, `/amr/wheel_cmd_right`, `/amr/enable`, `/amr/estop`, `/amr/clear_fault`; publishers are `/amr/wheel_state`, `/amr/fault_mask`, `/amr/safety_state`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/current_left_ma`, `/amr/current_right_ma`, `/amr/current_left_adc`, `/amr/current_right_adc`, `/amr/current_left_zero`, `/amr/current_right_zero` at 20 Hz.
-- PWM/Dir: TIM1 CH1/CH2 at 20 kHz; DIR PB4/PB5; duty capped at 30%.
+- Faults: overcurrent, stall, encoder timeout, ADC stuck detection; fault mask latched in ControlState and cleared via `/amr_stm/clear_fault` when faults/estop are inactive.
+- micro-ROS: USART2 custom transport over the STM32 ST-LINK virtual COM path; subscribers are `/amr_stm/wheel_cmd_left`, `/amr_stm/wheel_cmd_right`, `/amr_stm/enable`, `/amr_stm/estop`, `/amr_stm/clear_fault`; publishers are `/amr_stm/wheel_state`, `/amr_stm/fault_mask`, `/amr_stm/safety_state`, `/amr_stm/duty_cmd_left`, `/amr_stm/duty_cmd_right`, `/amr_stm/current_left_ma`, `/amr_stm/current_right_ma`, `/amr_stm/current_left_adc`, `/amr_stm/current_right_adc`, `/amr_stm/current_left_zero`, `/amr_stm/current_right_zero`, and `/amr_stm/ros_diag`. Critical topics publish every 100 ms; current/ADC diagnostics publish every 500 ms.
+- PWM/Dir: TIM1 CH1/CH2 at 20 kHz; DIR PB4/PB5; duty capped at 70%.
 - Legacy UART telemetry: disabled to avoid contention with micro-ROS on USART2.
 - Diagnostics policy: all current, duty, fault, and safety topics are intentionally still published. Some are mainly used by bench/monitor tools, but none are being pruned from firmware yet.
 
@@ -25,16 +25,16 @@ Last Updated: 2026-04-28
 - Encoders: TIM3 (left PA6/PA7), TIM2 (right PA0/PA1).
 - ADC: ADC1 CH8 (PB0), CH11 (PC1) for ACS758 current.
 - UART: USART2 460800 bps for micro-ROS custom transport.
-- E-stop sense: PC7 (active low, pull-up).
+- E-stop sense: PB10 (active low, pull-up).
 
 ## Parameters (current values in app_config.h)
-- Geometry: TRACK_WIDTH_M=0.386, WHEEL_RADIUS_M=0.0615.
+- Geometry: TRACK_WIDTH_M=0.381, WHEEL_RADIUS_M=0.0615.
 - Control loop: CONTROL_LOOP_HZ=100; CMD_TIMEOUT_MS=500.
-- Duty limits: MOTOR_DUTY_MAX=0.30; DUTY_RAMP_RATE_PER_SEC=0.2.
-- Command ramping: V_CMD_RAMP_RATE_MPS=0.20, W_CMD_RAMP_RATE_RAD=0.80.
-- RPM filtering: RPM_LPF_ALPHA=0.85; RPM_SPIKE_LIMIT_RPM=500.
-- Speed PI: KP/KI per wheel; output clamped to +/-0.30; I clamped to +/-0.20.
-- Current sense: divider ratio 0.667; LPF alpha 0.1; zero tracking enabled.
+- Duty limits: MOTOR_DUTY_MAX=0.70; DUTY_RAMP_RATE_PER_SEC=1.0.
+- Command ramping: CMD_RAMP_ENABLE=0; V_CMD_RAMP_RATE_MPS=0.8 and W_CMD_RAMP_RATE_RAD=0.8 are configured for firmware command ramping if it is re-enabled.
+- RPM filtering: RPM_LPF_ALPHA=0.05; RPM_SPIKE_LIMIT_RPM=500.
+- Speed PI: KP/KI per wheel; output clamped to +/-0.90; I clamped to +/-2.0.
+- Current sense: divider ratio 0.667; LPF alpha 0.1; zero tracking disabled with CURR_ZERO_TRACK_ALPHA=0.0 during current-sensor calibration.
 - Fault thresholds:
   - OC: 1500 mA with 50 ms dwell.
   - Stall: duty >= 8% and |RPM| <= 0.5 for 500 ms.
@@ -44,11 +44,11 @@ Last Updated: 2026-04-28
 ## Loop Rates and Ownership
 - Inner/current tick: reserved (1-5 kHz) tied to PWM/ADC (deferred until higher-accuracy sensor).
 - Outer/speed loop: 100 Hz via TIM4. Computes RPM, runs speed PI, updates duty targets.
-- micro-ROS publish: 20 Hz (osDelay 50 ms in ros_pub_task).
+- micro-ROS publish: critical STM topics every 100 ms; current/ADC diagnostic topics and `/amr_stm/ros_diag` every 500 ms.
 - ISRs/ticks own control math; RTOS tasks move messages/buffers.
 
 ## Data Flow (single-loop)
-1) Receive `/amr/wheel_cmd_left` and `/amr/wheel_cmd_right` via micro-ROS; store latest with timestamps.
+1) Receive `/amr_stm/wheel_cmd_left` and `/amr_stm/wheel_cmd_right` via micro-ROS; store latest with timestamps.
 2) Outer tick: read left/right wheel commands, clamp, apply ramp, run speed PI -> duty targets.
 3) Apply duty via TIM1 CH1/CH2 (DIR set per polarity).
 4) Sense: encoder deltas -> RPM (LPF); currents -> filtered for protection.
@@ -61,7 +61,7 @@ Last Updated: 2026-04-28
 graph TD
   subgraph Inputs
     CMD[Speed Setpoint]
-    ESTOP[Estop GPIO PC7]
+    ESTOP[Estop GPIO PB10]
   end
 
   subgraph Sensing
@@ -129,7 +129,7 @@ graph LR
   EST_W[Compute wheel velocity LPF]
   CTRL_W[Speed PI -> duty target]
   APPLY[Update PWM duty with ramp/cap]
-  TEL[micro-ROS publish at 20 Hz]
+  TEL[micro-ROS publish 100 ms critical / 500 ms diagnostics]
 
   TICK_W --> READ_W
   READ_W --> EST_W
@@ -189,21 +189,22 @@ flowchart TD
   W_L --> PWM1
   W_R --> PWM2
 
-  RPUB -->|/amr/wheel_cmd_left right| MODE
+  RPUB -->|/amr_stm/wheel_cmd_left right| MODE
   VEL --> RPUB
   SAFE --> RPUB
 ```
 
 Current topics
-- Sub: /amr/wheel_cmd_left, /amr/wheel_cmd_right (std_msgs/Float32, wheel angular velocity command in rad/s as currently consumed by the firmware).
-- Sub: /amr/enable (std_msgs/Bool), /amr/estop (std_msgs/Bool), /amr/clear_fault (std_msgs/Empty).
-- Pub: /amr/duty_cmd_left, /amr/duty_cmd_right (std_msgs/Float32, duty percent).
-- Pub: /amr/fault_mask (std_msgs/Int32).
-- Pub: /amr/wheel_state (sensor_msgs/JointState).
-- Pub: /amr/safety_state (std_msgs/UInt32).
-- Pub: /amr/current_left_ma, /amr/current_right_ma (std_msgs/Int32, filtered current estimate in mA).
-- Pub: /amr/current_left_adc, /amr/current_right_adc (std_msgs/UInt32, raw ADC sample).
-- Pub: /amr/current_left_zero, /amr/current_right_zero (std_msgs/UInt32, zero-offset estimate).
+- Sub: `/amr_stm/wheel_cmd_left`, `/amr_stm/wheel_cmd_right` (std_msgs/Float32, wheel angular velocity command in rad/s as currently consumed by the firmware).
+- Sub: `/amr_stm/enable` (std_msgs/Bool), `/amr_stm/estop` (std_msgs/Bool), `/amr_stm/clear_fault` (std_msgs/Empty).
+- Pub: `/amr_stm/duty_cmd_left`, `/amr_stm/duty_cmd_right` (std_msgs/Float32, duty percent).
+- Pub: `/amr_stm/fault_mask` (std_msgs/Int32).
+- Pub: `/amr_stm/wheel_state` (sensor_msgs/JointState).
+- Pub: `/amr_stm/safety_state` (std_msgs/UInt32).
+- Pub: `/amr_stm/current_left_ma`, `/amr_stm/current_right_ma` (std_msgs/Int32, filtered current estimate in mA).
+- Pub: `/amr_stm/current_left_adc`, `/amr_stm/current_right_adc` (std_msgs/UInt32, raw ADC sample).
+- Pub: `/amr_stm/current_left_zero`, `/amr_stm/current_right_zero` (std_msgs/UInt32, zero-offset estimate).
+- Pub: `/amr_stm/ros_diag` (std_msgs/UInt32MultiArray, micro-ROS diagnostics).
 
 ## Fault Mask (current bits)
 - Bit 0: CTRL_FAULT_ESTOP

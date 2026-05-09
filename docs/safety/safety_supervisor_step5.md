@@ -88,4 +88,4 @@ intervention_count: 0
 
 ## Next Step
 
-Step 6 is documented in `docs/safety_supervisor_step6.md`. It validates a stationary enforced intervention using a deliberately stale odom input, followed by manual recovery and a post-recovery baseline probe.
+Step 6 is documented in `docs/safety/safety_supervisor_step6.md`. It validates a stationary enforced intervention using a deliberately stale odom input, followed by manual recovery and a post-recovery baseline probe.

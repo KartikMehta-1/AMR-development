@@ -1,0 +1,17 @@
+# Obsolete: AMR Firmware Tasks
+
+Status: Obsolete as of 2026-05-09.
+
+This file used to track early STM32 motor-control bring-up tasks. It is intentionally retained only as a pointer so old references do not imply an active task board.
+
+Current sources of truth:
+
+- `docs/project/AMR_project.md` for the canonical project roadmap.
+- `docs/architecture/STM_architecture.md` for STM32 firmware architecture.
+- `docs/hardware/pin_map.yaml` for pin assignments.
+- `docs/safety/safety_fault_recovery.md` for fault decode and recovery behavior.
+- `STM/STM_Firmware_AMR_v2/` for current firmware source.
+
+Historical note:
+
+- The old contents referenced several legacy planning docs that are not part of the current repo structure. Those references were removed during the docs reorganization.

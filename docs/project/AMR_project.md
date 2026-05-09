@@ -1,7 +1,7 @@
 # Kartik's AMR Project Tracker (48 Weeks)
 **File:** `AMR_project.md`  
 **Owner:** Kartik Mehta  
-**Last Updated:** 2026-05-04
+**Last Updated:** 2026-05-09
 **Scope:** STM32 low-level control, Jetson Nano high-level compute, motor drivers, current sensing (ACS758 x2), FreeRTOS, ROS2 + Gazebo, SLAM & Navigation; eventual goal is a fully autonomous AMR with dual SO-101 manipulators that can pick/place small objects using state-of-the-art VLA/VLM/LLM-based policies.
 
 ## Week-by-Week Plan (canonical view)
@@ -17,15 +17,15 @@
 | 8 | Firmware v2: Dual-Motor Duty Bring-Up | <span style="color: green">Done</span> | M2 PWM/DIR (PA9/PB5) wired; duty sweep validated both channels; E-stop cut and GND common confirmed. | 2025-12-25 | 2025-11-03 |
 | 9 | Firmware v2: Encoder Integration | <span style="color: green">Done</span> | Encoders online both wheels (TIM3 PA6/PA7 left, TIM2 PA0/PA1 right); UART RPM confirmed; direction corrected; TODO: add external 3.3 V pull-ups or software invert flag. | 2026-01-01 | 2025-11-16 |
 | 10 | Firmware v2: Current Telemetry + Calibration | <span style="color: green">Done</span> | ADC1 scan IN8/IN11; zero-offset + scaling; filtered current stream; current reserved for logging/faults (not in loop). | 2026-01-08 | 2025-11-25 |
-| 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: green">Done</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); hardware e-stop GPIO input + debounce wired into ControlState (latched fault); step/ramp plots + docs (docs/pid.md); gains/feedforward tuned. | 2026-01-15 | 2025-12-07 |
+| 11 | Firmware v2: Control (Single-Loop PID) | <span style="color: green">Done</span> | TIM4 @100 Hz control loop; cmd_vel staleness timeout; speed PI + duty ramp; fault monitor (overcurrent/stall/encoder timeout/ADC stuck); hardware e-stop GPIO input + debounce wired into ControlState (latched fault); step/ramp plots captured during bring-up; gains/feedforward tuned. | 2026-01-15 | 2025-12-07 |
 | 12 | Firmware v2: Cascaded Control + Comparison | <span style="color: green">Done</span> | Cascaded-current-control investigation is complete for this AMR phase. Higher-accuracy current-sensor integration was brought up for protection/diagnostics, ROS current + ADC/zero topics were added, current polarity/sign were corrected, and the OC threshold was returned to `1500 mA`. Decision: keep production motion on the validated single-loop speed controller for now; use current sensing for protection/logging and revisit true cascaded current control only if traction or torque-control requirements justify it. | 2026-01-22 | 2026-05-03 |
 | 13 | Firmware v2: Differential Drive | <span style="color: green">Done</span> | Map (v, I%) -> wheel RPM; ramp/coordination added; saturation with curvature-preserving scaling; basic 5 s test sequence running. | 2026-01-29 | 2025-12-09 |
 | 14 | Firmware v2: Proximity Sensors HW | Planned | Proximity sensor integration is planned but not active in the current sprint: mounts, wiring, pull-ups/protection, pin-map updates, and bench power-budget checks remain queued. | 2026-02-05 | TBD |
 | 15 | Firmware v2: Proximity Drivers | Planned | Driver bring-up is planned after the hardware path is settled: implement sampling scheduler, debouncing/filtering, fault detection, and telemetry exposure for the proximity sensors. | 2026-02-12 | TBD |
-| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: green">Done</span> | USART2 custom transport; `/cmd_vel` sub; `/amr/wheel_rpm_left`, `/amr/wheel_rpm_right`, `/amr/duty_cmd_left`, `/amr/duty_cmd_right`, `/amr/fault_mask`, `/amr/wheel_state`, `/amr/safety_state` pubs; `/amr/enable`, `/amr/estop`, `/amr/clear_fault` wired; fault clear verified; fault mask documented; legacy UART telemetry disabled. | 2026-02-19 | 2026-01-04 |
+| 16 | Firmware v2: micro-ROS Bring-up | <span style="color: green">Done</span> | USART2 custom transport; `/amr_stm/wheel_cmd_left` and `/amr_stm/wheel_cmd_right` subs; `/amr_stm/wheel_state`, duty, current, ADC/zero, fault, safety, and `/amr_stm/ros_diag` pubs; `/amr_stm/enable`, `/amr_stm/estop`, `/amr_stm/clear_fault` wired; fault clear verified; fault mask documented; legacy UART telemetry disabled. | 2026-02-19 | 2026-01-04 |
 | 17 | Mechanical Assembly + Enclosure | <span style="color: green">Done</span> | Main AMR mechanical assembly completed, including SO-101 integration provisions. Follow-on hardware refinements now move into manipulation/perception work: wrist camera mount on SO-101, AMR depth sensor repositioning for better gripping, and any final cable routing/strain relief cleanup. | 2026-02-26 | 2026-04-17 |
 | 18 | Dev PC Env & Tooling | <span style="color: green">Done</span> | Dockerized Foxy drivers + devpc image built (micro-ROS agent + YDLidar + RViz2/Gazebo); RViz2 config for `/scan` (best_effort QoS) working; ROS2 workspace build verified; Docker buildx workflow and Jetson builds validated; passwordless SSH to Jetson set up. | 2026-03-05 | 2026-01-18 |
-| 19 | Jetson Nano ROS2/JetPack | <span style="color: green">Done</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr/*` and `/scan` verified; depth camera running with `/camera/*` and `/points` validated; RViz2 visualization from dev PC confirmed; DDS interface bound to Wi-Fi; depth stream stabilized with lower profiles. | 2026-03-12 | 2026-01-24 |
+| 19 | Jetson Nano ROS2/JetPack | <span style="color: green">Done</span> | Jetson container build complete; micro-ROS agent + teleop + YDLidar running; `/amr_stm/*` and `/scan` verified; depth camera running with `/camera/*` and `/points` validated; RViz2 visualization from dev PC confirmed; DDS interface bound to Wi-Fi; depth stream stabilized with lower profiles. | 2026-03-12 | 2026-01-24 |
 | 20 | Wireless PC<->Nano | <span style="color: green">Done</span> | Wi-Fi adapter online and Jetson reachable over home network; passwordless SSH working; DHCP reservation set; ping avg ~10 ms and iperf ~15 Mbps verified; NTP sync active. Optional VPN (WireGuard/Tailscale) remains a nice-to-have. | 2026-03-19 | 2026-01-20 |
 | 21 | URDF Modeling (Base AMR) | <span style="color: green">Done</span> | Base URDF/Xacro created with chassis, wheels, and sensor frames (LiDAR + depth cam); LiDAR/camera split into `lidar.xacro` + `camera.xacro`; D455 camera plugin added; base_footprint restored; wheel offsets corrected; caster clearance tuned; Gazebo launch defaults to `obstacles.world`; ros2_control config added; URDF validated in sim. | 2026-03-26 | 2026-02-11 |
 | 22 | Navigation & Mapping Bring-up | <span style="color: green">Done</span> | Mapping: slam_toolbox (2D LiDAR) running on real LiDAR; map save/load + posegraph serialization verified. Localization: AMCL on saved map working. Navigation: Nav2 bring-up working with RViz goals; costmaps wired to ros2_control topics. EKF fusion + odom improvements are tracked separately. | 2026-04-02 | 2026-02-11 |
@@ -50,8 +50,8 @@
 | 41 | Voice I/O Expansion (On-Robot) | Planned | Move voice input/output fully onto the robot; add wake-word, noise suppression, and command queue; integrate mission status feedback; verify latency and reliability on the Jetson Orin NX. | 2026-08-13 | TBD |
 | 42 | Conversational TTS/Dialogue + Safety Guards | Planned | Add TTS responses, multi-turn clarification, and dialogue manager/LLM; explicit confirmations; test end-to-end voice -> nav/pick/place with guardrails on the Orin-based stack. | 2026-08-20 | TBD |
 | 43 | Productization Scope Freeze | Planned | Freeze one product-like showcase workflow: fixed-place indoor delivery/navigation with human load/unload. Define what is in scope, what is explicitly out of scope, known limitations, demo route, operator workflow, and acceptance criteria. Do not add broad autonomy features unless they improve this workflow. | 2026-08-27 | TBD |
-| 44 | Repo Productization Baseline | Planned | Add top-level `README.md`, `Makefile`, `.env.example`, structured docs index, and cleanup plan for generated artifacts/placeholders. Convert `useful commands.md` into documented one-command workflows. Separate dev, ops, diagnostics, calibration, and hardware-acceptance scripts. | 2026-09-03 | TBD |
-| 45 | Automated Test Foundation | Planned | Add unit tests for `amr_voice` parser, mission config loading, mission request validation, and safety-supervisor health evaluation. Add `colcon test` workflow locally. Start with software-only tests that do not need hardware. | 2026-09-10 | TBD |
+| 44 | Repo Productization Baseline | Planned | Add top-level `README.md`, `Makefile`, `.env.example`, structured docs index, and cleanup plan for generated artifacts/placeholders. Convert `useful commands.md` into documented one-command workflows. Separate dev, ops, diagnostics, calibration, and hardware-acceptance scripts. Add the agentic robotics documentation baseline: agent roles, tool permissions, MCP wrapper plan, repo-local skills plan, and interaction examples. | 2026-09-03 | TBD |
+| 45 | Automated Test Foundation | Planned | Add unit tests for `amr_voice` parser, mission config loading, mission request validation, and safety-supervisor health evaluation. Add `colcon test` workflow locally. Start with software-only tests that do not need hardware. Add the first agent harness scenarios for unsafe motion refusal, localization-not-ready denial, safety-fault denial, and manipulator plan-before-execute behavior. | 2026-09-10 | TBD |
 | 46 | CI/CD Foundation | Planned | Add GitHub Actions or equivalent CI that runs formatting/lint checks, Python unit tests, ROS package build, and selected launch/config smoke checks on every PR/branch. CI should block regressions before hardware testing; CD remains limited to tagged Docker/image/release artifacts until deployment is safer. | 2026-09-17 | TBD |
 | 47 | Hardware Acceptance & Reliability Report | Planned | Turn baseline probes into a repeatable hardware acceptance suite: idle, motion, post-motion, localization readiness, fault decode, safety recovery, and mission success criteria. Run 20+ repeated delivery/navigation missions and summarize success rate, faults, localization jumps, recovery time, and known limitations. | 2026-09-24 | TBD |
 | 48 | Product-Grade Demo Package | Planned | Produce a polished productization case study: operator demo, deployment guide, safety case, acceptance-test report, architecture diagram, BOM/cost estimate, release tag, and demo video. Present the AMR as a product-grade indoor delivery platform showcase, not a general-purpose robot claim. | 2026-10-01 | TBD |
@@ -64,9 +64,9 @@
 - Overall: SLAM + localization + navigation pipeline is working on real hardware (slam_toolbox map -> saved map -> AMCL -> Nav2 goals); one-shot Jetson+dev-PC bring-up scripts now include STM reset through ST-LINK/OpenOCD; the mission layer now runs as a persistent dev-PC-side runtime on top of Nav2 with typed status/state and integrated tmux panes; SO-101 integration and an initial ACT manipulation demo are now validated; low-level control/odometry calibration is still in active tuning.
 - Progress: 22/48 weeks complete (~46%) (plan is now being executed iteratively vs. strictly week-by-week, with Weeks 43-48 reserved for productization maturity).
 - Recent:
-  - Reflashed `STM_Firmware_AMR_v2`, restored STM32 micro-ROS connectivity, and revalidated live `/amr/*` topics on the Jetson bring-up path.
-  - Re-checked wheel encoders on live `/amr/wheel_state`, corrected left/right motor-channel wiring, and fixed wheel direction polarity so individual left/right wheel commands now actuate the intended side.
-  - Added ROS current topics (`/amr/current_left_ma`, `/amr/current_right_ma`) plus raw ADC/zero topics for bench bring-up and calibration of the replacement current sensors.
+  - Reflashed `STM_Firmware_AMR_v2`, restored STM32 micro-ROS connectivity, and revalidated live `/amr_stm/*` topics on the Jetson bring-up path.
+  - Re-checked wheel encoders on live `/amr_stm/wheel_state`, corrected left/right motor-channel wiring, and fixed wheel direction polarity so individual left/right wheel commands now actuate the intended side.
+  - Added ROS current topics (`/amr_stm/current_left_ma`, `/amr_stm/current_right_ma`) plus raw ADC/zero topics for bench bring-up and calibration of the replacement current sensors.
   - Completed current-sensor integration bring-up: current sign/polarity was corrected, idle offset reduced to a small near-zero bias, load current now rises in the expected direction on both sides, and current settles back near zero when the wheels stop.
   - Restored the overcurrent threshold to `1500 mA` after calibration and confirmed the firmware-side current path is now usable for protection testing.
   - Added a one-command Jetson bench monitor workflow for wheel state, duty, current, safety state, and fault tracking during bring-up.
@@ -99,6 +99,12 @@
   - Use this AMR as a productization case study: show how a prototype robotics workbench becomes a repeatable, testable, operator-friendly indoor delivery/navigation platform.
   - Product-grade does not mean certified or mass-manufactured yet. For this project phase it means: one-command build/run paths, clean documentation, automated tests, CI, explicit safety behavior, repeatable hardware acceptance, operator-facing workflow, release tags, and known limitations.
   - Keep the productized showcase narrow: fixed-place indoor delivery/navigation with human load/unload. Manipulation, VLA/VLM autonomy, custom PCB, and general-purpose robot behavior stay as longer-term R&D unless a validated workflow demands them.
+- Agentic Tooling Direction:
+  - Treat MCP servers, skills, subagents, and harnesses as an operator/developer interface above the existing ROS and firmware stack, not as a replacement control system.
+  - Include engineering agents for test running, code review, STM firmware development, ROS 2 stack development, voice/interface development, and perception/image-processing development.
+  - Start with read-only and diagnostic capabilities: robot health, safety state, mission state, named places, localization status, logs, and fault summaries.
+  - Add motion-causing tools only after tool permissions, safety prechecks, explicit confirmation, and audit logging are documented.
+  - Keep agent tools intent-level (`go_to_named_place`, `cancel_mission`, `plan_arm_named_pose`) and block raw motor/PWM/unguarded joint-control pathways.
 - Control Architecture Direction:
   - Yes, moving toward cascaded control makes sense: inner current/torque limiting (or current loop if feasible) + outer speed loop is the standard industrial structure and will reduce slip/launch transients once current sensing is reliable.
 - Next Focus:
@@ -145,9 +151,26 @@ This avoids claiming a general-purpose robot too early while still producing a s
 - Automated software tests for deterministic logic: voice parser, mission config loading, mission validation, safety health-state logic.
 - CI checks on every branch/PR: build, tests, lint/static checks, package metadata, and smoke checks that do not require hardware.
 - Hardware acceptance suite: repeatable idle/motion/post-motion probes, mission success criteria, safety recovery checks, and saved reports.
+- Agent-facing interface discipline: documented agent roles, project skills, MCP tool permission levels, structured outputs, and harness scenarios for unsafe requests.
 - Deployment docs: Jetson/dev-PC setup, map creation, place calibration, startup, shutdown, log collection, recovery.
 - Safety case: hazards, mitigations, current limitations, operator responsibilities, and what is not certified.
 - Release discipline: tag stable demo states, record test results, keep generated logs/build artifacts out of source.
+
+### Agentic Tooling Track
+
+Detailed task breakdown: `docs/agentic/agentic_robotics_roadmap.md`.
+
+This track introduces MCP servers, subagent roles, repo-local skills, and agent harnesses as structured tooling around the AMR. The first milestone is documentation and read-only diagnostics. Motion-causing tools must remain behind explicit confirmation, safety-state checks, localization checks, and audit logging.
+
+Planned work:
+
+- Define the eight target agent roles: test runner, code review, STM firmware, ROS core/hardware interface, navigation/mission/safety, manipulator/MoveIt, perception/calibration, and voice/operator interface.
+- Create repo-local skills for `amr-nav-debug`, `amr-safety-recovery`, `amr-mission-runtime`, `amr-manipulator-bringup`, and `amr-hardware-acceptance`.
+- Create engineering skills for `amr-test-runner`, `amr-code-review`, `amr-stm-firmware-dev`, `amr-ros-core-hardware-dev`, `amr-navigation-mission-safety-dev`, `amr-voice-dev`, and `amr-perception-dev`.
+- Design an `amr_robot` MCP server that exposes typed, structured tools around existing ROS services/actions and logs.
+- Start MCP with read-only tools: robot health, safety state, mission status, named places, localization status, Nav2 status, and latest fault summary.
+- Add confirmation-required MCP tools only after guardrails are documented: go to named place, cancel mission, recovery checks, and later approved arm plans.
+- Add `agent_harness` scenarios that verify unsafe requests are denied, safe requests follow the mission/safety stack, code changes run focused tests, reviews catch safety regressions, firmware contract changes are documented, and stale perception data cannot trigger manipulation.
 
 ### Productization Guardrails
 
@@ -225,14 +248,23 @@ Continuous Deployment is when passing changes are automatically deployed to prod
 
 
 ## Architecture Docs
-- ROS stack diagrams: `docs/ros_stack_diagrams.md`
-- STM32 firmware architecture: `docs/STM_architecture.md`
-- Jetson Nano runtime architecture: `docs/jetson_architecture.md`
+- ROS stack diagrams: `docs/architecture/ros_stack_diagrams.md`
+- STM32 firmware architecture: `docs/architecture/STM_architecture.md`
+- Jetson Nano runtime architecture: `docs/architecture/jetson_architecture.md`
+- Agentic robotics roadmap: `docs/agentic/agentic_robotics_roadmap.md`
+- Agent tool permissions: `docs/agentic/agent_tool_permissions.md`
+- Agent interaction examples: `docs/agentic/agent_interaction_examples.md`
+- Initial agent role contracts: `docs/agentic/roles/`
 
 
 ---
 
 ## Project Log
+- 2026-05-09: Marked `docs/project/AMR_firmware_tasks.tmp` obsolete and removed its stale legacy references to missing planning docs. The canonical firmware/project status now lives in `docs/project/AMR_project.md`, `docs/architecture/STM_architecture.md`, `docs/hardware/pin_map.yaml`, and the current firmware source.
+- 2026-05-09: Created the first two repo-local agent skills: `.codex/skills/amr-code-review/SKILL.md` and `.codex/skills/amr-test-runner/SKILL.md`. These skills reference the detailed role contracts and provide practical workflows, safe command boundaries, subsystem selection guidance, and standardized output formats for review and validation work.
+- 2026-05-09: Refined the agent role structure from a compressed starter set into eight target agents: test runner, code review, STM firmware, ROS core/hardware interface, navigation/mission/safety, manipulator/MoveIt, perception/calibration, and voice/operator interface. Added contracts for the new split while keeping manipulator, perception, and voice contracts intentionally lighter until those subsystems mature.
+- 2026-05-09: Started Phase 1 of the agentic robotics plan by adding the first agent permission model, interaction examples, and role contracts for the test runner, code review, ROS/mission/safety, and STM firmware agents. These documents define allowed commands, blocked commands, required checks, done criteria, failure modes, and escalation rules before skills or MCP tools are implemented.
+- 2026-05-09: Added an agentic robotics roadmap for using MCP servers, subagent roles, repo-local skills, and harness scenarios as a structured operator/developer interface above the existing ROS 2, Nav2, MoveIt2, micro-ROS, and STM32 control stack. Updated the productization roadmap to include agent tool permissions, read-only-first MCP diagnostics, confirmation-required motion tools, engineering agents for test/review/code generation across STM firmware, ROS 2, voice, and perception, and safety-focused harness scenarios.
 - 2026-05-04: Added a productization track to the canonical AMR roadmap. The AMR will be treated as a productization case study for a narrow fixed-place indoor delivery/navigation workflow, with repo maturity milestones for README/Makefile cleanup, automated tests, CI/CD foundation, hardware acceptance, reliability reporting, safety case, deployment docs, and a product-grade demo package. Added CI/CD notes explaining why CI is needed for robotics, how it should start as software-only checks, and why automatic deployment to physical robots should remain manual/supervised until rollback and safety procedures are mature.
 - 2026-05-03: Hardened the Voice Command MVP for no-speaker operation. Voice motion commands now refuse to proceed until `map -> odom` localization is available, `/amr_voice/feedback` publishes operator-facing text for future TTS, and `scripts/open_amr_voice_asr.sh` launches laptop-mic ASR with the correct workspace setup.
 - 2026-05-03: Started Voice Command MVP Step 3. Added `voice_asr_node`, a laptop-microphone Vosk ASR node that publishes `/amr_voice/transcript` and `/amr_voice/partial_transcript`, supports device listing and dry-run mode, and feeds final transcripts through the existing wake-gated mission command handler.
@@ -260,7 +292,7 @@ Continuous Deployment is when passing changes are automatically deployed to prod
 - 2026-01-30: URDF validated in sim; updated Week 21 to focus on sim-vs-real motion alignment; noted ros2_control Docker build reorder + realtime_tools header compatibility work.
 - 2026-01-02: Added LiDAR/depth camera bring-up tasks; expanded navigation/mapping breakdown; marked Weeks 17-18 in progress and noted enclosure prep completion and structural changes underway.
 - 2026-01-01: Added functional hardware e-stop input with debounce + fault latch; tracker updated to reflect the new clear-path safety baseline.
-- 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/STM_architecture.md`; removed merged task/architecture files.
+- 2025-12-22: Integrated mechanical CAD tasks into Week 17; renamed STM architecture doc to `docs/architecture/STM_architecture.md`; removed merged task/architecture files.
 - 2025-12-22: Consolidated firmware tasks into the weekly tracker; merged STM32 architecture docs; added Jetson Nano architecture doc.
 - 2025-12-22: Added Week 17 mechanical assembly + enclosure tasks; shifted schedule by one week.
 - 2025-12-22: micro-ROS bring-up on STM32 (USART2 transport, `/cmd_vel` sub, RPM + fault mask pubs); updated ROS topic list.

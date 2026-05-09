@@ -45,7 +45,7 @@ enforce=false
 auto_reenable_when_safe=false
 ```
 
-Step 4 adds an explicit opt-in enforcement mode with `enforce:=true`; see `docs/safety_supervisor_step4.md`.
+Step 4 adds an explicit opt-in enforcement mode with `enforce:=true`; see `docs/safety/safety_supervisor_step4.md`.
 
 ## Observed Inputs
 

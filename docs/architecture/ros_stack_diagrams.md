@@ -24,8 +24,8 @@ The current real-hardware path in code is different:
 - `teleop_twist_keyboard` and Nav2 publish to `/diff_drive_controller/cmd_vel_unstamped`
 - `diff_drive_controller` converts base motion into left/right wheel velocity commands
 - the `amr_hardware` `ros2_control` plugin publishes:
-  - `/amr/wheel_cmd_left`
-  - `/amr/wheel_cmd_right`
+  - `/amr_stm/wheel_cmd_left`
+  - `/amr_stm/wheel_cmd_right`
 - the STM32 firmware subscribes to those two wheel-command topics
 
 That is the path shown below.
@@ -391,9 +391,9 @@ It does not attempt to enumerate every internal topic, service, or action create
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
 | `/diff_drive_controller/cmd_vel_unstamped` | `teleop_twist_keyboard`, Nav2 controller, Nav2 recoveries | `diff_drive_controller` | `geometry_msgs/Twist` with commanded base linear and angular velocity, mainly `linear.x` and `angular.z` for this differential-drive base |
-| `/amr/wheel_cmd_left` | `amr_hardware` | STM32 firmware via `micro_ros_agent` | `std_msgs/Float32` containing commanded left wheel angular velocity in rad/s |
-| `/amr/wheel_cmd_right` | `amr_hardware` | STM32 firmware via `micro_ros_agent` | `std_msgs/Float32` containing commanded right wheel angular velocity in rad/s |
-| `/amr/wheel_state` | STM32 firmware via `micro_ros_agent` | `amr_hardware` | `sensor_msgs/JointState` with wheel joint names plus wheel position and velocity arrays for left and right wheels |
+| `/amr_stm/wheel_cmd_left` | `amr_hardware` | STM32 firmware via `micro_ros_agent` | `std_msgs/Float32` containing commanded left wheel angular velocity in rad/s |
+| `/amr_stm/wheel_cmd_right` | `amr_hardware` | STM32 firmware via `micro_ros_agent` | `std_msgs/Float32` containing commanded right wheel angular velocity in rad/s |
+| `/amr_stm/wheel_state` | STM32 firmware via `micro_ros_agent` | `amr_hardware`, `amr_link_watchdog` | `sensor_msgs/JointState` with wheel joint names plus wheel position and velocity arrays for left and right wheels |
 | `/joint_states` | `joint_state_broadcaster` | `robot_state_publisher`, RViz | `sensor_msgs/JointState` representing the joint-state view exposed by `ros2_control` for the robot model |
 | `/diff_drive_controller/odom` | `diff_drive_controller` | `slam_toolbox`, `amcl`, Nav2, RViz | `nav_msgs/Odometry` with robot pose and twist in the odometry frame, derived from wheel feedback |
 
@@ -403,19 +403,24 @@ These topics are all still intentionally present in the STM firmware. Some are m
 
 | Topic | Produced by | Consumed by | Contents |
 | --- | --- | --- | --- |
-| `/amr/enable` | operator or helper topic publisher | STM32 firmware | `std_msgs/Bool` command indicating whether motion should be enabled |
-| `/amr/estop` | operator or helper topic publisher | STM32 firmware | `std_msgs/Bool` command indicating software e-stop state |
-| `/amr/clear_fault` | operator or helper topic publisher | STM32 firmware | `std_msgs/Empty` pulse used to request fault reset |
-| `/amr/fault_mask` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Int32` bitmask encoding active or latched faults such as overcurrent, stall, or encoder timeout |
-| `/amr/safety_state` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` state code summarizing enable, idle, fault, or e-stop related controller state |
-| `/amr/duty_cmd_left` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Float32` reporting applied left motor duty percentage |
-| `/amr/duty_cmd_right` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Float32` reporting applied right motor duty percentage |
-| `/amr/current_left_ma` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Int32` left motor current estimate in milliamps |
-| `/amr/current_right_ma` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Int32` right motor current estimate in milliamps |
-| `/amr/current_left_adc` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` raw ADC sample for the left current sensor |
-| `/amr/current_right_adc` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` raw ADC sample for the right current sensor |
-| `/amr/current_left_zero` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` stored or estimated zero-offset value for the left current sensor |
-| `/amr/current_right_zero` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` stored or estimated zero-offset value for the right current sensor |
+| `/amr_stm/enable` | operator or helper topic publisher | STM32 firmware | `std_msgs/Bool` command indicating whether motion should be enabled |
+| `/amr_stm/estop` | operator or helper topic publisher | STM32 firmware | `std_msgs/Bool` command indicating software e-stop state |
+| `/amr_stm/clear_fault` | operator or helper topic publisher | STM32 firmware | `std_msgs/Empty` pulse used to request fault reset |
+| `/amr_stm/fault_mask` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics, safety supervisor | `std_msgs/Int32` bitmask encoding active or latched faults such as overcurrent, stall, or encoder timeout |
+| `/amr_stm/safety_state` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` state code summarizing enable, idle, fault, or e-stop related controller state |
+| `/amr_stm/duty_cmd_left` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Float32` reporting applied left motor duty percentage |
+| `/amr_stm/duty_cmd_right` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Float32` reporting applied right motor duty percentage |
+| `/amr_stm/current_left_ma` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Int32` left motor current estimate in milliamps |
+| `/amr_stm/current_right_ma` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/Int32` right motor current estimate in milliamps |
+| `/amr_stm/current_left_adc` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` raw ADC sample for the left current sensor |
+| `/amr_stm/current_right_adc` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` raw ADC sample for the right current sensor |
+| `/amr_stm/current_left_zero` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` stored or estimated zero-offset value for the left current sensor |
+| `/amr_stm/current_right_zero` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32` stored or estimated zero-offset value for the right current sensor |
+| `/amr_stm/ros_diag` | STM32 firmware via `micro_ros_agent` | operator tools, diagnostics | `std_msgs/UInt32MultiArray` with firmware-side micro-ROS diagnostics |
+| `/amr_stm/comm_ok` | `amr_link_watchdog` | safety supervisor, operator tools, diagnostics | `std_msgs/Bool` indicating that fresh STM wheel-state messages are being received |
+| `/amr_stm/comm_fault` | `amr_link_watchdog` | safety supervisor, operator tools, diagnostics | `std_msgs/Bool` indicating startup timeout or stale STM wheel-state messages |
+| `/amr_stm/comm_fault_mask` | `amr_link_watchdog` | safety supervisor, operator tools, diagnostics | `std_msgs/UInt32` bitmask for STM communication health faults |
+| `/amr_stm/comm_status` | `amr_link_watchdog` | operator tools, diagnostics | `std_msgs/String` status text such as waiting for first wheel state, stale wheel state, or healthy link |
 
 ### 8.3 Perception and mapping topics
 
@@ -516,7 +521,7 @@ This is why you must not run `slam_toolbox` and `amcl` at the same time. They wo
 
 In this repo:
 
-- `diff_drive_controller` computes it from wheel feedback coming from `/amr/wheel_state`
+- `diff_drive_controller` computes it from wheel feedback coming from `/amr_stm/wheel_state`
 - it publishes both the transform and the odometry message on `/diff_drive_controller/odom`
 
 Properties of this transform:
@@ -565,30 +570,32 @@ Started by `hardware.launch.py`:
 - `ros2_control_node`
 - `joint_state_broadcaster`
 - `diff_drive_controller`
+- `amr_link_watchdog`
 
 ### STM32-side micro-ROS topics
 
 Current firmware publishes:
 
-- `/amr/wheel_state`
-- `/amr/fault_mask`
-- `/amr/safety_state`
-- `/amr/duty_cmd_left`
-- `/amr/duty_cmd_right`
-- `/amr/current_left_ma`
-- `/amr/current_right_ma`
-- `/amr/current_left_adc`
-- `/amr/current_right_adc`
-- `/amr/current_left_zero`
-- `/amr/current_right_zero`
+- `/amr_stm/wheel_state`
+- `/amr_stm/fault_mask`
+- `/amr_stm/safety_state`
+- `/amr_stm/duty_cmd_left`
+- `/amr_stm/duty_cmd_right`
+- `/amr_stm/current_left_ma`
+- `/amr_stm/current_right_ma`
+- `/amr_stm/current_left_adc`
+- `/amr_stm/current_right_adc`
+- `/amr_stm/current_left_zero`
+- `/amr_stm/current_right_zero`
+- `/amr_stm/ros_diag`
 
 Current firmware subscribes to:
 
-- `/amr/wheel_cmd_left`
-- `/amr/wheel_cmd_right`
-- `/amr/enable`
-- `/amr/estop`
-- `/amr/clear_fault`
+- `/amr_stm/wheel_cmd_left`
+- `/amr_stm/wheel_cmd_right`
+- `/amr_stm/enable`
+- `/amr_stm/estop`
+- `/amr_stm/clear_fault`
 
 ## 10. Mental Model
 
@@ -596,7 +603,11 @@ The stack is easiest to understand in layers:
 
 1. Sensors and MCU produce raw robot state:
    - `/scan`
-   - `/amr/wheel_state`
+   - `/amr_stm/wheel_state`
+   - `/amr_stm/comm_ok`
+   - `/amr_stm/comm_fault`
+   - `/amr_stm/comm_fault_mask`
+   - `/amr_stm/comm_status`
    - safety and current topics
 2. `ros2_control` turns wheel state into robot motion interfaces:
    - accepts base velocity commands
@@ -617,4 +628,4 @@ The stack is easiest to understand in layers:
 
 For this repo, the practical closed loop is:
 
-`teleop or Nav2 -> /diff_drive_controller/cmd_vel_unstamped -> diff_drive_controller -> amr_hardware -> /amr/wheel_cmd_left/right -> STM32 -> /amr/wheel_state -> amr_hardware -> diff_drive_controller -> /diff_drive_controller/odom -> SLAM or AMCL -> map-aware RViz/Nav2`
+`teleop or Nav2 -> /diff_drive_controller/cmd_vel_unstamped -> diff_drive_controller -> amr_hardware -> /amr_stm/wheel_cmd_left/right -> STM32 -> /amr_stm/wheel_state -> amr_hardware -> diff_drive_controller -> /diff_drive_controller/odom -> SLAM or AMCL -> map-aware RViz/Nav2`

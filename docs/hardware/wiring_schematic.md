@@ -1,6 +1,6 @@
 # AMR Wiring and Power Schematic (Text Overview)
 
-This document captures the practical wiring plan for the AMR project: power distribution, E-stop, and signal interconnects between the STM32 controller, motor driver, encoders, Jetson Nano, and sensors. Pin mapping is authoritative in `docs/pin_map.yaml`.
+This document captures the practical wiring plan for the AMR project: power distribution, E-stop, and signal interconnects between the STM32 controller, motor driver, encoders, Jetson Nano, and sensors. Pin mapping is authoritative in `docs/hardware/pin_map.yaml`.
 
 ---
 
@@ -260,7 +260,7 @@ Hardware
 - Sensor: ACS758 (variant TBD per current range) installed in series with each motor power line (left/right).
 - Supply: 5.0 V recommended; output is ratiometric (~Vcc/2 at 0 A).
 - Output conditioning to STM32 ADC:
-  - Resistor divider: 10 kOhm (top) + 20 kOhm (bottom) -> scales 0-5 V to ~0-3.33 V (see `docs/pin_map.yaml`).
+  - Resistor divider: 10 kOhm (top) + 20 kOhm (bottom) -> scales 0-5 V to ~0-3.33 V (see `docs/hardware/pin_map.yaml`).
   - RC filter: 1 kOhm series + 100 nF to ground after divider (fc ~1.6 kHz) to reduce PWM ripple/EMI.
   - ADC pins: `PB0 / ADC1_IN8` (Left current), `PC1 / ADC1_IN11` (Right current).
   - Sampling: ADC1 with DMA in circular mode for periodic current reads.
@@ -293,7 +293,7 @@ Safety and layout
   - `PC1 / ADC1_IN11` + Right motor current (ACS758)
   - `PA2/PA3` + UART2 TX/RX to Jetson (optional)
   - `PA5` + Status LED
-  - `PC7` + E-stop sense input (active-low, pull-up to 3.3 V)
+  - `PB10` + E-stop sense input (active-low, pull-up to 3.3 V)
 - Motor Driver:
   - Cytron MDD20A terminals: M1 PWM, M1 DIR, M2 PWM, M2 DIR, VM, GND, Motor outputs
 - Encoder: A, B, V+, GND (open-collector outputs with 3.3 V pull-ups)
