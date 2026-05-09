@@ -1,0 +1,54 @@
+id: amr_static_contracts_v1
+description: "Source-only contracts that should hold before agent or hardware workflows rely on the repo."
+contracts:
+  - id: stm_ros_topic_namespace
+    owner_agent: ros_core_hardware_interface_agent
+    skill: amr-ros-core-hardware-dev
+    required_sources:
+      - "STM/STM_Firmware_AMR_v2/Core/Src/main.c"
+      - "ros_ws/src/amr_hardware/src/amr_hardware.cpp"
+      - "ros_ws/src/amr_description/urdf/ros2_control.xacro"
+      - "docs/architecture/STM_architecture.md"
+      - "docs/architecture/ros_stack_diagrams.md"
+    required_patterns:
+      - "/amr_stm/wheel_cmd_left"
+      - "/amr_stm/wheel_cmd_right"
+      - "/amr_stm/wheel_state"
+      - "/amr_stm/fault_mask"
+      - "/amr_stm/safety_state"
+
+  - id: stm_estop_pin
+    owner_agent: stm_firmware_agent
+    skill: amr-stm-firmware-dev
+    required_sources:
+      - "STM/STM_Firmware_AMR_v2/Core/Inc/main.h"
+      - "docs/hardware/pin_map.yaml"
+      - "docs/architecture/STM_architecture.md"
+      - "docs/hardware/wiring_schematic.md"
+    required_patterns:
+      - "PB10"
+      - "ESTOP_Pin GPIO_PIN_10"
+
+  - id: stm_fault_mask_docs
+    owner_agent: stm_firmware_agent
+    skill: amr-stm-firmware-dev
+    required_sources:
+      - "STM/STM_Firmware_AMR_v2/Core/Inc/control_state.h"
+      - "docs/architecture/STM_architecture.md"
+      - "scripts/amr_decode_faults.py"
+    required_patterns:
+      - "CTRL_FAULT_ESTOP"
+      - "CTRL_FAULT_STALL_LEFT"
+      - "CTRL_FAULT_ENC_TIMEOUT_LEFT"
+      - "CTRL_FAULT_ADC_STUCK"
+
+  - id: runtime_no_implicit_hardware_start
+    owner_agent: runtime_environment_agent
+    skill: amr-runtime-environment-dev
+    required_sources:
+      - "docs/agentic/roles/runtime_environment_agent.md"
+      - ".codex/skills/amr-runtime-environment-dev/SKILL.md"
+    required_patterns:
+      - "explicit"
+      - "hardware-facing"
+      - "Jetson Orin NX"

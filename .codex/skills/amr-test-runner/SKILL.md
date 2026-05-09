@@ -31,6 +31,7 @@ Read additional references only when relevant:
    - ROS package builds/tests when the ROS environment is available
    - Python unit tests or syntax/import checks
    - firmware compile checks only when the command is documented and does not flash hardware
+   - agent harness definition and static contract checks
    - static inspection for launch/config/script changes when executable smoke checks are not available
 6. Do not start hardware, motors, Nav2 missions, arm motion, STM reset/enable, or hardware acceptance workflows without explicit supervised confirmation.
 7. Report skipped and not-runnable checks honestly.
@@ -43,6 +44,8 @@ Use these only when applicable and available:
 colcon build --packages-select <package>
 colcon test --packages-select <package>
 python3 -m compileall <path>
+python3 agent_harness/software/validate_harness.py
+python3 agent_harness/software/run_static_contract_checks.py
 ```
 
 For package selection:

@@ -1,0 +1,43 @@
+id: amr_software_test_plan_v1
+description: "Software-only test plan. These checks must not start robot hardware or ROS runtime unless explicitly reclassified."
+checks:
+  - id: harness_definition_validation
+    skill: amr-test-runner
+    command: "python3 agent_harness/software/validate_harness.py"
+    hardware_required: false
+    motion_allowed: false
+
+  - id: static_contract_validation
+    skill: amr-test-runner
+    command: "python3 agent_harness/software/run_static_contract_checks.py"
+    hardware_required: false
+    motion_allowed: false
+
+  - id: python_compile_voice
+    skill: amr-test-runner
+    command: "python3 -m compileall ros_ws/src/amr_voice"
+    hardware_required: false
+    motion_allowed: false
+
+  - id: python_compile_missions_safety_scripts
+    skill: amr-test-runner
+    command: "python3 -m compileall ros_ws/src/amr_missions ros_ws/src/amr_safety scripts"
+    hardware_required: false
+    motion_allowed: false
+
+  - id: ros_selected_build_when_environment_available
+    skill: amr-test-runner
+    command: "colcon build --packages-select amr_missions amr_missions_msgs amr_safety amr_voice"
+    hardware_required: false
+    motion_allowed: false
+    requires_ros_environment: true
+
+blocked_without_explicit_supervision:
+  - "ros2 launch ros_ws/src/amr_description/launch/hardware.launch.py"
+  - "ros2 action send_goal"
+  - "ros2 topic pub /cmd_vel"
+  - "ros2 topic pub /diff_drive_controller/cmd_vel_unstamped"
+  - "ros2 topic pub /amr_stm/enable"
+  - "ros2 service call /amr_stm/clear_fault"
+  - "openocd"
+  - "docker compose up"

@@ -467,35 +467,39 @@ Implemented skills:
 
 Add a harness folder for repeatable tests and agent evaluation scenarios before exposing MCP motion tools. The harness is where agents prove that their recommendations and code changes meet the project safety rules.
 
-Planned layout:
+Initial layout added on 2026-05-09:
 
 ```text
 agent_harness/
   README.md
+  agent_behavior/
+    scenarios/
+      localization_not_ready_blocks_navigation.yaml
+      manipulator_plan_before_execute.yaml
+      perception_stale_frame_rejected.yaml
+      runtime_environment_no_hardware_start.yaml
+      safety_fault_blocks_motion.yaml
+      voice_confirmation_required.yaml
   software/
-    run_unit_tests.sh
-    run_ros_smoke_checks.sh
-    run_firmware_build_check.sh
-  simulation/
-    run_nav2_sim_smoke.sh
-    run_moveit_planning_smoke.sh
+    validate_harness.py
+    run_static_contract_checks.py
+  software_contracts/
+    static_contracts.yaml
+  software_tests/
+    software_test_plan.yaml
   hardware_acceptance/
     README.md
-  scenarios/
-    nav_localization_not_ready.yaml
-    safety_fault_blocks_motion.yaml
-    mission_go_to_place.yaml
-    manipulator_plan_without_execute.yaml
-    voice_confirmation_required.yaml
-    perception_stale_frame_rejected.yaml
+    acceptance_checklist.yaml
+    report_template.md
   reports/
 ```
 
 Harness levels:
 
-- Software harness: parser tests, mission validation, safety health-state logic, launch/config smoke checks.
-- Simulation harness: Gazebo/Nav2 routes and MoveIt planning scenarios.
-- Hardware acceptance harness: supervised checks for idle, motion, localization, mission success, and safety recovery.
+- Agent behavior harness: scenario files that define expected refusals, confirmations, and safe next steps.
+- Software contract harness: source-only checks for topic, pin, fault-mask, docs, skill, and runtime contracts.
+- Software test harness: software-only command plans for parser tests, mission validation, safety health-state logic, launch/config smoke checks, and future firmware compile checks.
+- Hardware acceptance harness: supervised acceptance definitions for idle, motion, localization, mission success, and safety recovery. It starts as checklists and report templates, not an automated hardware runner.
 
 Required safety scenarios:
 

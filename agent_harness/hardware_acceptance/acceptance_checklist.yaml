@@ -1,0 +1,49 @@
+id: amr_hardware_acceptance_v1
+description: "Supervised AMR hardware acceptance levels. Defaults to source-only and read-only checks."
+levels:
+  level_0_source_config:
+    requires_robot: false
+    motion_allowed: false
+    checks:
+      - harness_definition_validation
+      - static_contract_validation
+      - required_docs_exist
+      - required_skills_exist
+      - forbidden_actions_declared
+
+  level_1_read_only_live_robot:
+    requires_robot: true
+    motion_allowed: false
+    requires_explicit_confirmation: true
+    checks:
+      - stm_wheel_state_present_and_fresh
+      - stm_fault_mask_zero
+      - stm_comm_ok
+      - safety_supervisor_publishing
+      - mission_server_ready
+      - localization_status_known
+      - nav2_lifecycle_state_known
+      - no_fault_clear_or_reenable
+
+  level_2_supervised_motion:
+    requires_robot: true
+    motion_allowed: true
+    requires_explicit_confirmation: true
+    checks:
+      - pre_motion_fault_mask_zero
+      - pre_motion_comm_ok
+      - pre_motion_localization_ready
+      - short_named_place_mission
+      - post_motion_fault_mask_zero
+      - post_motion_comm_ok
+      - recovery_if_faulted
+
+blocked_by_default:
+  - "STM flashing"
+  - "STM reset"
+  - "fault clear"
+  - "STM re-enable"
+  - "Nav2 mission"
+  - "raw velocity command"
+  - "arm motion"
+  - "hardware-facing Docker runtime"
