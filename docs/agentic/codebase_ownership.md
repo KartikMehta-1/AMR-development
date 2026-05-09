@@ -68,3 +68,10 @@ This document maps repo areas to the current agent structure. It is a routing ai
 - Hardware-facing commands require explicit user confirmation even if the owning agent allows edits in that area.
 - Archived firmware and workspace folders may be inspected, but should not be treated as source of truth without explicit reclassification.
 - Generated artifacts should not be manually edited unless the task is specifically about artifact management.
+
+## Runtime Validation Policy
+
+- The authoritative AMR ROS environment is containerized.
+- Current Nano/dev PC validation uses the Foxy Docker profile, especially `amr/ros2-foxy-devpc:amd64` for software-only checks.
+- Host ROS installations on the dev PC are not authoritative for AMR validation. If host ROS is used for a quick inspection, report it explicitly and do not treat it as proof that the current robot workflow passes.
+- Orin NX work should use a separate runtime profile, likely Humble in Docker on JetPack 6, and should not silently replace the current Foxy/Nano workflow.

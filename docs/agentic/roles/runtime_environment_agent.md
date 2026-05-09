@@ -4,6 +4,20 @@
 
 Maintain the robot runtime environment used to build, launch, and operate the ROS 2 stack across the dev PC, Jetson Nano, and upcoming Jetson Orin NX. This agent owns containers, Docker workflows, runtime environment documentation, and non-motion bring-up infrastructure.
 
+## Runtime Policy
+
+AMR ROS 2 builds, tests, launches, and validation should use the project Docker profiles by default. Host ROS installations on the dev PC are treated as incidental developer state and must not be used for AMR validation unless the user explicitly asks for a host-ROS check.
+
+Current runtime split:
+
+- Dev PC / laptop: Docker host for repo work, editor tools, Git, SSH, Docker, and buildx. Do not rely on host `/opt/ros/*` for AMR validation.
+- Current Jetson Nano workflow: ROS 2 Foxy in Docker, using the `docker/foxy` image family.
+- Current dev PC software validation for the Nano workflow: `amr/ros2-foxy-devpc:amd64`.
+- Current Jetson Nano runtime image: `amr/ros2-foxy-jetson:arm64`.
+- Upcoming Jetson Orin NX workflow: define a separate Orin profile, likely ROS 2 Humble in Docker on JetPack 6, without reusing Nano/Foxy assumptions silently.
+
+If host ROS is present, for example Humble on the dev PC, the Runtime Environment Agent should call that out as a possible source of false validation results.
+
 ## Owned Areas
 
 - `docker`
@@ -34,6 +48,8 @@ Maintain the robot runtime environment used to build, launch, and operate the RO
 For Docker/runtime changes:
 
 - Confirm which machine profile is affected: dev PC, Jetson Nano, Jetson Orin NX, or shared.
+- Confirm which ROS distribution is authoritative for the profile: Foxy for current Nano/dev PC Docker workflow, Humble only for explicit Orin migration work.
+- Prefer containerized `colcon` checks over host ROS checks. If a host ROS check is run, label it as non-authoritative for the current robot workflow unless explicitly requested.
 - Identify whether the change is build-only, simulation-only, read-only diagnostics, or hardware-facing.
 - Preserve ROS workspace paths, package overlay expectations, and environment setup commands.
 - Document required host devices, network mode, volumes, user/group permissions, and ROS environment variables.

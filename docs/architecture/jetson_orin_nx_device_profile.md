@@ -317,7 +317,9 @@ The Orin is ready for:
 Still pending for AMR migration:
 
 - Build or select an Orin/JetPack 6 container image for ROS 2 / AMR runtime.
-- Decide whether AMR runtime migrates to ROS 2 Humble on Orin, or keeps the existing Foxy split temporarily.
+- Define the Orin runtime as a separate Docker profile, likely ROS 2 Humble in Docker on JetPack 6.
+- Keep the existing Nano/dev PC workflow on Foxy Docker until the migration is explicit and validated.
+- Do not use host ROS on the dev PC as proof of Orin or Nano runtime compatibility.
 - Verify STM32 micro-ROS, LiDAR, RealSense, and SO-101 USB device IDs on Orin.
 - Add Orin-specific launch variables/scripts instead of reusing the Nano host defaults.
 - Install or containerize LeRobot for SO-101 teleoperation.

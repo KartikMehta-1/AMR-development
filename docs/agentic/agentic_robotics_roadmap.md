@@ -460,7 +460,7 @@ Implemented skills:
 
 - `.codex/skills/amr-runtime-environment-dev/SKILL.md`
   - Source files: Dockerfiles, compose files, Jetson runtime docs, Orin NX profile docs, top-level runtime command docs.
-  - Tasks: develop Docker/runtime environment changes while separating build-only, read-only, simulation, and hardware-facing workflows.
+  - Tasks: develop Docker/runtime environment changes while separating build-only, read-only, simulation, and hardware-facing workflows. Use Foxy Docker for the current Nano/dev PC workflow; use Humble only for explicit Orin migration profiles.
   - Done criteria: documented runtime scope, safe command list, and explicit hardware-facing exclusions.
 
 ## Phase 3 - Agent Harness

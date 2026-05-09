@@ -5,7 +5,7 @@ Status: Draft — containerized ROS 2 runtime on L4T 32.7.x with micro-ROS agent
 Last Updated: 2026-01-04
 
 ## Goals
-- Run ROS 2 Humble on Jetson Nano despite Ubuntu 18.04 base by using L4T containers.
+- Run the current AMR ROS 2 Foxy stack on Jetson Nano using L4T containers.
 - Host micro-ROS agent and AMR ROS nodes; provide GPU-accelerated perception where needed.
 - Keep runtime reproducible between dev PC and Jetson via Docker/Compose.
 
@@ -19,6 +19,13 @@ Last Updated: 2026-01-04
 - micro-ROS agent runs in the same container or a separate agent container.
 - Host networking enabled for DDS and XRCE-DDS discovery.
 - Volumes for logs, rosbags, and configs mounted from the host.
+
+## Dev PC Validation Policy
+
+- The dev PC should be treated as a Docker host for the AMR project, not as the authoritative ROS runtime.
+- Current Nano-compatible software validation should run in the Foxy dev PC container, `amr/ros2-foxy-devpc:amd64`.
+- Host ROS installations, including host Humble, may exist for unrelated development but should not be used to validate the current Nano/Foxy robot workflow unless explicitly requested.
+- Orin NX migration work should use a separate container profile, expected to be Humble-based on JetPack 6, and should not change the Nano/Foxy assumptions silently.
 
 ## Hardware Interfaces
 - LiDAR: USB via powered hub.
