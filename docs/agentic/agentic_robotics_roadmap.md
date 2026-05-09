@@ -558,30 +558,25 @@ Done criteria:
 
 Start with a read-mostly MCP server. Do not expose motion tools until the permission model and safety checks are documented.
 
-Planned server layout:
+Initial server layout:
 
 ```text
 mcp_servers/
-  amr_robot/
+  amr_state_inspection/
     README.md
     server.py
-    tools/
-      health.py
-      mission.py
-      safety.py
-      navigation.py
-      manipulation.py
+    smoke_test.py
 ```
 
 Initial read-only tools:
 
-- `get_robot_health()`
-- `get_safety_state()`
-- `get_mission_status()`
-- `list_named_places()`
-- `get_localization_status()`
-- `get_nav2_status()`
-- `get_latest_fault_summary()`
+- `get_robot_health`
+- `get_safety_state`
+- `get_localization_state`
+- `get_mission_state`
+- `list_named_places`
+- `get_stm_diagnostics`
+- `get_navigation_state`
 
 Implementation rule:
 
@@ -594,6 +589,8 @@ Mission server / safety supervisor / Nav2 / MoveIt2
 ```
 
 The MCP server should wrap existing stable ROS services/actions or shared Python client functions. It should not reimplement mission or safety logic.
+
+Initial implementation added on 2026-05-09 as `mcp_servers/amr_state_inspection`. It is a dependency-light stdio MCP server intended to run inside the Foxy Docker ROS environment after the AMR workspace is built and sourced. It must remain read-only.
 
 Done criteria:
 
