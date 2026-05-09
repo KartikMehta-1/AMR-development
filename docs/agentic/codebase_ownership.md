@@ -33,6 +33,7 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `scripts` | Navigation / Mission / Safety Agent | Test Runner Agent | active | Mission, safety, localization, monitor, and bring-up scripts. Hardware-facing scripts require explicit confirmation before running. |
 | `docker` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Dockerfiles and runtime images for dev PC, Jetson Nano, and upcoming Jetson Orin NX. |
 | `docker-compose.slam.yml` | Runtime Environment Agent | Navigation / Mission / Safety Agent | active | Runtime orchestration; do not start hardware-facing services without explicit request. |
+| `mcp_servers` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | MCP servers for agent/tool integration. Read-only state servers may inspect ROS graph state; motion or fault-changing tools require explicit permission and harness coverage first. |
 | `docs/architecture/STM_architecture.md` | STM Firmware Agent | ROS Core / Hardware Interface Agent | active | Firmware architecture and micro-ROS contract docs. |
 | `docs/architecture/ros_stack_diagrams.md` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | ROS graph, topic ownership, TF, and stack wiring. |
 | `docs/architecture/jetson_architecture.md` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Jetson runtime architecture. |
