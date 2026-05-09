@@ -1,5 +1,7 @@
 # ROS 2 Foxy Docker Images
 
+This is the authoritative ROS 2 environment for the current Jetson Nano AMR workflow. Use these containers for AMR Foxy builds, tests, and runtime checks. Do not use host ROS on the dev PC for current AMR validation unless the check is explicitly labeled as host-only/non-authoritative.
+
 This folder defines a shared driver image and two runtime images:
 
 1) `docker/foxy/Dockerfile` builds the **driver base image** with:
@@ -49,7 +51,7 @@ docker buildx build -f docker/foxy/Dockerfile.jetson \
 
 ## Run (example)
 
-Dev PC with RViz2/Gazebo:
+Dev PC with RViz2/Gazebo. This is hardware-facing if USB devices are mounted:
 ```bash
 xhost +local:
 docker run -it --rm --net=host \
@@ -60,6 +62,16 @@ docker run -it --rm --net=host \
   --device=/dev/ttyUSB0 \
   -v /home/kartik/AMR-development/ros_ws:/workspaces/ros_ws \
   amr/ros2-foxy-devpc:amd64
+```
+
+Software-only dev PC validation, with no device mounts and no hardware access:
+
+```bash
+docker run --rm \
+  -v /home/kartik/AMR-development:/workspaces/AMR-development \
+  -w /workspaces/AMR-development/ros_ws \
+  amr/ros2-foxy-devpc:amd64 \
+  bash -lc 'source /opt/ros/foxy/setup.bash && colcon build --merge-install'
 ```
 
 RViz2 (preconfigured LaserScan with best_effort QoS):
