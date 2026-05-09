@@ -17,6 +17,7 @@ Read first:
 Read when relevant:
 
 - `ros_ws/src/amr_hardware`
+- `ros_ws/src/amr_clients`
 - `ros_ws/src/amr_description`
 - `ros_ws/src/amr_missions_msgs`
 - `docs/architecture/STM_architecture.md`

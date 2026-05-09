@@ -27,7 +27,7 @@ checks:
 
   - id: ros_selected_build_when_environment_available
     skill: amr-test-runner
-    command: "colcon build --packages-select amr_missions amr_missions_msgs amr_safety amr_voice"
+    command: "colcon build --packages-select amr_clients amr_missions amr_missions_msgs amr_safety amr_voice"
     hardware_required: false
     motion_allowed: false
     requires_ros_environment: true
