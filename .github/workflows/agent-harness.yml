@@ -1,0 +1,35 @@
+name: Agent Harness
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - add-harness-ci
+
+permissions:
+  contents: read
+
+jobs:
+  source-only-harness:
+    name: Source-only harness checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate harness definitions
+        run: python3 agent_harness/software/validate_harness.py
+
+      - name: Run static contract checks
+        run: python3 agent_harness/software/run_static_contract_checks.py
+
+      - name: Compile harness scripts
+        run: python3 -m py_compile agent_harness/software/validate_harness.py agent_harness/software/run_static_contract_checks.py
