@@ -20,6 +20,7 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `STM/STM_SRM_CurrentBench` | STM Firmware Agent | Code Review Agent | archived | Legacy/current-sensor bench reference. Keep separate from active firmware behavior. |
 | `STM_Firmware_AMR_v2` | STM Firmware Agent | Code Review Agent | archived | Root-level legacy copy or old workspace. Active firmware remains under `STM/STM_Firmware_AMR_v2`. |
 | `ros_ws/src/amr_hardware` | ROS Core / Hardware Interface Agent | STM Firmware Agent | active | Hardware bridge, watchdog, and STM topic contracts. |
+| `ros_ws/src/amr_clients` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | Shared ROS client helpers for mission, safety, localization, navigation, robot health, and STM diagnostics. |
 | `ros_ws/src/amr_description` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | URDF, launch, controller config, Nav2/SLAM/AMCL runtime wiring. |
 | `ros_ws/src/amr_missions` | Navigation / Mission / Safety Agent | Voice / Operator Interface Agent | active | Persistent mission runtime and named-place behavior. |
 | `ros_ws/src/amr_missions_msgs` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | Shared message/service contracts. |

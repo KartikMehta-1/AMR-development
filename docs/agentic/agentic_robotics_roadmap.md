@@ -525,14 +525,16 @@ Before implementing MCP tools, pull shared request logic out of scripts where du
 Target structure:
 
 ```text
-ros_ws/src/amr_missions/amr_missions/
+ros_ws/src/amr_clients/amr_clients/
   mission_client.py
-  mission_cli.py
-  mission_server.py
-
-ros_ws/src/amr_safety/amr_safety/
   safety_client.py
-  safety_supervisor.py
+  robot_health_client.py
+  localization_client.py
+  navigation_client.py
+  stm_diagnostics_client.py
+
+ros_ws/src/amr_voice/amr_voice/
+  intent_client.py
 ```
 
 Rules:
@@ -542,6 +544,7 @@ Rules:
 - Shared clients own request/response handling.
 - CLI wrappers and MCP tools stay thin.
 - The MCP server must not reimplement mission or safety logic.
+- Voice intent parsing stays as a shared adapter before mission clients are called.
 
 Done criteria:
 
@@ -549,6 +552,7 @@ Done criteria:
 - Shared client functions return structured results.
 - Timeout and failure behavior is explicit.
 - Voice and future MCP paths can reuse the same client logic.
+- Initial `amr_clients` package and voice intent adapter added on 2026-05-09. Existing CLI and voice nodes can be migrated to these clients in later focused PRs.
 
 ## Phase 5 - Read-Only MCP Server
 

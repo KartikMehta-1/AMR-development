@@ -7,6 +7,7 @@ Maintain the ROS 2 workspace structure and the ROS-to-hardware interface layer t
 ## Owned Areas
 
 - `ros_ws/src/amr_hardware`
+- `ros_ws/src/amr_clients` for shared ROS client helpers and safe wrapper patterns
 - `ros_ws/src/amr_description` when changes affect URDF, ros2_control, controller configs, or hardware bring-up
 - `ros_ws/src/amr_missions_msgs` when message/service contracts are shared across packages
 - ROS package metadata, build files, launch conventions, and shared interface patterns
@@ -73,4 +74,3 @@ For URDF/controller changes:
 - If a change touches both ROS and STM firmware contracts, coordinate with the STM Firmware Agent.
 - If a change can cause physical motion, require explicit supervised confirmation.
 - If source-of-truth docs and code disagree, document the mismatch before continuing.
-

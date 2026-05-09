@@ -54,6 +54,7 @@ For package selection:
 - `ros_ws/src/amr_missions` -> `amr_missions`
 - `ros_ws/src/amr_safety` -> `amr_safety`
 - `ros_ws/src/amr_hardware` -> `amr_hardware`
+- `ros_ws/src/amr_clients` -> `amr_clients`
 - `ros_ws/src/amr_description` -> `amr_description`
 - `ros_ws/src/amr_missions_msgs` -> `amr_missions_msgs`
 
