@@ -1,0 +1,63 @@
+---
+name: amr-mission-runtime
+description: "Use when developing or diagnosing AMR mission runtime behavior, named places, mission CLI/server, patrol/go_to/cancel/status commands, mission messages, or mission integration with Nav2 and safety. Keeps mission logic above Nav2 and safety checks."
+---
+
+# AMR Mission Runtime
+
+Use this skill for `amr_missions`, named places, mission services/topics, mission CLI behavior, patrol sequencing, or mission status diagnosis.
+
+## Source Of Truth
+
+Read first:
+
+- `docs/agentic/roles/navigation_mission_safety_agent.md`
+- `docs/architecture/ros_stack_diagrams.md`
+
+Read when relevant:
+
+- `ros_ws/src/amr_missions`
+- `ros_ws/src/amr_missions_msgs`
+- `ros_ws/src/amr_missions/config/places.yaml`
+- `docs/agentic/agent_tool_permissions.md`
+
+## Workflow
+
+1. Classify the change: config-only, CLI/client, server runtime, message/service contract, or Nav2/safety integration.
+2. Preserve typed mission requests and status outputs.
+3. Keep named-place validation deterministic.
+4. Keep mission cancellation and timeout behavior explicit.
+5. Do not bypass safety supervisor or publish direct raw motion commands.
+6. For code changes, add or update software-only tests where possible.
+7. Coordinate with Voice / Operator Interface when voice commands call mission behavior.
+
+## Safe Checks
+
+Use when available and relevant:
+
+```bash
+python3 -m compileall ros_ws/src/amr_missions
+colcon build --packages-select amr_missions amr_missions_msgs
+colcon test --packages-select amr_missions amr_missions_msgs
+```
+
+Do not run a live `go_to`, `patrol`, or `cancel` command unless explicitly requested in a supervised runtime context.
+
+## Output Format
+
+```text
+Mission Scope
+- ...
+
+Behavior/Contract Impact
+- ...
+
+Checks Run
+- ...
+
+Safety/Motion Not Run
+- ...
+
+Next Step
+- ...
+```

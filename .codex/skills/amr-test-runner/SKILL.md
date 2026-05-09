@@ -1,6 +1,6 @@
 ---
 name: amr-test-runner
-description: Use when validating AMR project changes with software-only tests, ROS 2 builds, focused package checks, firmware compile checks, or when deciding which checks are safe to run. Separates software, simulation, and hardware-required checks and must not start robot motion without explicit supervised confirmation.
+description: "Use when validating AMR project changes with software-only tests, ROS 2 builds, focused package checks, firmware compile checks, or when deciding which checks are safe to run. Separates software, simulation, and hardware-required checks and must not start robot motion without explicit supervised confirmation."
 ---
 
 # AMR Test Runner

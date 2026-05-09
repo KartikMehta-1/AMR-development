@@ -1,6 +1,6 @@
 ---
 name: amr-code-review
-description: Use when reviewing AMR project code, docs, configs, scripts, firmware, ROS 2 packages, voice, perception, or manipulation changes before merge or hardware runs. Prioritizes safety regressions, robot motion risk, broken ROS/firmware contracts, missing tests, and hardware validation gaps.
+description: "Use when reviewing AMR project code, docs, configs, scripts, firmware, ROS 2 packages, voice, perception, or manipulation changes before merge or hardware runs. Prioritizes safety regressions, robot motion risk, broken ROS/firmware contracts, missing tests, and hardware validation gaps."
 ---
 
 # AMR Code Review

@@ -361,11 +361,11 @@ First implementation target:
   amr-code-review/
     SKILL.md   # initial version added 2026-05-09
   amr-stm-firmware-dev/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-ros-core-hardware-dev/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-navigation-mission-safety-dev/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
 ```
 
 Second implementation target:
@@ -373,11 +373,11 @@ Second implementation target:
 ```text
 .codex/skills/
   amr-nav-debug/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-safety-recovery/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-mission-runtime/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
 ```
 
 Later implementation target:
@@ -385,16 +385,18 @@ Later implementation target:
 ```text
 .codex/skills/
   amr-manipulator-bringup/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-perception-dev/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-hardware-acceptance/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
   amr-voice-dev/
-    SKILL.md
+    SKILL.md   # initial version added 2026-05-09
+  amr-runtime-environment-dev/
+    SKILL.md   # initial version added 2026-05-09
 ```
 
-Planned skills:
+Implemented skills:
 
 - `.codex/skills/amr-nav-debug/SKILL.md`
   - Source files: Nav2 params, launch files, `docs/architecture/ros_stack_diagrams.md`, mission logs.
@@ -455,6 +457,11 @@ Planned skills:
   - Source files: perception packages once added, calibration docs, camera/depth logs.
   - Tasks: add image/depth processing, calibration checks, object/grasp proposal outputs.
   - Done criteria: structured outputs with frame/timestamp/confidence handling.
+
+- `.codex/skills/amr-runtime-environment-dev/SKILL.md`
+  - Source files: Dockerfiles, compose files, Jetson runtime docs, Orin NX profile docs, top-level runtime command docs.
+  - Tasks: develop Docker/runtime environment changes while separating build-only, read-only, simulation, and hardware-facing workflows.
+  - Done criteria: documented runtime scope, safe command list, and explicit hardware-facing exclusions.
 
 ## Phase 3 - Agent Harness
 
@@ -670,9 +677,9 @@ Acceptance criteria:
 
 - Agent docs exist and are linked from the project tracker.
 - The first two skills exist: test runner and code review.
-- The next three skills are planned: STM firmware development, ROS core/hardware development, and navigation/mission/safety development.
+- The STM firmware, ROS core/hardware, and navigation/mission/safety development skills exist.
 - At least three robot-domain support skills exist: navigation debug, safety recovery, mission runtime.
-- Optional later skills exist for manipulator bring-up, voice/interface development, perception development, and hardware acceptance.
+- Optional later skills exist for manipulator bring-up, voice/interface development, perception development, hardware acceptance, and runtime environment development.
 - Shared mission/safety client functions exist where MCP or voice would otherwise duplicate script logic.
 - Read-only MCP tools can report health, safety, mission, places, and localization status.
 - Motion-causing MCP tools require explicit confirmation and safety prechecks.
