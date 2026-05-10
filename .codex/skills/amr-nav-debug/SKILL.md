@@ -13,6 +13,7 @@ Read first:
 
 - `docs/agentic/roles/navigation_mission_safety_agent.md`
 - `docs/architecture/ros_stack_diagrams.md`
+- `docs/agentic/amr_bringup_runbooks.md`
 
 Read when relevant:
 
@@ -36,6 +37,32 @@ Read when relevant:
    - mission server state
 5. Do not start Nav2 goals, named-place missions, teleop, or recovery motion without explicit supervised confirmation.
 6. If wheel state, STM comms, or fault masks are implicated, coordinate with STM Firmware and ROS Core / Hardware Interface contracts.
+
+## Navigation Bringup Boundary
+
+When the user explicitly asks for supervised navigation bringup, this skill may help start or inspect the dev-PC navigation layer after hardware is ready:
+
+- Dev-PC Foxy container `amr_devpc`.
+- `amr_scan_sanitizer.py`, `bringup_nav2.launch.py`, RViz, AMCL, and Nav2 lifecycle nodes.
+
+Map readiness must be verified with a late subscriber, not just map-server logs:
+
+```bash
+python3 /workspaces/AMR-development/scripts/amr_wait_for_map.py --timeout 12
+```
+
+Current known maps:
+
+- `my_new_map.yaml`: `259 x 160`, resolution `0.05`, origin `[-3.72, -1.4, 0]`.
+- `my_hall_save.yaml`: `216 x 299`, resolution `0.05`, origin `[-7.16, -7.53, 0]`.
+
+If `map_server` reports a load but late subscribers cannot receive `/map`, use the guarded static map publisher as a display/localization fallback only:
+
+```bash
+python3 /workspaces/AMR-development/scripts/amr_static_map_publisher.py <map.yaml>
+```
+
+Before enabling missions, verify fresh `/amcl_pose`, `map -> odom`, and active Nav2 lifecycle nodes. Do not send Nav2 goals from this skill unless the user explicitly approves a supervised motion test.
 
 ## Safe Commands
 

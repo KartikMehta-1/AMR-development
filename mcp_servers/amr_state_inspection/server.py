@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from dataclasses import asdict, is_dataclass
 from typing import Any, Callable
 
@@ -19,7 +20,7 @@ from amr_clients.stm_diagnostics_client import StmDiagnosticsClient
 
 SERVER_NAME = "amr-state-inspection"
 SERVER_VERSION = "0.1.0"
-DEFAULT_TIMEOUT_SEC = float(os.environ.get("AMR_MCP_TIMEOUT_SEC", "1.0"))
+DEFAULT_TIMEOUT_SEC = float(os.environ.get("AMR_MCP_TIMEOUT_SEC", "3.0"))
 
 
 def to_jsonable(value: Any) -> Any:
@@ -88,7 +89,7 @@ class RosState:
             return
         if not rclpy.ok():
             rclpy.init(args=None)
-        self.node = rclpy.create_node("amr_state_inspection_mcp")
+        self.node = rclpy.create_node(f"amr_state_inspection_mcp_{os.getpid()}")
         self.mission = MissionClient(self.node)
         self.safety = SafetyClient(self.node)
         self.localization = LocalizationClient(self.node)
@@ -96,6 +97,9 @@ class RosState:
         self.robot_health = RobotHealthClient(self.node)
         self.stm = StmDiagnosticsClient(self.node)
         self.started = True
+        deadline = time.monotonic() + float(os.environ.get("AMR_MCP_GRAPH_WARMUP_SEC", "1.0"))
+        while time.monotonic() < deadline:
+            rclpy.spin_once(self.node, timeout_sec=0.05)
 
     def spin_for(self, timeout_sec: float) -> None:
         self.start()

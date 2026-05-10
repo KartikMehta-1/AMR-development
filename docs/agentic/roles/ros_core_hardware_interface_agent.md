@@ -47,6 +47,7 @@ For hardware interface changes:
 - Preserve wheel command/state units.
 - Preserve fault/safety topic compatibility.
 - Coordinate with STM firmware changes when topic contracts change.
+- For limited hardware bringup, follow `docs/agentic/amr_bringup_runbooks.md`: prove controllers, STM topics, `/scan`, `/odom`, and TF without starting Nav2, missions, teleop, or motion.
 
 For URDF/controller changes:
 

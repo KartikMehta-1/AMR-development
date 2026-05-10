@@ -13,6 +13,7 @@ Read first:
 
 - `docs/agentic/roles/runtime_environment_agent.md`
 - `docs/agentic/codebase_ownership.md`
+- `docs/agentic/amr_bringup_runbooks.md`
 
 Read when relevant:
 
@@ -30,6 +31,17 @@ Read when relevant:
 4. Document hardware-facing risks for privileged mode, host networking, serial devices, cameras, LiDAR, GPU, and USB mounts.
 5. Coordinate with ROS Core / Hardware Interface when package launch behavior changes.
 6. Coordinate with Navigation / Mission / Safety when runtime startup affects Nav2, localization, mission, or safety supervisor.
+
+## AMR Bringup Boundary
+
+- Current physical AMR uses Jetson Nano + ROS 2 Foxy containers, not Humble.
+- Hardware-facing container launches require explicit supervised confirmation.
+- Prefer the project launch scripts for repeatable execution, but understand and verify their contract:
+  - dev PC container: `amr_devpc`, image `amr/ros2-foxy-devpc:amd64`, repo mounted at `/workspaces/AMR-development`.
+  - Jetson container: `amr_foxy`, image `amr/ros2-foxy-jetson:arm64`, workspace mounted at `/workspaces/ros_ws`.
+  - Runtime env inside containers: unset `CYCLONEDDS_URI`, set `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, source Foxy and the workspace overlay.
+- A clean runtime launch is not proven by Docker status. Verify ROS graph readiness for the target layer: controllers/wheel state for hardware, `/map` and Nav2 lifecycle for navigation, mission services for mission/MCP.
+- Jetson power-on autostart should default to hardware-only readiness. Do not autostart Nav2, missions, teleop, STM re-enable, or movement.
 
 ## Safe Checks
 

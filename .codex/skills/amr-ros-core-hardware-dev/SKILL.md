@@ -13,6 +13,7 @@ Read first:
 
 - `docs/agentic/roles/ros_core_hardware_interface_agent.md`
 - `docs/architecture/ros_stack_diagrams.md`
+- `docs/agentic/amr_bringup_runbooks.md`
 
 Read when relevant:
 
@@ -31,6 +32,23 @@ Read when relevant:
 4. Coordinate with STM Firmware Agent when firmware topic units or semantics change.
 5. Do not start hardware launch files, motor drivers, or Nav2 missions without explicit supervised confirmation.
 6. Run focused `colcon` build/test only when the ROS environment is available.
+
+## Hardware Bringup Boundary
+
+When the user explicitly approves supervised hardware bringup, this skill may help start or inspect only the hardware layer:
+
+- Jetson Nano Foxy container `amr_foxy`.
+- `hardware.launch.py` with STM micro-ROS agent, `amr_hardware`, robot state publisher, controllers, LiDAR, and optional link watchdog.
+
+Required readiness checks:
+
+- `joint_state_broadcaster` and `diff_drive_controller` are active.
+- `/amr_stm/wheel_state`, `/amr_stm/fault_mask`, `/amr_stm/comm_status`, and `/amr_stm/comm_fault_mask` are receivable.
+- `/scan` is present when LiDAR is requested.
+- `/odom`, `/tf`, and `/tf_static` are present.
+- Fault and communication fault masks are zero unless the task is fault diagnosis.
+
+Do not start Nav2, RViz, mission server, teleop, voice, MCP motion tools, fault clear, or STM re-enable from this skill unless explicitly requested and supervised.
 
 ## Safe Checks
 

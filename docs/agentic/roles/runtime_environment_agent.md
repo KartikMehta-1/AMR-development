@@ -56,6 +56,8 @@ For Docker/runtime changes:
 - Coordinate with ROS Core / Hardware Interface Agent when launch, package, or `ros2_control` behavior is affected.
 - Coordinate with Navigation / Mission / Safety Agent when runtime changes affect Nav2, missions, localization, or safety supervisor startup.
 - Coordinate with Voice / Operator Interface Agent when runtime changes affect ASR/TTS/model availability.
+- For AMR bringup work, follow `docs/agentic/amr_bringup_runbooks.md`. Treat the Jetson Nano + dev PC workflow as Foxy Docker unless the task is explicitly about Orin/Humble migration.
+- If considering Jetson power-on autostart, keep the default design hardware-only and non-motion: no Nav2 goals, no missions, no teleop, no automatic STM enable, and no safety reset.
 
 ## Done Criteria
 

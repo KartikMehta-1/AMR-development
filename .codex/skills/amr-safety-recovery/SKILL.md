@@ -14,6 +14,7 @@ Read first:
 - `docs/agentic/roles/navigation_mission_safety_agent.md`
 - `docs/safety/safety_fault_recovery.md`
 - `docs/safety/safety_baseline.md`
+- `docs/agentic/amr_bringup_runbooks.md`
 
 Read when relevant:
 
@@ -30,6 +31,19 @@ Read when relevant:
 4. Never treat reset as safe while STM faults remain active.
 5. Never automatically re-enable STM after fault clear; keep re-enable as an explicit operator action.
 6. For source changes, preserve cancellation, zero-velocity, disable, fault decode, reset guard, and manual re-enable behavior.
+
+## Safety Bringup Boundary
+
+During normal AMR bringup, safety supervisor should start in monitor-only mode unless the task is explicitly about enforcement.
+
+Readiness checks:
+
+- `/amr/safety_supervisor/status` publisher exists and messages are receivable.
+- Status reports `healthy: true`, no active intervention, and no observed fault reasons for a normal bringup.
+- STM fault and communication fault masks are zero.
+- Mission state is idle before any recovery or motion-related test.
+
+Do not treat missing safety-supervisor status as acceptable for mission or MCP readiness. Do not call reset or fault-clear services without explicit supervised confirmation.
 
 ## Blocked Unless Explicitly Requested
 

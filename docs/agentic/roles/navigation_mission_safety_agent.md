@@ -56,6 +56,8 @@ For navigation/localization changes:
 - Check interaction between SLAM, AMCL, map server, odom, and robot state publisher.
 - Preserve topic remaps between Nav2 and the diff-drive control path.
 - Treat missing or stale localization as not ready for motion.
+- During bringup, verify `/map` with a late subscriber before relying on RViz or AMCL. Map-server load logs alone are not sufficient.
+- If RViz does not display a known-good map, check map metadata, `/map` QoS/discovery, RViz fixed frame, and the fallback static map publisher described in `docs/agentic/amr_bringup_runbooks.md`.
 
 For recovery:
 
@@ -83,4 +85,3 @@ For recovery:
 - If a request requires physical robot motion, ask for explicit supervised confirmation.
 - If safety behavior must change, document the design reason before editing.
 - If navigation failures implicate wheel state, current, fault masks, or micro-ROS, coordinate with ROS Core Hardware Interface and STM Firmware agents.
-

@@ -12,6 +12,7 @@ Use this skill when the user asks to run tests, validate changes, check a branch
 Read this first:
 
 - `docs/agentic/roles/test_runner_agent.md`
+- `docs/agentic/amr_bringup_runbooks.md`
 
 Read additional references only when relevant:
 
@@ -35,6 +36,17 @@ Read additional references only when relevant:
    - static inspection for launch/config/script changes when executable smoke checks are not available
 6. Do not start hardware, motors, Nav2 missions, arm motion, STM reset/enable, or hardware acceptance workflows without explicit supervised confirmation.
 7. Report skipped and not-runnable checks honestly.
+
+## Bringup Validation Boundary
+
+For AMR launch/MCP changes, validate in layers:
+
+- Static checks: `bash -n` for shell scripts and Python syntax/import checks for helper scripts.
+- Container checks: run inside Foxy containers with `CYCLONEDDS_URI` unset and `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`.
+- Map checks: use `scripts/amr_wait_for_map.py` as a late subscriber; do not rely only on `ros2 topic info` or map-server logs.
+- MCP checks: verify stdio `initialize`, `tools/list`, and read-only tool calls.
+
+Runtime checks against the live AMR are allowed only when the user explicitly expects the AMR runtime to be active. They must remain read-only unless supervised motion or recovery is explicitly requested.
 
 ## Common Safe Checks
 

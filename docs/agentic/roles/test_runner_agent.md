@@ -145,6 +145,13 @@ Hardware checks, explicit supervised request only:
 - safety baseline
 - recovery flow
 
+Bringup helper checks:
+
+- `bash -n scripts/open_amr_devpc_navigation.sh`
+- `python3 scripts/amr_wait_for_map.py --help`
+- `python3 scripts/amr_static_map_publisher.py --help`
+- When the Foxy runtime is intentionally active, verify `/map` with a late subscriber instead of trusting process presence.
+
 ### Voice / Operator Interface
 
 Paths:

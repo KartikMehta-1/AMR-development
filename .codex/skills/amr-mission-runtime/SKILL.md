@@ -13,6 +13,7 @@ Read first:
 
 - `docs/agentic/roles/navigation_mission_safety_agent.md`
 - `docs/architecture/ros_stack_diagrams.md`
+- `docs/agentic/amr_bringup_runbooks.md`
 
 Read when relevant:
 
@@ -30,6 +31,20 @@ Read when relevant:
 5. Do not bypass safety supervisor or publish direct raw motion commands.
 6. For code changes, add or update software-only tests where possible.
 7. Coordinate with Voice / Operator Interface when voice commands call mission behavior.
+
+## Mission Bringup Boundary
+
+Mission runtime may be launched only after hardware and navigation/localization readiness are established for the requested supervised context.
+
+Required readiness checks before any mission command:
+
+- `mission_server` starts after `amr_missions_msgs`, `amr_clients`, and `amr_missions` are built and sourced.
+- `/amr_missions/list_places` returns named places.
+- `/amr_missions/state` returns `idle`.
+- `/amr/safety_supervisor/status` is receivable and healthy.
+- Nav2 lifecycle and localization checks are green.
+
+This skill may inspect status and list places without motion. It must not run `go_to`, `patrol`, recovery experiments, direct Nav2 goals, or raw velocity commands unless the user explicitly approves supervised motion.
 
 ## Safe Checks
 

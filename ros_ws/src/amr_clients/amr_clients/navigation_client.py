@@ -40,6 +40,8 @@ class NavigationClient:
         timeout_sec: float = 2.0,
     ) -> Nav2Status:
         nodes = nodes or [
+            "/map_server",
+            "/amcl",
             "/bt_navigator",
             "/planner_server",
             "/controller_server",

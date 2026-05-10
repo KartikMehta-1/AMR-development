@@ -31,6 +31,9 @@ VOICE_MODE="${AMR_VOICE_MODE:-text}"
 VOICE_DEVICE="${AMR_VOICE_DEVICE:-auto}"
 VOICE_ASR_EXTRA_ARGS="${AMR_VOICE_ASR_EXTRA_ARGS:-}"
 GRAPH_MONITOR_PERIOD="${AMR_GRAPH_MONITOR_PERIOD:-3.0}"
+MAP_READY_TIMEOUT_SEC="${AMR_MAP_READY_TIMEOUT_SEC:-12}"
+MAP_FALLBACK_PUBLISHER="${AMR_MAP_FALLBACK_PUBLISHER:-true}"
+ATTACH_TMUX="${AMR_ATTACH_TMUX:-true}"
 
 usage() {
   cat >&2 <<'EOF'
@@ -47,6 +50,8 @@ Optional environment:
   AMR_VOICE_MODE=text|asr|both|off
   AMR_VOICE_DEVICE=auto
   AMR_GRAPH_MONITOR_PERIOD=3.0
+  AMR_MAP_FALLBACK_PUBLISHER=true|false
+  AMR_ATTACH_TMUX=true|false
 
 This starts:
   - Jetson hardware stack (amr_foxy)
@@ -402,17 +407,30 @@ mission_shell_pane="$(tmux display-message -p -t "${SESSION_NAME}:navigation.0" 
 tmux select-pane -t "${mission_shell_pane}" -T "Mission Shell"
 nav_runtime_cmd="source /opt/ros/foxy/setup.bash; \
 rm -f ${localization_ready_file}; \
-cleanup() { [ -n \"\${scan_filter_pid:-}\" ] && kill \"\${scan_filter_pid}\" 2>/dev/null || true; [ -n \"\${nav2_pid:-}\" ] && kill \"\${nav2_pid}\" 2>/dev/null || true; [ -n \"\${rviz_pid:-}\" ] && kill \"\${rviz_pid}\" 2>/dev/null || true; }; \
+cleanup() { [ -n \"\${scan_filter_pid:-}\" ] && kill \"\${scan_filter_pid}\" 2>/dev/null || true; [ -n \"\${nav2_pid:-}\" ] && kill \"\${nav2_pid}\" 2>/dev/null || true; [ -n \"\${rviz_pid:-}\" ] && kill \"\${rviz_pid}\" 2>/dev/null || true; [ -n \"\${map_fallback_pid:-}\" ] && kill \"\${map_fallback_pid}\" 2>/dev/null || true; }; \
 trap cleanup EXIT INT TERM; \
+pkill -f '[a]mr_static_map_publisher.py' 2>/dev/null || true; \
 python3 /workspaces/AMR-development/scripts/amr_scan_sanitizer.py & \
 scan_filter_pid=\$!; \
-echo 'Starting full Nav2 bringup. Set the initial pose in RViz with 2D Pose Estimate.'; \
+echo 'Starting full Nav2 bringup.'; \
+ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false autostart:=true map:=${MAP_PATH_CONTAINER} params_file:=${PARAMS_PATH_CONTAINER} cmd_vel_topic:=/diff_drive_controller/cmd_vel_unstamped odom_topic:=/odom & \
+nav2_pid=\$!; \
+echo 'Waiting for /map to be receivable by a late subscriber...'; \
+if ! python3 /workspaces/AMR-development/scripts/amr_wait_for_map.py --timeout ${MAP_READY_TIMEOUT_SEC}; then \
+  if [ '${MAP_FALLBACK_PUBLISHER}' = 'true' ]; then \
+    echo 'map_server did not expose /map reliably; starting static map fallback publisher.'; \
+    python3 /workspaces/AMR-development/scripts/amr_static_map_publisher.py ${MAP_PATH_CONTAINER} >/tmp/amr_static_map_publisher.log 2>&1 & \
+    map_fallback_pid=\$!; \
+    python3 /workspaces/AMR-development/scripts/amr_wait_for_map.py --timeout ${MAP_READY_TIMEOUT_SEC}; \
+  else \
+    echo 'Map was not receivable and AMR_MAP_FALLBACK_PUBLISHER=false.'; \
+  fi; \
+fi; \
 echo 'Starting RViz in the background. RViz logs: /tmp/amr_rviz.log'; \
 export LIBGL_ALWAYS_SOFTWARE=1; \
 rviz2 -d ${RVIZ_CONFIG_PATH} >/tmp/amr_rviz.log 2>&1 & \
 rviz_pid=\$!; \
-ros2 launch /workspaces/AMR-development/ros_ws/src/amr_description/launch/bringup_nav2.launch.py use_sim_time:=false use_rviz:=false autostart:=true map:=${MAP_PATH_CONTAINER} params_file:=${PARAMS_PATH_CONTAINER} cmd_vel_topic:=/diff_drive_controller/cmd_vel_unstamped odom_topic:=/odom & \
-nav2_pid=\$!; \
+echo 'Set the initial pose in RViz with 2D Pose Estimate.'; \
 echo 'Waiting for fresh AMCL pose and map->odom before enabling mission commands...'; \
 if ! python3 /workspaces/AMR-development/scripts/amr_wait_for_localization.py --timeout 180.0; then \
   echo 'Localization did not become ready. Leave Nav2 running and set RViz 2D Pose Estimate again.'; \
@@ -426,7 +444,7 @@ nav_pane="$(tmux split-window -h -p 45 -P -F '#{pane_id}' -t "${mission_shell_pa
 tmux select-pane -t "${nav_pane}" -T "Nav2 + AMCL"
 teleop_pane="$(tmux split-window -v -p 35 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
 tmux select-pane -t "${teleop_pane}" -T "Teleop"
-select_build_packages="build_packages='amr_missions_msgs amr_missions'; [ -f src/amr_safety/package.xml ] && build_packages=\"\${build_packages} amr_safety\"; [ -f src/amr_voice/package.xml ] && build_packages=\"\${build_packages} amr_voice\""
+select_build_packages="build_packages='amr_missions_msgs amr_clients amr_missions'; [ -f src/amr_safety/package.xml ] && build_packages=\"\${build_packages} amr_safety\"; [ -f src/amr_voice/package.xml ] && build_packages=\"\${build_packages} amr_voice\""
 tmux select-layout -t "${SESSION_NAME}:navigation" tiled
 
 topics_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n monitor "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_graph_monitor.py --mode topics --period ${GRAPH_MONITOR_PERIOD}")")"
@@ -475,4 +493,9 @@ fi
 tmux select-window -t "${SESSION_NAME}:navigation"
 tmux select-pane -t "${mission_shell_pane}"
 
-exec tmux attach -t "${SESSION_NAME}"
+if [[ "${ATTACH_TMUX}" == "true" ]]; then
+  exec tmux attach -t "${SESSION_NAME}"
+fi
+
+printf 'AMR navigation launch created tmux session: %s\n' "${SESSION_NAME}" >&2
+printf 'Attach with: tmux attach -t %s\n' "${SESSION_NAME}" >&2
