@@ -128,7 +128,7 @@ flowchart TB
 
 | Block | Current or planned detail diagram |
 | --- | --- |
-| Agent, skills, MCP, harness | `docs/agentic/agentic_robotics_roadmap.md`, `docs/agentic/agent_tool_permissions.md` |
+| Agent, skills, MCP, harness | `docs/agentic/agentic_behavior_diagram.md`, `docs/agentic/agentic_robotics_roadmap.md`, `docs/agentic/agent_tool_permissions.md` |
 | Runtime / Docker / Jetson | `docs/architecture/10_runtime_environment.md` |
 | ROS core hardware interface | `docs/architecture/20_ros_core_hardware_interface.md` |
 | Navigation / mission / safety | `docs/architecture/30_navigation_mission_safety.md` |

@@ -48,6 +48,7 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `docs/architecture/ros_stack_diagrams.md` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | ROS graph, topic ownership, TF, and stack wiring. |
 | `docs/architecture/jetson_architecture.md` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Jetson runtime architecture. |
 | `docs/architecture/jetson_orin_nx_device_profile.md` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Orin NX runtime/device profile. |
+| `docs/agentic/agentic_behavior_diagram.md` | Code Review Agent | Test Runner Agent | active | Agentic behavior diagram covering agents, skills, MCP servers, harnesses, shared ROS clients, and robot runtime boundaries. |
 | `docs/hardware` | STM Firmware Agent | Runtime Environment Agent | active | Pin map is STM-owned; hardware block/spec docs may be cross-domain references. |
 | `docs/safety` | Navigation / Mission / Safety Agent | STM Firmware Agent | active | Safety baseline, fault recovery, and safety-supervisor procedures. |
 | `docs/project` | Code Review Agent | all domain agents | active | Project tracker and planning docs. Domain owners update their own sections; review agent checks consistency. |

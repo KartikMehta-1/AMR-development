@@ -4,6 +4,8 @@ This document tracks how agent-oriented tooling should be introduced into the AM
 
 The goal is not to replace ROS 2, Nav2, MoveIt2, `ros2_control`, micro-ROS, or STM32 firmware. Those remain the deterministic robot control stack. Agent tooling should sit above them as a structured operator/developer interface with clear permissions, typed tools, logs, and test harnesses.
 
+For the expanded diagram of agents, skills, MCP servers, harnesses, ROS clients, and robot runtime boundaries, see `docs/agentic/agentic_behavior_diagram.md`.
+
 ## Architecture Principle
 
 ```text
@@ -26,18 +28,27 @@ Agents may inspect state, explain faults, compose missions, generate code, and r
 
 ## Implementation Sequence
 
-Do not start by building a full multi-agent runtime. Start with static contracts and skills that improve day-to-day work immediately, then add harnesses and MCP wrappers after the boundaries are clear.
+Do not start by building a full multi-agent runtime. Start with static contracts and skills that improve day-to-day work immediately, then add harnesses, shared clients, and MCP wrappers only after the boundaries are clear.
+
+The current sequence is:
 
 ```text
-1. Agent contracts and permissions
-2. Repo-local skills
-3. Test/review/agent harness
-4. Shared ROS client libraries
-5. Read-only MCP server
-6. Confirmation-required MCP tools
-7. Subagent workflow
-8. Manipulation/perception expansion
+1. Agent contracts and permissions                    [baseline implemented]
+2. Agentic behavior diagram and ownership map          [baseline implemented]
+3. Repo-local skills                                   [baseline implemented, expand as needed]
+4. Test/review/agent harness                           [baseline implemented]
+5. Harness CI for source-only checks                    [baseline implemented]
+6. Shared ROS client libraries                          [baseline implemented]
+7. Read-only AMR state MCP server                       [baseline implemented]
+8. Software-only functional validation of skills/MCPs   [active next step]
+9. Fake-ROS or fixture-backed MCP integration tests      [next]
+10. Confirmation-required command MCP tools             [future, gated]
+11. Subagent PR workflow and review discipline          [ongoing]
+12. Supervised hardware acceptance workflow             [future, physical AMR required]
+13. Manipulation, perception, and Orin expansion         [future expansion]
 ```
+
+The next practical work should be software-only validation and test fixtures for the skills, harness, shared ROS clients, and read-only MCP server. Motion-causing MCP tools should wait until the read-only path is stable, command preconditions are documented, and hardware acceptance procedures are ready to supervise real robot behavior.
 
 ## Phase 1 - Agent Contracts And Permission Model
 

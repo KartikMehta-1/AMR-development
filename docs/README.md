@@ -40,6 +40,7 @@ This folder is organized by documentation purpose.
 
 ## Agentic Tooling
 
+- `agentic/agentic_behavior_diagram.md` - diagram of agents, skills, MCPs, harnesses, ROS clients, and robot runtime boundaries
 - `agentic/agentic_robotics_roadmap.md` - agentic robotics implementation roadmap
 - `agentic/agent_tool_permissions.md` - agent permission classes and blocked actions
 - `agentic/agent_interaction_examples.md` - example interactions
