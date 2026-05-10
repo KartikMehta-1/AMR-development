@@ -6,7 +6,7 @@ Last Updated: 2026-05-09
 
 ## Current Implementation Snapshot
 - Control loop: TIM4 at 100 Hz; speed PI per wheel; duty ramp; differential-drive mapping from left/right wheel command topics; command staleness timeout (500 ms).
-- Sensing: encoders TIM3 (left, 16-bit) / TIM2 (right, 32-bit) with RPM LPF; ADC1 CH8/11 current sense (ACS758) with scaling and LPF.
+- Sensing: encoders TIM3 (left, 16-bit) / TIM2 (right, 32-bit) with RPM LPF; ADC1 CH8/11 current sense (ACS758) with scaling and LPF. Proximity sensors, IMU-on-STM-I2C, INA226 battery telemetry, and STM I2C are planned work, not active firmware behavior.
 - Faults: overcurrent, stall, encoder timeout, ADC stuck detection; fault mask latched in ControlState and cleared via `/amr_stm/clear_fault` when faults/estop are inactive.
 - micro-ROS: USART2 custom transport over the STM32 ST-LINK virtual COM path; subscribers are `/amr_stm/wheel_cmd_left`, `/amr_stm/wheel_cmd_right`, `/amr_stm/enable`, `/amr_stm/estop`, `/amr_stm/clear_fault`; publishers are `/amr_stm/wheel_state`, `/amr_stm/fault_mask`, `/amr_stm/safety_state`, `/amr_stm/duty_cmd_left`, `/amr_stm/duty_cmd_right`, `/amr_stm/current_left_ma`, `/amr_stm/current_right_ma`, `/amr_stm/current_left_adc`, `/amr_stm/current_right_adc`, `/amr_stm/current_left_zero`, `/amr_stm/current_right_zero`, and `/amr_stm/ros_diag`. Critical topics publish every 100 ms; current/ADC diagnostics publish every 500 ms.
 - PWM/Dir: TIM1 CH1/CH2 at 20 kHz; DIR PB4/PB5; duty capped at 70%.
@@ -24,6 +24,7 @@ Last Updated: 2026-05-09
 - DIR GPIO: PB4/PB5.
 - Encoders: TIM3 (left PA6/PA7), TIM2 (right PA0/PA1).
 - ADC: ADC1 CH8 (PB0), CH11 (PC1) for ACS758 current.
+- I2C: not enabled in current STM firmware. Planned STM I2C uses `PB8/PB9` for shared IMU and INA226 battery monitor. This requires CubeMX/HAL I2C enablement, timing review, address-conflict checks, and synchronized micro-ROS topic additions.
 - UART: USART2 460800 bps for micro-ROS custom transport.
 - E-stop sense: PB10 (active low, pull-up).
 

@@ -10,7 +10,6 @@ graph TD
     ESTOP[E-Stop]
     BATT --> MSW
     MSW --> FUSE
-    FUSE --> ESTOP
   end
 
   %% DC-DC supplies and rails
@@ -20,10 +19,14 @@ graph TD
     BUCK_LOGIC[5V Buck Logic/Enc/Prox ~2A LM2596]
     BUCK_12V[12V Buck Spare/Opt Sensors]
     ESTOP --> MPBUS
-    MSW --> BUCK_JET
-    MSW --> BUCK_LOGIC
-    MSW --> BUCK_12V
     MSW --> DVM[DSN-DVM/DUM-368 Volt Display]
+    FUSE --> BSHUNT[External Battery Shunt<br/>50A min, 75/100A preferred]
+    BSHUNT --> PWRDIST[Power Distribution]
+    PWRDIST --> ESTOP
+    PWRDIST --> BUCK_JET
+    PWRDIST --> BUCK_LOGIC
+    PWRDIST --> BUCK_12V
+    BSHUNT --> INA226[INA226 Battery Monitor<br/>I2C voltage/current/power]
   end
 
   %% Drive system
@@ -54,7 +57,7 @@ graph TD
     ENC_R[Right Encoder 600 PPR<br/>5V NPN OC]
     LIDAR[YDLidar G4<br/>USB, 5V from hub]
     DEPTH[RealSense D455<br/>USB 3, 5V from hub]
-    IMU[BNO080 IMU<br/>I2C, 3.3V]
+    IMU[BNO080 or equivalent IMU dev board<br/>I2C, 3.3V]
     PROX[Proximity x4<br/>HC-SR04 ultrasonic 5V trig/echo]
   end
 
@@ -76,13 +79,14 @@ graph TD
   ENC_R -.-> STM
   CS_L -.-> STM
   CS_R -.-> STM
+  INA226 -.-> STM
   ESTOP -.-> STM
   PROX -.-> STM
   LIDAR --> USBHUB
   DEPTH --> USBHUB
   USBHUB --> JET
   STM <-.-> JET
-  IMU -.-> JET
+  IMU -.-> STM
   PWRBTN -.-> JET
 
   %% Styles: power vs data
@@ -94,7 +98,9 @@ graph TD
 - Powered USB hub arrows are correct: LiDAR and RealSense data go to the hub, hub data to Jetson; hub + Jetson 5 V both come from the Jetson/USB buck.
 - Power links are thick/orange; data/sense links are thinner/blue for quick visual separation.
 - Main power switch sits at pack output ahead of fuse and E-Stop for full isolation during service/storage.
-- Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off.
-- Proximity sensors: 4x HC-SR04 ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; stagger triggers to avoid crosstalk.
-- IMU: BNO080 on Jetson I2C (3.3 V). Power from Jetson 3.3 V rail; keep cable short and avoid vibration.
+- Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off; it is treated as display-only unless its exact module proves otherwise.
+- Battery telemetry: planned INA226 I2C monitor on STM `PB8/PB9`, with an external shunt after the main fuse and before power distribution. Main battery current passes through the shunt, not through the INA226 PCB. STM firmware/CubeMX changes are still required.
+- Battery auxiliary connector: unused 5/6-pin connector remains unassigned until pinout is verified.
+- Proximity sensors: 4x HC-SR04 ultrasonic modules (5 V, trig/echo) wired to STM32 GPIO; echo lines must be level-shifted to 3.3 V and triggers staggered to avoid crosstalk.
+- IMU: BNO080 or equivalent IMU dev board on planned STM I2C `PB8/PB9` (3.3 V), sharing the bus with INA226. Keep cable short, avoid vibration, and verify I2C addresses.
 - Jetson soft power button: momentary N.O. switch across JET PWR_BTN to GND for graceful shutdown/start (no power cut).

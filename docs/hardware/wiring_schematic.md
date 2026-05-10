@@ -27,12 +27,18 @@ Notes
 - STM32 power: feed E5V/VIN on the Nucleo. Avoid back-powering if USB is also connected (set the Nucleo power select to external or remove the USB 5 V link per board manual).
 - DC-DC 12 V Sensors (optional): only if any sensor requires 12 V; otherwise omit.
 
-Voltage monitoring (optional)
-- Add a resistive divider from pack P+/P- to an ADC input (on STM32 or a small monitor) to estimate state of charge and low-voltage cutoff warnings. Choose values to keep ADC input under 3.3 V at 14.6 V full charge.
+Battery monitoring (planned)
+- Planned preferred telemetry path: INA226 I2C monitor with an external 50 A minimum, preferably 75 A or 100 A, shunt placed after the main switch and main fuse, before the robot power branches split.
+- Main battery current must pass through the external shunt, not through the INA226 PCB. Use bolted/crimped high-current wiring through the shunt and thin Kelvin sense wires from the shunt to INA226 `IN+` and `IN-`.
+- INA226 reads shunt voltage, robot bus voltage, and calculated power over I2C. Planned ownership is STM I2C on `PB8/PB9`, shared with the IMU. Firmware/ROS telemetry will be added later when proximity sensors, IMU, and battery monitoring are implemented together.
+- Fallback voltage-only path: add a resistive divider from the robot bus/load side of the shunt to an ADC input (on STM32 or a small monitor) to estimate state of charge and low-voltage cutoff warnings. Choose values to keep ADC input under 3.3 V at 14.6 V full charge.
 - Optional panel display: DSN-DVM/DUM-368 wired after the main switch across pack P+/P- for at-a-glance pack voltage; goes dark when the main switch is off (2-wire variant is self-powered; 3-wire adds separate sense lead).
+- Do not assume the panel display provides a data output. Typical 2-wire/3-wire LED voltmeter modules only expose power/sense wiring; the yellow sense wire on 3-wire modules is an input to the display, not telemetry for STM/Jetson.
+- The battery has an unused 5/6-pin connector that is not yet identified. Treat it as potentially a balance, thermistor, or BMS communication connector. Verify pinout, voltages, and isolation with the battery vendor documentation and a meter before connecting it to STM32, Jetson, or any USB adapter.
+- Optional STM ADC fallback input path: robot bus/load side of the shunt -> small inline fuse or current-limited tap -> high-value divider -> series resistor/RC filter/clamp -> STM32 ADC pin TBD. Final resistor values and exact header pin must be confirmed before wiring.
 
 Wiring intent
-- Battery/BMS + Main Fuse + E-stop + Motor Power Bus + Motor driver VM.
+- Battery/BMS + Main Fuse + external shunt + power distribution + E-stop + Motor Power Bus + Motor driver VM.
 - Battery/BMS + DC-DC 5 V Jetson (XH-M401) + Jetson Nano, USB hub.
 - Battery/BMS + DC-DC 5 V Logic (LM2596) + STM32, proximity sensors.
 - Battery/BMS + DC-DC 12 V Sensors + 12 V sensors (if used).
@@ -55,11 +61,15 @@ Wiring intent
 graph TD
   BATT[12.8 V LiFePO4<br/>B+/B-] --> MSW[Main Switch]
   MSW --> FUSE[Main Fuse]
-  FUSE --> ESTOP[E-stop / Switch]
+  FUSE --> SHUNT[External Battery Shunt<br/>50A min, 75/100A preferred]
+  SHUNT --> PWRDIST[Robot Power Distribution]
+  PWRDIST --> ESTOP
   ESTOP --> VM[Motor Power Bus]
   ESTOP -.-> ESTOP_SENSE[PB10 / D6 E-stop sense]
   MSW --> DVM[DSN-DVM-368 Volt Display]
-  FUSE --> BUCK5V[5 V Buck >=6-8 A]
+  SHUNT --> INA226[INA226 Battery Monitor<br/>I2C + VBUS + IN+/IN- sense]
+  MSW --> BATT_TAP[Optional Voltage Sense Tap<br/>fused/current-limited]
+  PWRDIST --> BUCK5V[5 V Buck >=6-8 A]
   VM --> CS_L[ACS758L Left<br/>IP+ + IP-]
   VM --> CS_R[ACS758R Right<br/>IP+ + IP-]
   CS_L --> MDD_L[MDD20A M1 VM]
@@ -87,6 +97,12 @@ graph TD
     CS_R_V[ACS758R Vout] -->|10k/20k divider + 1k/100nF| ADC_R[PC1 ADC1_IN11]
   end
 
+  subgraph Battery Voltage to ADC
+    BATT_TAP -->|optional high-value divider + RC + clamp| ADC_BATT[STM ADC fallback TBD]
+  end
+
+  INA226 -.->|STM I2C PB8/PB9, future telemetry| MCU
+
   BUCK5V --> FUSE_JET[5 V Fuse 4-5 A]
   BUCK5V --> FUSE_MCU[5 V Fuse 0.5-1 A]
   FUSE_JET --> JET[Jetson Nano + Powered Hub]
@@ -99,10 +115,12 @@ graph TD
   GNDALL -.-> JET
   GNDALL -.-> Encoders
   GNDALL -.-> CurrentstoADC
+  GNDALL -.-> BatteryVoltagetoADC
 ```
 
 Notes
 - Insert one ACS758 per wheel supply. Keep IP+/IP- loops short. Route Vout away from motor leads.
+- Insert the battery shunt after the main fuse and before branch distribution so total robot current is measured. Do not route main battery current through the INA226 PCB.
 - Jetson/hub on dedicated high-current 5 V buck. Logic on separate 5 V buck or shared if capacity/noise is acceptable.
 - All grounds meet at a solid star point near the power entry.
 
@@ -206,9 +224,10 @@ ROS topic exchange
 
 - LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
 - Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
-- IMU (Adafruit BNO080): I2C to Jetson (3.3 V logic, STEMMA QT/Qwiic). Power from Jetson 3.3 V; ensure common ground and keep cable short.
-  - Jetson J41 pins: 3.3 V = pin 1, GND = pin 6, SDA (I2C1) = pin 3, SCL (I2C1) = pin 5.
+- IMU dev board (Adafruit BNO080 or equivalent): I2C to STM32 (3.3 V logic, STEMMA QT/Qwiic or short jumper wiring). Power from the 3.3 V logic rail; ensure common ground and keep cable short.
+  - STM planned I2C pins: SCL = `PB8` (Arduino D15 / Nucleo header), SDA = `PB9` (Arduino D14 / Nucleo header).
 - Proximity Sensors: 4x HC-SR04 ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; level-shift echo to 3.3 V (HC-SR04 echo is 5 V). Use a simple divider (10 kOhm top / 20 kOhm bottom) or a BSS138 level shifter.
+- Battery voltage sense: planned STM32 ADC input from protected pack-voltage divider. Do not connect the battery's unused 5/6-pin connector until its pinout is identified at home.
 
 Notes
 - Use powered USB hub if multiple high-draw USB devices are attached.
@@ -216,16 +235,21 @@ Notes
 
 ---
 
-## 6a) IMU Wiring Diagram (Jetson I2C)
+## 6a) IMU + INA226 Wiring Diagram (Planned STM I2C)
 
 ```mermaid
 graph LR
-  JET[Jetson Nano J41]
-  IMU[BNO080 IMU]
-  JET -- "Pin 1 (3.3V)" --> IMU
-  JET -- "Pin 6 (GND)" --> IMU
-  JET -- "Pin 3 (SDA, I2C1)" --> IMU
-  JET -- "Pin 5 (SCL, I2C1)" --> IMU
+  STM[STM32 Nucleo F401RE]
+  IMU[BNO080 or equivalent IMU dev board]
+  INA[INA226 battery monitor]
+  STM -- "3.3V" --> IMU
+  STM -- "GND" --> IMU
+  STM -- "PB9 / D14 (SDA, planned I2C1)" --> IMU
+  STM -- "PB8 / D15 (SCL, planned I2C1)" --> IMU
+  STM -- "3.3V" --> INA
+  STM -- "GND" --> INA
+  STM -- "PB9 / D14 (SDA, planned I2C1)" --> INA
+  STM -- "PB8 / D15 (SCL, planned I2C1)" --> INA
 ```
 
 ## 7) Proximity Sensors + STM32 (4x HC-SR04 Ultrasonic)
@@ -234,12 +258,23 @@ Goal: Obstruction detection around the AMR perimeter using 4 HC-SR04 ultrasonic 
 
 Interface and pin map (STM32 3.3 V GPIO; echo level-shift to 3.3 V):
 - S1 front_left: TRIG -> PA10 (Arduino D2), ECHO -> PC7 (Arduino D9)
-- S2 front_right: TRIG -> PB3 (Arduino D3), ECHO -> PB6 (Arduino D10)
+- S2 front_right: TRIG -> PC2 candidate, ECHO -> PC3 candidate
 - S3 rear_left: TRIG -> PA4 (Arduino A2), ECHO -> PC0 (Arduino A5)
-- S4 rear_right: TRIG -> PB9 (Arduino D14), ECHO -> PB8 (Arduino D15)
+- S4 rear_right: TRIG -> PB12 candidate, ECHO -> PB13 candidate
 Notes:
-- D14/D15 are the I2C pins; if you need I2C later, move S4 to other free GPIOs.
+- These are provisional pin candidates. Verify Nucleo header availability and update CubeMX before wiring.
+- `PB3` is reserved for SWO in the current CubeMX configuration and should not be used for proximity unless debug trace is intentionally changed.
+- `PB8/PB9` are reserved for planned STM I2C shared by the IMU and INA226 and should not be consumed by proximity.
 - Echo: use 10 kOhm / 20 kOhm divider (or level shifter) to keep MCU input at 3.3 V max.
+
+Shield conditioning:
+- ECHO level reduction is required on every HC-SR04 echo line. Use one divider per sensor, for example 10 kOhm from ECHO to STM input and 20 kOhm from STM input to GND, or use a proper 5 V to 3.3 V buffer.
+- Add 100-330 Ohm series resistor on each TRIG line near the STM pin.
+- Add 100 kOhm pulldown on each TRIG line so sensors remain idle during STM reset.
+- Optional ECHO noise filter: 100-330 Ohm series resistor plus 100-470 pF to GND. Keep this small; large RC values distort pulse width and corrupt distance measurement.
+- Add 100 nF ceramic plus 10 uF bulk decoupling from 5 V to GND near each proximity connector.
+- For off-shield sensor cables, add low-capacitance ESD/TVS protection on TRIG/ECHO lines if practical.
+- Use one 4-pin connector per sensor: 5 V, TRIG, ECHO_3V3, GND. Route ECHO away from motor PWM/current wiring and keep a ground return near signal wires.
 
 Timing
 - Stagger triggers (round-robin) to avoid crosstalk; add minimal dead time between pings.
@@ -248,7 +283,66 @@ Power
 - 5 V supply from logic rail; decouple each module (0.1 uF + 10 uF); tie grounds to logic ground.
 
 Firmware notes
-- Round-robin firing, timeout for no-echo, median/low-pass filtering; publish via `/amr/obstacles` (e.g., sensor_msgs/Range[]).
+- Round-robin firing, timeout for no-echo, median/low-pass filtering; STM raw range telemetry should use a future `/amr_stm/*` topic contract. A ROS-side obstacle/range node may later convert that into higher-level obstacle topics.
+
+```mermaid
+graph LR
+  P5V[5 V Logic Rail] --> S1[Front Left HC-SR04]
+  P5V --> S2[Front Right HC-SR04]
+  P5V --> S3[Rear Left HC-SR04]
+  P5V --> S4[Rear Right HC-SR04]
+  S1 -- TRIG --> PA10[PA10 / D2]
+  S1 -- ECHO through divider --> PC7[PC7 / D9]
+  S2 -- TRIG --> PC2[PC2 candidate]
+  S2 -- ECHO through divider --> PC3[PC3 candidate]
+  S3 -- TRIG --> PA4[PA4 / A2]
+  S3 -- ECHO through divider --> PC0[PC0 / A5]
+  S4 -- TRIG --> PB12[PB12 candidate]
+  S4 -- ECHO through divider --> PB13[PB13 candidate]
+  GND[Logic GND] --- S1
+  GND --- S2
+  GND --- S3
+  GND --- S4
+```
+
+## 7a) Battery Monitoring + INA226 External Shunt
+
+Goal: Make pack voltage, total battery current, power, and later energy usage visible to STM firmware, ROS diagnostics, safety baselines, hardware acceptance reports, and future Orin monitoring.
+
+Preferred path:
+- Placement: battery positive -> main switch -> main fuse -> external shunt -> robot power distribution.
+- Current sensing: use an external 50 A minimum shunt, preferably 75 A or 100 A for transient headroom. Common shunts are rated by full-scale current and millivolt drop, such as 50 A / 75 mV.
+- INA226 connections: `IN+` to battery/fuse side of shunt, `IN-` to robot/load side of shunt, `VBUS` to robot/load positive through a fused/current-limited sense tap, `GND` to robot ground, `VCC` to 3.3 V logic, `SDA` to STM `PB9`, and `SCL` to STM `PB8`.
+- Mechanical wiring: high-current battery wiring must use the shunt's main bolts or terminals. INA226 sense wires are thin Kelvin sense leads only.
+- Planned software values: battery voltage, battery current, battery power, and eventually accumulated energy/charge.
+- Planned ROS topics after STM firmware/micro-ROS implementation: `/amr_stm/battery_voltage_mv`, `/amr_stm/battery_current_ma`, and `/amr_stm/battery_power_mw`.
+
+STM I2C shield conditioning:
+- Pull up `PB8`/SCL and `PB9`/SDA to 3.3 V only. Start with 4.7 kOhm. Use 2.2-3.3 kOhm only if bus capacitance or cable length requires faster rise time.
+- Avoid duplicate strong pull-ups across the shield, IMU breakout, and INA226 breakout. Measure the effective pull-up before soldering extras permanently.
+- Power IMU and INA226 logic at 3.3 V if supported. If any breakout forces 5 V I2C pull-ups, remove those pull-ups or add a bidirectional I2C level shifter.
+- Add 22-100 Ohm series damping resistors on SCL/SDA near the STM if either device is connected through off-board wiring.
+- Add 100 nF decoupling at each IMU/INA226 module VCC, plus 1-10 uF bulk near the I2C connector or sensor cluster.
+- Expose INA226 address straps/jumpers and verify the INA226 address does not conflict with the IMU address.
+- Keep SCL/SDA short and routed together over ground. Avoid motor PWM, motor leads, shunt force-current wiring, and buck converter switch nodes.
+
+INA226/shunt conditioning:
+- Use an external shunt rated at least 50 A; 75 A or 100 A is preferred for transient headroom. Common shunts are 75 mV full-scale.
+- Main battery current must pass through the shunt's main terminals, not through the INA226 PCB traces.
+- Use dedicated Kelvin sense wires from the shunt sense screws to INA226 `IN+` and `IN-`; do not share the high-current path.
+- Add small input filtering close to the INA226 if needed: 10-100 Ohm in each sense lead plus a 10-100 nF differential capacitor, following the module/datasheet limits.
+- Connect `VBUS` to the robot bus/load side of the shunt through a fused/current-limited sense tap. Add 100-1 kOhm series resistance and local clamp/TVS protection if the sense wire leaves the shield.
+- Keep INA226 low-voltage logic referenced to logic GND. Keep Kelvin traces symmetric and away from motor current loops.
+
+Fallback voltage-only path:
+- If INA226 integration is delayed, add a protected high-value divider from the robot bus on the load side of the shunt into an STM32 ADC candidate. The ADC pin is TBD; choose final pin ownership before wiring.
+- This fallback gives pack voltage only. It does not provide total robot current or power.
+
+Battery auxiliary connector investigation:
+- The unused 5/6-pin battery connector is not yet assigned in the wiring plan.
+- When the robot is available, identify connector type, pin count, keying, wire colors, and vendor markings.
+- Measure only with a high-impedance meter first: each pin to pack negative, adjacent pin-to-pin voltage, and whether any pin is temperature/NTC or communication.
+- Do not connect this connector to STM32, Jetson, USB adapters, or the voltage display until the pinout is known.
 
 ---
 
@@ -291,6 +385,8 @@ Safety and layout
   - `PA0/PA1 / TIM2` + Right encoder A/B
   - `PB0 / ADC1_IN8` + Left motor current (ACS758)
   - `PC1 / ADC1_IN11` + Right motor current (ACS758)
+- STM I2C `PB8/PB9` + INA226 battery monitor with external shunt (planned)
+  - STM ADC candidate + Battery pack voltage divider fallback only if INA226 is delayed; choose final pin before wiring
   - `PA2/PA3` + UART2 TX/RX to Jetson (optional)
   - `PA5` + Status LED
   - `PB10` + E-stop sense input (active-low, pull-up to 3.3 V)
@@ -298,6 +394,8 @@ Safety and layout
   - Cytron MDD20A terminals: M1 PWM, M1 DIR, M2 PWM, M2 DIR, VM, GND, Motor outputs
 - Encoder: A, B, V+, GND (open-collector outputs with 3.3 V pull-ups)
 - Proximity Sensors (x4 HC-SR04): V+, GND, TRIG, ECHO to STM32 GPIOs (echo level-shift to 3.3 V)
+- Battery monitoring: external shunt plus INA226 I2C module for total pack voltage/current/power telemetry
+- Battery voltage fallback: protected divider from robot bus/load side of shunt to STM32 ADC pin TBD
 - Jetson Nano: 5 V, GND, USB ports, J41 UART if used
 - YDLidar G4 / RealSense D455: USB to Jetson via powered hub; 5 V from sensor/USB rail
 - Proximity: Trigger/Echo GPIO (HC-SR04, see mapping above)

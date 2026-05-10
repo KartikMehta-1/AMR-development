@@ -17,7 +17,40 @@ power:
     continuous_amps: null
     peak_amps: null
     protections: [OVP, UVP, OCP, SCP]    # basic protections; telemetry limited
-    notes: Pack includes built-in BMS; exposes only P+/P- (no cell taps or telemetry). Add pack-voltage sense if needed.
+    auxiliary_connector: unverified_5_or_6_pin
+    notes: Pack includes built-in BMS. Main output is P+/P-. An unused 5/6-pin connector is present but its pinout is unverified; treat it as possibly balance, temperature, or BMS telemetry and do not connect to STM/Jetson until measured and identified. Add protected pack-voltage sense if host telemetry is needed.
+  voltage_monitoring:
+    status: planned
+    preferred_path: INA226_I2C_external_shunt
+    source: battery_pack_after_main_fuse
+    shunt:
+      type: external
+      minimum_rating_amps: 50
+      preferred_rating_amps: 75_or_100
+      typical_full_scale_drop_mv: 75
+      placement: after_main_switch_and_main_fuse_before_power_distribution
+      notes: Main battery current must pass through the external shunt, not through the INA226 PCB. Use bolted/crimped high-current wiring and Kelvin sense leads to INA226 IN+/IN-.
+    monitor:
+      ic: INA226
+      interface: i2c
+      host: stm32_planned
+      bus: stm_i2c1_planned
+      scl_pin: PB8
+      sda_pin: PB9
+      vcc: 3v3_preferred
+      signals: [VCC, GND, SDA, SCL, IN_PLUS, IN_MINUS, VBUS]
+      notes: Use a module that exposes I2C and supports external shunt wiring. STM ownership is planned on PB8/PB9, sharing the STM I2C bus with the IMU. STM firmware/CubeMX must enable I2C before wiring this as an active interface.
+    fallback_voltage_only:
+      path: STM32_ADC_pack_voltage_divider
+      adc_pin_candidate: TBD
+      adc_channel_candidate: TBD
+      notes: Choose only if INA226 is delayed; do not reuse a proximity pin without updating CubeMX and wiring docs.
+    target_topics:
+      - /amr_stm/battery_voltage_mv
+      - /amr_stm/battery_current_ma
+      - /amr_stm/battery_power_mw
+    display_module: DSN-DVM_or_DUM-368_panel_meter
+    notes: Existing panel meter is currently display-only unless the exact module proves it exposes a telemetry output. Typical 2-wire/3-wire LED voltmeters provide power/sense wiring, not a microcontroller-safe data output. Firmware/ROS telemetry path will be implemented later together with proximity and IMU work.
   dc_dc:
     jetson_5v:
       input: battery_pack
@@ -118,23 +151,37 @@ sensors:
   imu:
     model: adafruit_bno080
     interface: i2c
-    host: jetson_nano
-    bus: /dev/i2c-1
-    sda_pin: J41-3
-    scl_pin: J41-5
-    power_pin: J41-1_3v3
-    gnd_pin: J41-6
+    host: stm32_planned
+    bus: stm_i2c1_planned
+    sda_pin: PB9
+    scl_pin: PB8
+    power_pin: 3v3_logic
+    gnd_pin: logic_gnd
     power_rail: 3v3
-    notes: Connect to Jetson I2C (3.3 V logic). Use STEMMA QT/Qwiic cable if available; keep leads short.
+    notes: Planned STM I2C connection on PB8/PB9 shared with INA226. Use 3.3 V logic only, verify IMU and INA226 I2C addresses do not conflict, and keep leads short.
   proximity:
     quantity: 4
     model: hc_sr04_ultrasonic
+    status: planned_provisional_pins
     power_rail: 5v
     interface: gpio_trig_echo
     units: distance           # mm in firmware
     level_shift: echo_divider_to_3v3   # ensure echo is 3.3 V safe
     firing_strategy: staggered_round_robin
-    notes: Stagger triggers to avoid crosstalk; HC-SR04 echo is 5 V (level-shift to 3.3 V); add 0.1 uF + 10 uF per module; keep leads short
+    notes: Stagger triggers to avoid crosstalk; HC-SR04 echo is 5 V (level-shift to 3.3 V); add 0.1 uF + 10 uF per module; keep leads short. Pin candidates avoid PB3/SWO and reserve PB8/PB9 for STM I2C unless intentionally changed in CubeMX.
+    shield_conditioning:
+      trig_series_ohms: 100_to_330
+      trig_pulldown_ohms: 100000
+      echo_level_shift: required_5v_to_3v3
+      echo_divider_example:
+        r_top_ohms: 10000
+        r_bottom_ohms: 20000
+      echo_optional_filter:
+        r_series_ohms: 100_to_330
+        c_shunt_pf: 100_to_470
+        notes: Keep RC small to avoid distorting pulse width.
+      connector_per_sensor: [5v, trig, echo_3v3, gnd]
+      decoupling_per_sensor: [100nf, 10uf]
     channels:
       - id: S1
         position: front_left
@@ -143,9 +190,9 @@ sensors:
         notes: add divider or level shifter on echo if module drives 5 V high
       - id: S2
         position: front_right
-        trig_pin: PB3          # Arduino D3
-        echo_pin: PB6          # Arduino D10
-        notes: add divider or level shifter on echo if module drives 5 V high
+        trig_pin: PC2          # candidate GPIO; verify Nucleo header/CubeMX before wiring
+        echo_pin: PC3          # candidate GPIO; verify Nucleo header/CubeMX before wiring
+        notes: add divider or level shifter on echo if module drives 5 V high; avoids PB3 because PB3 is SWO in current CubeMX
       - id: S3
         position: rear_left
         trig_pin: PA4          # Arduino A2
@@ -153,21 +200,33 @@ sensors:
         notes: add divider or level shifter on echo if module drives 5 V high
       - id: S4
         position: rear_right
-        trig_pin: PB9          # Arduino D14 (I2C SDA)
-        echo_pin: PB8          # Arduino D15 (I2C SCL)
-        notes: add divider or level shifter on echo if module drives 5 V high
+        trig_pin: PB12         # candidate Morpho GPIO; verify Nucleo header/CubeMX before wiring
+        echo_pin: PB13         # candidate Morpho GPIO; verify Nucleo header/CubeMX before wiring
+        notes: add divider or level shifter on echo if module drives 5 V high; PB8/PB9 are reserved as STM I2C candidates
 
 buses:
-  i2c1:
+  jetson_i2c1:
     host: jetson_nano
     bus: /dev/i2c-1
     scl: J41-5
     sda: J41-3
     pullups: onboard_3v3
-  i2c2:
-    scl: TBD
-    sda: TBD
+    status: available_not_selected_for_current_stm_sensor_plan
+  stm_i2c1_planned:
+    host: stm32
+    scl: PB8
+    sda: PB9
     pullups: external_3v3
+    shared_devices: [imu, ina226_battery_monitor]
+    status: planned_not_enabled_in_current_firmware
+    pullups:
+      voltage: 3v3
+      recommended_ohms: 4700
+      range_ohms: 2200_to_4700
+      notes: Avoid duplicate strong pull-ups on IMU, INA226, and shield.
+    series_damping_ohms: 22_to_100
+    decoupling: [100nf_per_module, 1uf_to_10uf_bulk_near_connector]
+    notes: On STM32F401RE PB8/PB9 are typically I2C1 SCL/SDA alternate-function pins; verify in CubeMX before firmware implementation. Power I2C devices at 3.3 V or add level shifting if any breakout forces 5 V pull-ups.
 
 adc:
   vref_volts: 3.3
@@ -201,6 +260,18 @@ adc:
         r_series_ohms: 1000
         c_shunt_nf: 100
       status: active           # included in ADC regular sequence (Rank 2)
+    - id: battery_pack_voltage
+      pin: TBD                 # fallback only; choose after proximity pin ownership is finalized
+      name: V_BATT_PACK
+      source: robot_bus_load_side_of_shunt
+      divider:
+        status: planned
+        design_goal: scale_14_6v_full_charge_to_under_3_3v_adc
+        notes: Use high-value divider, input fuse or current limit, series resistor, RC filter, and optional clamp protection. Final resistor values and ADC pin TBD after confirming header availability, proximity pin ownership, and acceptable input impedance.
+      filter:
+        status: planned
+        notes: Add RC filtering near STM ADC input for motor/PWM noise rejection.
+      status: planned
 
 current_sensors:
   model: ACS758LCB-050B        # Allegro Hall-effect current sensor +/-50 A

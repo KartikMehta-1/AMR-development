@@ -131,7 +131,7 @@ Mounting and effective resolution
 | Supply Voltage | 3.3 V (check board regulator if powering from 5 V) |
 | Outputs | Orientation (quaternion), angular velocity, linear acceleration |
 | Mounting | Rigidly mounted near base center; minimize vibration |
-| Notes | Connect to Jetson I2C at 3.3 V logic. Keep leads short and share ground with Jetson. |
+| Notes | Planned near-term wiring is STM I2C on `PB8/PB9` at 3.3 V logic, shared with the INA226 battery monitor. Keep leads short, share logic ground, and verify I2C address compatibility before firmware bring-up. |
 
 ---
 
@@ -198,7 +198,7 @@ Notes
 | Continuous/Peak Current | Per pack design; not externally specified |
 | Protections | OVP, UVP, OCP, SCP (basic) |
 | Balance Method | Passive (typical for pack-integrated BMS) |
-| Notes | Pack exposes only P+/P-; no cell-level telemetry. Add pack-voltage sensing if host needs charge status. |
+| Notes | Main pack output is P+/P-. An unused 5/6-pin connector is present but unverified; identify it before use because it may be balance leads, thermistor wiring, or BMS telemetry. Add protected pack-voltage sensing if host needs charge status. |
 
 ## 13. Charger
 **Model:** Pro Range 4S LiFePO4 14.6 V 7 A with nylon T male
@@ -223,7 +223,25 @@ Notes
 | Accuracy | ~±1% FS (verify per batch; calibrate if needed) |
 | Wiring | 2-wire: Red = V+, Black = GND (senses its own supply). 3-wire variant: Red = V+, Black = GND, Yellow = sense (tie to Red if single-line). |
 | Mounting | Panel mount with bezel; cutout sized for module |
-| Notes | Connect after main power switch so the display is off when the robot is off; fuse the feed if run separately. |
+| Notes | Connect after main power switch so the display is off when the robot is off; fuse the feed if run separately. Treat this as display-only unless the exact module datasheet proves it has a separate telemetry output. The 3-wire sense lead, if present, is normally an input to the display, not an output to STM/Jetson. |
+
+---
+
+## 15. Planned Battery Telemetry Monitor
+**Model:** INA226 I2C current/voltage/power monitor module with external shunt
+
+| Parameter | Value |
+|------------|--------|
+| Status | Planned |
+| Bus Voltage Range | Suitable for 12.8 V LiFePO4 pack; INA226 class supports up to 36 V bus voltage |
+| Current Measurement | External shunt, 50 A minimum; 75 A or 100 A preferred for transient headroom |
+| Typical Shunt | 50 A / 75 mV = 1.5 mOhm, or equivalent external shunt with known resistance |
+| Interface | Planned I2C to STM32 on `PB8/PB9`; CubeMX/firmware changes required |
+| Placement | After main switch and main fuse, before branch power distribution |
+| Intended Telemetry | Pack voltage, total battery current, battery power, later Ah/Wh estimate in software |
+| Planned ROS Topics | `/amr_stm/battery_voltage_mv`, `/amr_stm/battery_current_ma`, `/amr_stm/battery_power_mw` |
+| Shield Components | 3.3 V I2C pull-ups around 4.7 kOhm unless breakout pull-ups already exist; 22-100 Ohm optional SCL/SDA series damping; 100 nF local decoupling; fused/current-limited VBUS sense tap; optional 10-100 Ohm shunt-sense series resistors plus 10-100 nF differential filter near INA226 |
+| Notes | Do not pass main battery current through a small INA226 breakout PCB. Use bolted/crimped high-current wiring through the external shunt and Kelvin sense wires to INA226 `IN+`/`IN-`. If the INA226 module includes an onboard shunt, bypass/remove it or use a module designed for external shunt input. |
 
 ---
 
