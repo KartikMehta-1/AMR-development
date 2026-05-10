@@ -34,6 +34,16 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `docker` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Dockerfiles and runtime images for dev PC, Jetson Nano, and upcoming Jetson Orin NX. |
 | `docker-compose.slam.yml` | Runtime Environment Agent | Navigation / Mission / Safety Agent | active | Runtime orchestration; do not start hardware-facing services without explicit request. |
 | `mcp_servers` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | MCP servers for agent/tool integration. Read-only state servers may inspect ROS graph state; motion or fault-changing tools require explicit permission and harness coverage first. |
+| `docs/architecture/README.md` | ROS Core / Hardware Interface Agent | all domain agents | active | Architecture index and agent-owned diagram routing map. |
+| `docs/architecture/00_system_hierarchy.md` | ROS Core / Hardware Interface Agent | all domain agents | active | Top-level communication hierarchy from high-level input to actuators and sensor feedback. Keep this stable and link block-level diagrams from it. |
+| `docs/architecture/10_runtime_environment.md` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Runtime environment architecture entry point for Docker, dev PC, Nano, and Orin profiles. |
+| `docs/architecture/20_ros_core_hardware_interface.md` | ROS Core / Hardware Interface Agent | STM Firmware Agent | active | ROS core and hardware interface architecture entry point. |
+| `docs/architecture/30_navigation_mission_safety.md` | Navigation / Mission / Safety Agent | ROS Core / Hardware Interface Agent | active | Navigation, mission, localization, and safety architecture entry point. |
+| `docs/architecture/40_stm_firmware.md` | STM Firmware Agent | ROS Core / Hardware Interface Agent | active | STM firmware architecture entry point. Detailed source remains `STM_architecture.md`. |
+| `docs/architecture/50_voice_operator_interface.md` | Voice / Operator Interface Agent | Navigation / Mission / Safety Agent | active | Voice/text operator interface architecture entry point. |
+| `docs/architecture/60_manipulator_moveit.md` | Manipulator / MoveIt Agent | ROS Core / Hardware Interface Agent | future | Future SO-101 manipulator and MoveIt architecture entry point. |
+| `docs/architecture/70_perception_calibration.md` | Perception / Calibration Agent | Manipulator / MoveIt Agent | future | Future perception, calibration, and proposal-output architecture entry point. |
+| `docs/architecture/80_physical_hardware.md` | STM Firmware Agent | Runtime Environment Agent | active | Physical hardware architecture summary that links to detailed hardware docs. |
 | `docs/architecture/STM_architecture.md` | STM Firmware Agent | ROS Core / Hardware Interface Agent | active | Firmware architecture and micro-ROS contract docs. |
 | `docs/architecture/ros_stack_diagrams.md` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | ROS graph, topic ownership, TF, and stack wiring. |
 | `docs/architecture/jetson_architecture.md` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Jetson runtime architecture. |
