@@ -9,6 +9,16 @@ This folder is organized by documentation purpose.
 
 ## Architecture
 
+- `architecture/README.md` - architecture index and agent-owned diagram map
+- `architecture/00_system_hierarchy.md` - top-level AMR hierarchy from operator/agent input to actuators and sensor feedback
+- `architecture/10_runtime_environment.md` - Docker, dev PC, Jetson Nano, Orin NX, Foxy/Humble split
+- `architecture/20_ros_core_hardware_interface.md` - ROS core, `ros2_control`, hardware bridge, TF, STM topic bridge
+- `architecture/30_navigation_mission_safety.md` - SLAM, AMCL, Nav2, mission, safety
+- `architecture/40_stm_firmware.md` - STM32 firmware architecture entry point
+- `architecture/50_voice_operator_interface.md` - voice/text operator interface architecture
+- `architecture/60_manipulator_moveit.md` - future SO-101 manipulator and MoveIt architecture
+- `architecture/70_perception_calibration.md` - future perception and calibration architecture
+- `architecture/80_physical_hardware.md` - physical hardware architecture summary
 - `architecture/ros_stack_diagrams.md` - ROS 2 graph, TF ownership, navigation stack
 - `architecture/STM_architecture.md` - STM32 firmware architecture
 - `architecture/jetson_architecture.md` - Jetson runtime architecture
