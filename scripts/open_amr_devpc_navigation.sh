@@ -27,9 +27,7 @@ JETSON_CONTROLLERS_TIMEOUT_SEC="${AMR_JETSON_CONTROLLERS_TIMEOUT_SEC:-45}"
 STM_AUTO_RESET="${AMR_STM_AUTO_RESET:-true}"
 SAFETY_ENFORCE="${AMR_SAFETY_ENFORCE:-false}"
 SAFETY_REQUIRE_AMCL="${AMR_SAFETY_REQUIRE_AMCL:-false}"
-VOICE_MODE="${AMR_VOICE_MODE:-text}"
-VOICE_DEVICE="${AMR_VOICE_DEVICE:-auto}"
-VOICE_ASR_EXTRA_ARGS="${AMR_VOICE_ASR_EXTRA_ARGS:-}"
+VOICE_MODE="${AMR_VOICE_MODE:-off}"
 GRAPH_MONITOR_PERIOD="${AMR_GRAPH_MONITOR_PERIOD:-3.0}"
 MAP_READY_TIMEOUT_SEC="${AMR_MAP_READY_TIMEOUT_SEC:-12}"
 MAP_FALLBACK_PUBLISHER="${AMR_MAP_FALLBACK_PUBLISHER:-true}"
@@ -47,8 +45,7 @@ Examples:
 
 Optional environment:
   AMR_RVIZ_CONFIG_PATH=/workspaces/AMR-development/ros_ws/src/amr_description/config/amr.rviz
-  AMR_VOICE_MODE=text|asr|both|off
-  AMR_VOICE_DEVICE=auto
+  AMR_VOICE_MODE=off
   AMR_GRAPH_MONITOR_PERIOD=3.0
   AMR_MAP_FALLBACK_PUBLISHER=true|false
   AMR_ATTACH_TMUX=true|false
@@ -63,7 +60,7 @@ This starts:
   - safety_supervisor and live safety status pane
   - a mission command shell for mission_cli actions
   - keyboard teleop for fallback checks
-  - typed and/or microphone voice command panes, depending on AMR_VOICE_MODE
+  - no legacy voice command panes; voice work is MCP-based
 EOF
   exit 1
 }
@@ -112,9 +109,9 @@ require_cmd ssh
 resolve_map_paths "$1"
 
 case "${VOICE_MODE}" in
-  text|asr|both|off) ;;
+  off) ;;
   *)
-    echo "Invalid AMR_VOICE_MODE='${VOICE_MODE}'. Expected text, asr, both, or off." >&2
+    echo "Invalid AMR_VOICE_MODE='${VOICE_MODE}'. Legacy voice panes were removed; use AMR_VOICE_MODE=off." >&2
     exit 1
     ;;
 esac
@@ -462,33 +459,6 @@ safety_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${nodes_pane}" 
 tmux select-pane -t "${safety_pane}" -T "Safety"
 safety_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_safety_status_monitor.py")")"
 tmux select-pane -t "${safety_status_pane}" -T "Safety Status"
-
-if [[ "${VOICE_MODE}" != "off" ]]; then
-  voice_text_cmd="cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then echo 'Typed voice commands ready. Examples: lovely status, lovely go kitchen, yes, stop'; ros2 run amr_voice voice_command_node --input-mode text --wake-gated; else echo 'amr_voice package not present; typed voice pane disabled.'; exec bash -i; fi"
-  voice_asr_cmd="cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; ${wait_for_localization}; ${wait_for_mission_services}; if [ -f src/amr_voice/package.xml ]; then echo 'Microphone ASR ready. Say: lovely status, lovely go kitchen, yes, stop'; ros2 run amr_voice voice_asr_node --device ${VOICE_DEVICE} ${VOICE_ASR_EXTRA_ARGS}; status=\$?; echo; echo \"voice_asr_node exited with status \${status}. Check microphone device/model setup if ASR did not start.\"; exec bash -i; else echo 'amr_voice package not present; ASR pane disabled.'; exec bash -i; fi"
-  case "${VOICE_MODE}" in
-    text)
-      voice_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n voice "$(container_cmd "${voice_text_cmd}")")"
-      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-status top
-      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-format ' #{pane_index}: #{pane_title} '
-      tmux select-pane -t "${voice_pane}" -T "Voice Text"
-      ;;
-    asr)
-      voice_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n voice "$(container_cmd "${voice_asr_cmd}")")"
-      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-status top
-      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-format ' #{pane_index}: #{pane_title} '
-      tmux select-pane -t "${voice_pane}" -T "Voice ASR"
-      ;;
-    both)
-      voice_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n voice "$(container_cmd "${voice_text_cmd}")")"
-      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-status top
-      tmux set-window-option -t "${SESSION_NAME}:voice" pane-border-format ' #{pane_index}: #{pane_title} '
-      tmux select-pane -t "${voice_pane}" -T "Voice Text"
-      voice_asr_pane="$(tmux split-window -h -p 50 -P -F '#{pane_id}' -t "${voice_pane}" "$(container_cmd "${voice_asr_cmd}")")"
-      tmux select-pane -t "${voice_asr_pane}" -T "Voice ASR"
-      ;;
-  esac
-fi
 
 tmux select-window -t "${SESSION_NAME}:navigation"
 tmux select-pane -t "${mission_shell_pane}"

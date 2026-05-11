@@ -17,7 +17,7 @@ class VoiceIntentDecision:
 class VoiceIntentAdapter:
     """Shared voice/text intent adapter used before mission clients are called."""
 
-    def __init__(self, known_places: Optional[Iterable[str]] = None, wake_word: str = "lovely"):
+    def __init__(self, known_places: Optional[Iterable[str]] = None, wake_word: str = "hey jarvis"):
         self.known_places = known_places
         self.wake_word = wake_word
 

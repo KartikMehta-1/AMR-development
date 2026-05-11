@@ -15,14 +15,13 @@ setup(
     zip_safe=True,
     maintainer="Kartik",
     maintainer_email="kartik@example.com",
-    description="Text and voice command interface for AMR mission control.",
+    description="MCP-oriented voice intent helpers for AMR operator input.",
     license="Proprietary",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "voice_text_cli = amr_voice.voice_text_cli:main",
-            "voice_command_node = amr_voice.voice_text_cli:main",
-            "voice_asr_node = amr_voice.voice_asr_node:main",
+            "wake_word_node = amr_voice.wake_word_node:main",
+            "vad_node = amr_voice.vad_node:main",
         ],
     },
 )

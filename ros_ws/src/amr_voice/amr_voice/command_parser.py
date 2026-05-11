@@ -112,7 +112,7 @@ _PLACE_ALIASES = {
 def parse_text_command(
     text: str,
     known_places: Optional[Iterable[str]] = None,
-    wake_word: str = "lovely",
+    wake_word: str = "hey jarvis",
     require_wake_word: bool = False,
 ) -> ParsedCommand:
     normalized = _normalize(text)
@@ -120,7 +120,7 @@ def parse_text_command(
         return ParsedCommand(UNKNOWN, detail="empty command")
 
     wake_word_normalized = _normalize(wake_word)
-    wake_detected = wake_word_normalized in normalized.split()
+    wake_detected = _contains_wake_word(normalized, wake_word_normalized)
     command_text = _strip_wake_word(normalized, wake_word_normalized)
     if wake_detected and not command_text:
         return ParsedCommand(
@@ -199,8 +199,29 @@ def _normalize(text: str) -> str:
 def _strip_wake_word(text: str, wake_word: str) -> str:
     if not wake_word:
         return text
-    words = [word for word in text.split() if word != wake_word]
-    return " ".join(words)
+    words = text.split()
+    wake_words = wake_word.split()
+    if not wake_words:
+        return text
+    stripped = []
+    index = 0
+    while index < len(words):
+        if words[index : index + len(wake_words)] == wake_words:
+            index += len(wake_words)
+            continue
+        stripped.append(words[index])
+        index += 1
+    return " ".join(stripped)
+
+
+def _contains_wake_word(text: str, wake_word: str) -> bool:
+    if not wake_word:
+        return False
+    words = text.split()
+    wake_words = wake_word.split()
+    if not wake_words:
+        return False
+    return any(words[index : index + len(wake_words)] == wake_words for index in range(len(words)))
 
 
 def _drop_polite_prefix(text: str) -> str:
