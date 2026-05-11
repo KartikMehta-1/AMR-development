@@ -166,6 +166,9 @@ ros2 run amr_voice asr_file_cli input.wav \
   --model /workspaces/AMR-development/models/whisper/ggml-base.en.bin
 ```
 
+`asr_file_cli` assumes the wake word was already detected, so the MCP payload does not
+require the wake phrase in the transcript text unless `--require-wake-word` is passed.
+
 The removed legacy nodes were:
 - `voice_text_cli`
 - `voice_command_node`

@@ -30,7 +30,7 @@ def test_build_mcp_transcript_payload_keeps_asr_separate_from_execution():
     assert payload["text"] == "hey jarvis go to kitchen"
     assert payload["source"] == "laptop_transcript"
     assert payload["dry_run"] is True
-    assert payload["require_wake_word"] is True
+    assert payload["require_wake_word"] is False
     assert payload["known_places"] == ["home", "hall", "kitchen"]
 
 

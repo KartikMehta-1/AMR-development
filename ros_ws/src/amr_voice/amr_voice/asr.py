@@ -130,7 +130,7 @@ def build_mcp_transcript_payload(
     *,
     source: str = "laptop_transcript",
     wake_word: str = "hey jarvis",
-    require_wake_word: bool = True,
+    require_wake_word: bool = False,
     known_places: Optional[Sequence[str]] = None,
 ) -> dict:
     payload = {

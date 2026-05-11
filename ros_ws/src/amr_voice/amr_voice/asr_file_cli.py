@@ -24,9 +24,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--threads", type=int, default=defaults.threads)
     parser.add_argument("--source", default="laptop_transcript")
     parser.add_argument("--wake-word", default="hey jarvis")
-    parser.add_argument("--no-require-wake-word", dest="require_wake_word", action="store_false")
+    parser.add_argument(
+        "--require-wake-word",
+        action="store_true",
+        help="Require the wake phrase in the transcript text. Leave off for post-wake ASR segments.",
+    )
     parser.add_argument("--known-place", action="append", dest="known_places")
-    parser.set_defaults(require_wake_word=True)
+    parser.set_defaults(require_wake_word=False)
     return parser.parse_args()
 
 

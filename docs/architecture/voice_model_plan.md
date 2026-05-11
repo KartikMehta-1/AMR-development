@@ -64,8 +64,10 @@ ros2 run amr_voice asr_file_cli input.wav \
 ```
 
 It prints a JSON payload shaped for `mcp_servers/amr_voice_interface` and does not
-parse, confirm, or execute robot commands. Live microphone ASR should be built by
-feeding wake/VAD speech segments into the same transcript boundary.
+parse, confirm, or execute robot commands. Because live ASR runs after wake-word
+detection, the emitted MCP payload does not require the wake phrase to be present in
+the transcript text by default. Live microphone ASR should be built by feeding
+wake/VAD speech segments into the same transcript boundary.
 
 Example event:
 
