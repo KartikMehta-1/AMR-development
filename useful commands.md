@@ -161,13 +161,33 @@ Transcribe a WAV file with local `whisper.cpp` and emit voice-MCP arguments:
 ```bash
 ./scripts/setup_whisper_cpp.sh
 
+# For use from the Foxy container:
+AMR_WHISPER_BUILD_DIR=/workspaces/AMR-development/models/whisper.cpp/build-foxy \
+  ./scripts/setup_whisper_cpp.sh
+
 ros2 run amr_voice asr_file_cli input.wav \
-  --whisper-bin models/whisper.cpp/build/bin/whisper-cli \
+  --whisper-bin models/whisper.cpp/build-foxy/bin/whisper-cli \
   --model /workspaces/AMR-development/models/whisper/ggml-base.en.bin
 ```
 
 `asr_file_cli` assumes the wake word was already detected, so the MCP payload does not
 require the wake phrase in the transcript text unless `--require-wake-word` is passed.
+
+Run the live wake -> VAD -> ASR dry-run pipeline:
+
+```bash
+ros2 run amr_voice voice_pipeline_node \
+  --device 9 \
+  --whisper-bin /workspaces/AMR-development/models/whisper.cpp/build-foxy/bin/whisper-cli \
+  --whisper-model /workspaces/AMR-development/models/whisper/ggml-base.en.bin \
+  --log-audio-level
+```
+
+Bypass wake detection while tuning VAD/ASR:
+
+```bash
+ros2 run amr_voice voice_pipeline_node --start-listening --device 9 ...
+```
 
 The removed legacy nodes were:
 - `voice_text_cli`

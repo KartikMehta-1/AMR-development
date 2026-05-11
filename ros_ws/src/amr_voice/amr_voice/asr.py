@@ -84,6 +84,7 @@ class WhisperCppTranscriber:
             result = self._runner(
                 command,
                 check=False,
+                env=self._build_env(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -119,6 +120,20 @@ class WhisperCppTranscriber:
         ]
         command.extend(self.config.extra_args)
         return command
+
+    def _build_env(self) -> dict[str, str]:
+        env = dict(os.environ)
+        executable = Path(self.config.executable).expanduser()
+        build_dir = executable.parents[1] if len(executable.parents) > 1 else executable.parent
+        library_paths = [
+            build_dir / "src",
+            build_dir / "ggml" / "src",
+        ]
+        existing = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = ":".join(
+            [str(path) for path in library_paths if path.exists()] + ([existing] if existing else [])
+        )
+        return env
 
 
 def normalize_transcript(text: str) -> str:

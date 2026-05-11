@@ -44,7 +44,7 @@ def test_whisper_cpp_transcriber_reads_text_output(tmp_path: Path):
     whisper_bin.chmod(0o755)
     commands = []
 
-    def runner(command, check, stdout, stderr, text):
+    def runner(command, check, env, stdout, stderr, text):
         commands.append(command)
         output_base = Path(command[command.index("-of") + 1])
         output_base.with_suffix(".txt").write_text(" hey   jarvis go kitchen\n", encoding="utf-8")

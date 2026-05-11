@@ -58,8 +58,12 @@ The file-transcription entry point is:
 ```bash
 ./scripts/setup_whisper_cpp.sh
 
+# For use from the Foxy container:
+AMR_WHISPER_BUILD_DIR=/workspaces/AMR-development/models/whisper.cpp/build-foxy \
+  ./scripts/setup_whisper_cpp.sh
+
 ros2 run amr_voice asr_file_cli input.wav \
-  --whisper-bin models/whisper.cpp/build/bin/whisper-cli \
+  --whisper-bin models/whisper.cpp/build-foxy/bin/whisper-cli \
   --model /workspaces/AMR-development/models/whisper/ggml-base.en.bin
 ```
 
@@ -68,6 +72,25 @@ parse, confirm, or execute robot commands. Because live ASR runs after wake-word
 detection, the emitted MCP payload does not require the wake phrase to be present in
 the transcript text by default. Live microphone ASR should be built by feeding
 wake/VAD speech segments into the same transcript boundary.
+
+The first live end-to-end dry-run node is:
+
+```bash
+ros2 run amr_voice voice_pipeline_node \
+  --device 9 \
+  --whisper-bin /workspaces/AMR-development/models/whisper.cpp/build-foxy/bin/whisper-cli \
+  --whisper-model /workspaces/AMR-development/models/whisper/ggml-base.en.bin \
+  --log-audio-level
+```
+
+It publishes wake events, VAD events, transcripts, and MCP arguments, but it does not
+call the voice MCP or mission-control MCP by itself.
+
+For VAD/ASR tuning without wake detection:
+
+```bash
+ros2 run amr_voice voice_pipeline_node --start-listening --device 9 ...
+```
 
 Example event:
 
