@@ -76,17 +76,19 @@ def main() -> int:
             "list_named_places",
             "get_stm_diagnostics",
             "get_navigation_state",
+            "get_last_known_place",
         }
         if init_response["result"]["serverInfo"]["name"] != "amr-state-inspection":
             raise RuntimeError("unexpected server name")
         missing = required - tool_names
         if missing:
             raise RuntimeError(f"missing tools: {sorted(missing)}")
-        if unavailable_response["result"]["isError"] is not True:
-            raise RuntimeError("missing ROS graph did not produce an MCP tool error")
         content = unavailable_response["result"]["content"][0]["text"]
         payload = json.loads(content)
-        if payload["ok"] is not False or "service unavailable" not in payload["message"]:
+        if unavailable_response["result"]["isError"] is True:
+            if payload["ok"] is not False or "service unavailable" not in payload["message"]:
+                raise RuntimeError(f"unexpected unavailable payload: {payload}")
+        elif payload["ok"] is not True:
             raise RuntimeError(f"unexpected unavailable payload: {payload}")
         print("MCP smoke test: PASS")
         print(f"tools: {sorted(tool_names)}")

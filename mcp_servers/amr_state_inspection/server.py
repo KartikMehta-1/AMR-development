@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from dataclasses import asdict, is_dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 import rclpy
@@ -21,6 +22,16 @@ from amr_clients.stm_diagnostics_client import StmDiagnosticsClient
 SERVER_NAME = "amr-state-inspection"
 SERVER_VERSION = "0.1.0"
 DEFAULT_TIMEOUT_SEC = float(os.environ.get("AMR_MCP_TIMEOUT_SEC", "3.0"))
+
+
+def default_last_place_path() -> Path:
+    configured = os.environ.get("AMR_MISSION_LAST_PLACE_PATH")
+    if configured:
+        return Path(configured)
+    workspace_path = Path("/workspaces/AMR-development/ros_ws/log/amr_last_place.json")
+    if workspace_path.parent.exists() or Path("/workspaces/AMR-development").exists():
+        return workspace_path
+    return Path.home() / ".ros" / "amr_last_place.json"
 
 
 def to_jsonable(value: Any) -> Any:
@@ -198,6 +209,27 @@ class AmrStateTools:
         )
         return observed(status, status.active, "navigation lifecycle snapshot", status.blockers)
 
+    def get_last_known_place(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        path = Path(str(arguments.get("path") or default_last_place_path()))
+        if not path.is_file():
+            return observed(
+                {"path": str(path)},
+                False,
+                "last known place unavailable",
+                ["last_known_place_missing"],
+            )
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return observed(
+                {"path": str(path), "error": str(exc)},
+                False,
+                "last known place unreadable",
+                ["last_known_place_unreadable"],
+            )
+        data["path"] = str(path)
+        return ok(data, "last known place received")
+
 
 TOOL_DEFINITIONS = [
     {
@@ -256,6 +288,11 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "name": "get_last_known_place",
+        "description": "Read the last named place recorded after a successful mission. Does not estimate or set robot pose.",
+        "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}},
+    },
 ]
 
 
@@ -270,6 +307,7 @@ class McpServer:
             "list_named_places": self.tools.list_named_places,
             "get_stm_diagnostics": self.tools.get_stm_diagnostics,
             "get_navigation_state": self.tools.get_navigation_state,
+            "get_last_known_place": self.tools.get_last_known_place,
         }
 
     def handle(self, request: dict[str, Any]) -> dict[str, Any] | None:

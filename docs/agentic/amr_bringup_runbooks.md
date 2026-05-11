@@ -110,7 +110,7 @@ Owned launch scope:
 Required state-inspection verification:
 
 - Server starts inside `amr_devpc` after the workspace is built and sourced.
-- Tools list includes robot health, safety, localization, mission, named places, STM diagnostics, and navigation state.
+- Tools list includes robot health, safety, localization, mission, named places, STM diagnostics, navigation state, and last known place.
 - Health output separates blockers:
   - `/map` missing or not receivable.
   - `/amcl_pose` missing or stale.
@@ -118,6 +118,7 @@ Required state-inspection verification:
   - mission services unavailable.
   - STM fault or communication fault.
   - safety supervisor status missing.
+- `get_last_known_place` may be used as an operator-facing initial-pose hint after launch, but it must not replace AMCL readiness checks.
 
 Required mission-control verification:
 
