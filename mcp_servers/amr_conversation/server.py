@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable
 
@@ -19,26 +17,7 @@ for package_path in [
     if str(package_path) not in sys.path:
         sys.path.insert(0, str(package_path))
 
-from amr_voice.command_parser import (  # noqa: E402
-    CANCEL,
-    CONFIRM,
-    DIAGNOSE,
-    GO_TO,
-    LIST_PLACES,
-    REJECT,
-    STATUS,
-    UNKNOWN,
-    WAKE,
-)
-from amr_voice.intent_client import VoiceIntentAdapter  # noqa: E402
-
-
-DEFAULT_WAKE_WORD = os.environ.get("AMR_VOICE_WAKE_WORD", "hey jarvis")
-DEFAULT_KNOWN_PLACES = tuple(
-    place.strip()
-    for place in os.environ.get("AMR_VOICE_KNOWN_PLACES", "home,hall,kitchen,door").split(",")
-    if place.strip()
-)
+from amr_voice.conversation import DEFAULT_KNOWN_PLACES, DEFAULT_WAKE_WORD, plan_turn  # noqa: E402
 
 
 def response(
@@ -65,109 +44,6 @@ def known_places_from(arguments: dict[str, Any]) -> list[str]:
     if not isinstance(known_places, list):
         raise ValueError("known_places must be a list of place names")
     return [str(place).strip() for place in known_places if str(place).strip()]
-
-
-def normalized_text(text: str) -> str:
-    return " ".join(str(text).lower().strip().split())
-
-
-def next_tool_for(action: str, place: str | None, *, dry_run: bool) -> dict[str, Any] | None:
-    if action == GO_TO and place:
-        return {
-            "server": "amr_mission_control",
-            "tool": "go_to_named_place",
-            "arguments": {
-                "place": place,
-                "dry_run": bool(dry_run),
-                "operator_confirmed_supervised": False,
-            },
-            "precheck_tool": {
-                "server": "amr_mission_control",
-                "tool": "check_go_to_readiness",
-                "arguments": {"place": place},
-            },
-            "requires_operator_confirmation": True,
-            "notes": [
-                "Conversation MCP does not start motion.",
-                "Call check_go_to_readiness first.",
-                "Set operator_confirmed_supervised=true only after explicit supervised confirmation.",
-            ],
-        }
-    if action == CANCEL:
-        return {
-            "server": "amr_mission_control",
-            "tool": "cancel_mission",
-            "arguments": {},
-            "requires_operator_confirmation": True,
-            "notes": ["Cancellation changes robot runtime state; confirm with the operator first."],
-        }
-    if action == STATUS:
-        return {
-            "server": "amr_mission_control",
-            "tool": "get_mission_state",
-            "arguments": {},
-            "requires_operator_confirmation": False,
-        }
-    if action == LIST_PLACES:
-        return {
-            "server": "amr_mission_control",
-            "tool": "list_named_places",
-            "arguments": {},
-            "requires_operator_confirmation": False,
-        }
-    if action == DIAGNOSE:
-        return {
-            "server": "amr_state_inspection",
-            "tool_plan": [
-                {"tool": "get_robot_health", "arguments": {"require_localization": True}},
-                {"tool": "get_safety_state", "arguments": {}},
-                {"tool": "get_localization_state", "arguments": {}},
-                {"tool": "get_mission_state", "arguments": {}},
-                {"tool": "get_navigation_state", "arguments": {}},
-                {"tool": "get_stm_diagnostics", "arguments": {}},
-            ],
-            "requires_operator_confirmation": False,
-            "notes": [
-                "Read-only diagnostic plan.",
-                "LLM should summarize failures and may call amr_speaker.speak_text with the summary.",
-                "Do not clear faults, re-enable STM, or start recovery without separate explicit confirmation.",
-            ],
-        }
-    return None
-
-
-def conversational_response(text: str) -> str | None:
-    normalized = normalized_text(text)
-    greetings = {"hello", "hi", "hey", "hey robot", "hello robot", "good morning", "good evening"}
-    thanks = {"thanks", "thank you", "good job", "nice work"}
-    identity = {"who are you", "what are you", "what is your name", "what can you do"}
-    if normalized in greetings:
-        return "Hello. I am ready to help with robot status, diagnostics, and supervised missions."
-    if normalized in thanks:
-        return "You are welcome."
-    if normalized in identity:
-        return "I am the AMR voice interface. I can discuss robot state and route safe mission requests through MCP tools."
-    return None
-
-
-def response_for_action(action: str, place: str | None) -> str:
-    if action == GO_TO and place:
-        return f"I can help send the robot to {place}, but I need supervised confirmation before motion starts."
-    if action == CANCEL:
-        return "I can request mission cancellation after confirmation."
-    if action == STATUS:
-        return "I can check the current mission status."
-    if action == LIST_PLACES:
-        return "I can list the named places the robot knows."
-    if action == DIAGNOSE:
-        return "I will check robot health, safety, localization, mission, navigation, and STM diagnostics."
-    if action == CONFIRM:
-        return "I heard the confirmation, but I need an active pending request before taking action."
-    if action == REJECT:
-        return "Understood. I will not continue with the pending request."
-    if action == WAKE:
-        return "I am listening."
-    return "I did not find a safe robot command in that. You can ask for status, diagnostics, places, or a supervised named-place mission."
 
 
 class ConversationTools:
@@ -197,20 +73,13 @@ class ConversationTools:
         if not text:
             return response(False, "conversation turn blocked", blockers=["empty_text"])
 
-        adapter = VoiceIntentAdapter(known_places=known_places, wake_word=wake_word)
-        decision = adapter.decide(text, require_wake_word=require_wake_word)
-        command = decision.command
-        next_tool = next_tool_for(command.action, command.place, dry_run=dry_run)
-        response_text = conversational_response(text) if command.action == UNKNOWN else None
-        if response_text is None:
-            response_text = response_for_action(command.action, command.place)
-
-        blockers = list(decision.blockers)
-        is_general_conversation = command.action == UNKNOWN and conversational_response(text) is not None
-        if is_general_conversation:
-            blockers = [blocker for blocker in blockers if blocker != "unknown_or_ambiguous_command"]
-        if command.action == UNKNOWN and not is_general_conversation:
-            blockers.append("no_safe_tool_route")
+        turn = plan_turn(
+            text,
+            known_places=known_places,
+            wake_word=wake_word,
+            require_wake_word=require_wake_word,
+            dry_run=dry_run,
+        )
 
         speaker_request = None
         if include_speech_request:
@@ -218,7 +87,7 @@ class ConversationTools:
                 "server": "amr_speaker",
                 "tool": "speak_text",
                 "arguments": {
-                    "text": response_text,
+                    "text": turn.assistant_response,
                     "source": "conversation",
                     "priority": "normal",
                     "interrupt": False,
@@ -229,22 +98,21 @@ class ConversationTools:
 
         data = {
             "source": source,
-            "text": text,
+            "text": turn.text,
             "known_places": known_places,
-            "command": asdict(command),
-            "assistant_response": response_text,
-            "next_tool": next_tool,
+            "command": turn.command,
+            "assistant_response": turn.assistant_response,
+            "next_tool": turn.next_tool,
             "speaker_request": speaker_request,
-            "requires_confirmation": decision.requires_confirmation,
-            "allowed": (decision.allowed or is_general_conversation) and not blockers,
+            "requires_confirmation": turn.requires_confirmation,
+            "allowed": turn.allowed,
             "policy": [
                 "This server plans one conversational turn only.",
                 "Motion and runtime-changing tools still require their own MCP confirmation gates.",
                 "Robot-state answers should be based on read-only state MCP results, not guesses.",
             ],
         }
-        ok_value = not blockers
-        return response(ok_value, "conversation turn planned", data=data, blockers=sorted(set(blockers)))
+        return response(turn.allowed, "conversation turn planned", data=data, blockers=turn.blockers)
 
     def describe_conversation_contract(self, arguments: dict[str, Any]) -> dict[str, Any]:
         data = {

@@ -6,6 +6,7 @@ import json
 import os
 import queue
 import struct
+import subprocess
 import time
 import wave
 from collections import deque
@@ -17,6 +18,9 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 from amr_voice.asr import (
+    AsrTranscript,
+    FasterWhisperConfig,
+    FasterWhisperTranscriber,
     WhisperCppConfig,
     WhisperCppTranscriber,
     VoskConfig,
@@ -62,13 +66,23 @@ class VoicePipelineNode(Node):
                     grammar=default_command_grammar(args.known_places, args.wake_phrase),
                 )
             )
-        else:
+        elif args.asr_backend == "whisper":
             self._asr = WhisperCppTranscriber(
                 WhisperCppConfig(
                     executable=args.whisper_bin,
                     model_path=args.whisper_model,
                     language=args.whisper_language,
                     threads=args.whisper_threads,
+                )
+            )
+        else:
+            self._asr = FasterWhisperTranscriber(
+                FasterWhisperConfig(
+                    model_path=args.faster_whisper_model,
+                    language=args.whisper_language,
+                    device=args.faster_whisper_device,
+                    compute_type=args.faster_whisper_compute_type,
+                    beam_size=args.faster_whisper_beam_size,
                 )
             )
         self._wake_pub = self.create_publisher(String, "/amr_voice/wake_word", 10)
@@ -188,6 +202,12 @@ class VoicePipelineNode(Node):
             self.get_logger().error(f"ASR failed: {exc}")
             self._publish_text(self._feedback_pub, f"asr failed: {exc}")
             return
+        transcript = self._clean_transcript(transcript)
+        if self._ignore_transcript(transcript.text):
+            self.get_logger().info(f"ignored low-confidence transcript: {transcript.text!r}")
+            if self._args.continuous_listening:
+                self._restart_listening()
+            return
         payload = build_mcp_transcript_payload(
             transcript,
             source=self._args.source,
@@ -206,6 +226,50 @@ class VoicePipelineNode(Node):
         self._publish(self._mcp_pub, payload)
         self._publish_text(self._feedback_pub, f"transcript: {transcript.text}")
         print(json.dumps({"transcript": transcript.text, "mcp_arguments": payload}, sort_keys=True), flush=True)
+        if self._args.continuous_listening:
+            self._restart_listening()
+
+    def _restart_listening(self) -> None:
+        self._listening = True
+        self._listen_started_at = time.monotonic()
+        self._gate = VadGate(
+            threshold=self._args.vad_threshold,
+            release_threshold=self._args.vad_release_threshold,
+            start_frames=self._args.vad_start_frames,
+            end_frames=self._args.vad_end_frames,
+        )
+        self._utterance_frames = []
+        self.get_logger().info("continuous-listening mode: ready for next utterance")
+
+    @staticmethod
+    def _ignore_transcript(text: str) -> bool:
+        tokens = str(text).lower().strip().split()
+        if not tokens:
+            return True
+        known_tokens = [token for token in tokens if token != "[unk]"]
+        if not known_tokens:
+            return True
+        single_word_commands = {
+            "cancel",
+            "diagnose",
+            "diagnostics",
+            "hello",
+            "places",
+            "status",
+            "stop",
+        }
+        return len(known_tokens) < 2 and known_tokens[0] not in single_word_commands
+
+    @staticmethod
+    def _clean_transcript(transcript: AsrTranscript) -> AsrTranscript:
+        text = " ".join(token for token in transcript.text.split() if token.lower() != "[unk]").strip()
+        return AsrTranscript(
+            text=text,
+            wav_path=transcript.wav_path,
+            model_path=transcript.model_path,
+            executable=transcript.executable,
+            language=transcript.language,
+        )
 
     @staticmethod
     def _publish(publisher, payload: dict) -> None:
@@ -225,6 +289,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Wake -> VAD -> whisper.cpp transcript pipeline")
     parser.add_argument("--source", default=os.environ.get("AMR_VOICE_SOURCE", "laptop_transcript"))
     parser.add_argument("--device", default=os.environ.get("AMR_VOICE_DEVICE", "auto"))
+    parser.add_argument("--alsa-device", default=os.environ.get("AMR_VOICE_ALSA_DEVICE", ""))
     parser.add_argument("--sample-rate", type=int, default=0)
     parser.add_argument("--recognition-rate", type=int, default=16000)
     parser.add_argument("--channels", type=int, default=2)
@@ -250,12 +315,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Bypass wake detection and immediately capture one utterance for VAD/ASR dry-run testing.",
     )
+    parser.add_argument(
+        "--continuous-listening",
+        action="store_true",
+        default=os.environ.get("AMR_VOICE_CONTINUOUS_LISTENING", "false").lower() in {"1", "true", "yes"},
+        help="After each finalized utterance, immediately listen for the next utterance.",
+    )
     parser.add_argument("--whisper-bin", default=defaults.executable)
     parser.add_argument("--whisper-model", default=defaults.model_path)
     parser.add_argument("--whisper-language", default=defaults.language)
     parser.add_argument("--whisper-threads", type=int, default=defaults.threads)
-    parser.add_argument("--asr-backend", choices=["vosk", "whisper"], default=os.environ.get("AMR_ASR_BACKEND", "vosk"))
+    parser.add_argument("--asr-backend", choices=["vosk", "whisper", "faster-whisper"], default=os.environ.get("AMR_ASR_BACKEND", "vosk"))
     parser.add_argument("--vosk-model", default=os.environ.get("AMR_VOSK_MODEL", "/workspaces/AMR-development/models/vosk-model-small-en-us-0.15"))
+    parser.add_argument("--faster-whisper-model", default=os.environ.get("AMR_FASTER_WHISPER_MODEL_DIR", "/workspaces/AMR-development/models/faster-whisper/small.en"))
+    parser.add_argument("--faster-whisper-device", default=os.environ.get("AMR_FASTER_WHISPER_DEVICE", "cpu"))
+    parser.add_argument("--faster-whisper-compute-type", default=os.environ.get("AMR_FASTER_WHISPER_COMPUTE_TYPE", "int8"))
+    parser.add_argument("--faster-whisper-beam-size", type=int, default=int(os.environ.get("AMR_FASTER_WHISPER_BEAM_SIZE", "5")))
     parser.add_argument("--known-place", action="append", dest="known_places", default=["home", "hall", "kitchen", "door"])
     parser.add_argument("--output-dir", type=Path, default=Path("/tmp/amr_voice_pipeline"))
     parser.add_argument("--log-audio-level", action="store_true")
@@ -278,6 +353,10 @@ def _load_sounddevice():
 
 def main() -> None:
     args = parse_args()
+    if args.alsa_device:
+        run_alsa_pipeline(args)
+        return
+
     sd = _load_sounddevice()
     if args.list_devices:
         print(sd.query_devices())
@@ -338,6 +417,63 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+def run_alsa_pipeline(args: argparse.Namespace) -> None:
+    if args.sample_rate <= 0:
+        args.sample_rate = args.recognition_rate
+    frame_samples = max(1, int(args.recognition_rate * args.frame_ms / 1000))
+    frame_bytes = frame_samples * 2
+    command = [
+        "arecord",
+        "-q",
+        "-D",
+        args.alsa_device,
+        "-f",
+        "S16_LE",
+        "-r",
+        str(args.recognition_rate),
+        "-c",
+        "1",
+        "-t",
+        "raw",
+    ]
+    rclpy.init()
+    node: Optional[VoicePipelineNode] = None
+    process: Optional[subprocess.Popen[bytes]] = None
+    try:
+        node = VoicePipelineNode(args)
+        start = time.monotonic()
+        node.get_logger().info(
+            f"voice pipeline listening alsa_device={args.alsa_device} "
+            f"sample_rate={args.recognition_rate} recognition_rate={args.recognition_rate} "
+            f"channels=1 wake_model={args.wake_model}"
+        )
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if process.stdout is None:
+            raise RuntimeError("arecord stdout unavailable")
+        while rclpy.ok():
+            if args.duration_sec > 0.0 and time.monotonic() - start >= args.duration_sec:
+                break
+            data = process.stdout.read(frame_bytes)
+            if not data:
+                stderr = process.stderr.read().decode("utf-8", errors="replace") if process.stderr else ""
+                raise RuntimeError(f"arecord stopped unexpectedly: {stderr.strip()}")
+            node.log_audio_level(data)
+            node.process_audio(data, sample_rate=args.recognition_rate)
+            rclpy.spin_once(node, timeout_sec=0.0)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if process is not None:
+            process.terminate()
+            try:
+                process.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()

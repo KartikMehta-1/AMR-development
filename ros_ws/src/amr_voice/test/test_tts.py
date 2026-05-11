@@ -7,6 +7,18 @@ def test_sanitize_speech_text_collapses_and_limits_text():
     assert sanitize_speech_text("x" * 30, max_chars=10) == "xxxxxxxxx."
 
 
+def test_sanitize_speech_text_truncates_at_sentence_boundary():
+    text = "First complete sentence. Second sentence is much too long to keep in full."
+
+    assert sanitize_speech_text(text, max_chars=45) == "First complete sentence."
+
+
+def test_sanitize_speech_text_truncates_at_word_boundary():
+    text = "This response contains several words and should not cut one in half."
+
+    assert sanitize_speech_text(text, max_chars=40) == "This response contains several words."
+
+
 def test_speech_request_from_json():
     request = speech_request_from_json('{"text": "Going to kitchen", "source": "test", "interrupt": true}')
     assert request.text == "Going to kitchen"

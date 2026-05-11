@@ -12,6 +12,7 @@ from typing import Callable, Optional, Sequence
 
 DEFAULT_WHISPER_MODEL = "/workspaces/AMR-development/models/whisper/ggml-base.en.bin"
 DEFAULT_WHISPER_LANGUAGE = "en"
+DEFAULT_FASTER_WHISPER_MODEL = "/workspaces/AMR-development/models/faster-whisper/small.en"
 DEFAULT_VOSK_MODEL = "/workspaces/AMR-development/models/vosk-model-small-en-us-0.15"
 
 
@@ -38,6 +39,15 @@ class VoskConfig:
     model_path: str = DEFAULT_VOSK_MODEL
     sample_rate: int = 16000
     grammar: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class FasterWhisperConfig:
+    model_path: str = DEFAULT_FASTER_WHISPER_MODEL
+    language: str = DEFAULT_WHISPER_LANGUAGE
+    device: str = "cpu"
+    compute_type: str = "int8"
+    beam_size: int = 5
 
 
 def default_whisper_cpp_config() -> WhisperCppConfig:
@@ -143,6 +153,46 @@ class WhisperCppTranscriber:
             [str(path) for path in library_paths if path.exists()] + ([existing] if existing else [])
         )
         return env
+
+
+class FasterWhisperTranscriber:
+    def __init__(self, config: Optional[FasterWhisperConfig] = None):
+        self.config = config or FasterWhisperConfig()
+        self._model = None
+
+    def transcribe_wav(self, wav_path: str | Path) -> AsrTranscript:
+        try:
+            from faster_whisper import WhisperModel
+        except Exception as exc:
+            raise RuntimeError("Python package 'faster-whisper' is not available in this runtime") from exc
+
+        wav = Path(wav_path).expanduser()
+        if not wav.exists():
+            raise FileNotFoundError(f"ASR input WAV not found: {wav}")
+        model_path = Path(self.config.model_path).expanduser()
+        if not model_path.exists():
+            raise FileNotFoundError(f"faster-whisper model not found: {model_path}")
+
+        if self._model is None:
+            self._model = WhisperModel(
+                str(model_path),
+                device=self.config.device,
+                compute_type=self.config.compute_type,
+            )
+        segments, _info = self._model.transcribe(
+            str(wav),
+            language=self.config.language,
+            beam_size=self.config.beam_size,
+            vad_filter=False,
+        )
+        text = normalize_transcript(" ".join(segment.text for segment in segments))
+        return AsrTranscript(
+            text=text,
+            wav_path=str(wav),
+            model_path=str(model_path),
+            executable="faster-whisper",
+            language=self.config.language,
+        )
 
 
 def normalize_transcript(text: str) -> str:

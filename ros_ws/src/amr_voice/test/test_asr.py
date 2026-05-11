@@ -40,6 +40,9 @@ def test_default_command_grammar_includes_known_places():
     assert "hey jarvis" in grammar
     assert "go to kitchen" in grammar
     assert "move to kitchen" in grammar
+    assert "hello robot" in grammar
+    assert "what can you do" in grammar
+    assert "debug what failed" in grammar
 
 
 def test_whisper_cpp_transcriber_reads_text_output(tmp_path: Path):

@@ -19,6 +19,7 @@ RUN rm -f /etc/apt/sources.list.d/ros2-snapshots.list \
       > /etc/apt/sources.list.d/ros2.list \
     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    alsa-utils \
     python3-pip \
     portaudio19-dev \
     ros-${ROS_DISTRO}-desktop \

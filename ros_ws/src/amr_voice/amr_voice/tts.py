@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 
-MAX_SPEECH_CHARS = 280
+MAX_SPEECH_CHARS = 420
 
 
 @dataclass(frozen=True)
@@ -35,8 +35,22 @@ def sanitize_speech_text(text: str, max_chars: int = MAX_SPEECH_CHARS) -> str:
     cleaned = re.sub(r"\s+", " ", str(text)).strip()
     cleaned = cleaned.replace("\x00", "")
     if len(cleaned) > max_chars:
-        return cleaned[: max(0, max_chars - 1)].rstrip() + "."
+        return _truncate_speech_text(cleaned, max_chars=max_chars)
     return cleaned
+
+
+def _truncate_speech_text(text: str, *, max_chars: int) -> str:
+    if max_chars <= 1:
+        return "."
+    limit = max_chars - 1
+    head = text[:limit].rstrip()
+    sentence_end = max(head.rfind("."), head.rfind("?"), head.rfind("!"))
+    if sentence_end >= max(12, int(limit * 0.35)):
+        return head[: sentence_end + 1].rstrip()
+    word_end = head.rfind(" ")
+    if word_end >= max(20, int(limit * 0.6)):
+        head = head[:word_end].rstrip()
+    return head.rstrip(" ,;:-") + "."
 
 
 def speech_request_from_json(payload: str) -> SpeechRequest:
@@ -119,10 +133,10 @@ class PiperSpeaker:
             if self.speaker is not None:
                 command.extend(["--speaker", str(self.speaker)])
             for option, value in [
-                ("--length-scale", self.length_scale),
-                ("--noise-scale", self.noise_scale),
-                ("--noise-w-scale", self.noise_w_scale),
-                ("--sentence-silence", self.sentence_silence),
+                ("--length_scale", self.length_scale),
+                ("--noise_scale", self.noise_scale),
+                ("--noise_w", self.noise_w_scale),
+                ("--sentence_silence", self.sentence_silence),
                 ("--volume", self.volume),
             ]:
                 if value is not None:

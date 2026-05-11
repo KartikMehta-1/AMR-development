@@ -41,7 +41,13 @@ _STOP_PHRASES = {
 
 _STATUS_PHRASES = {
     "status",
+    "robot status",
+    "check status",
+    "check robot status",
     "what is your status",
+    "what is robot status",
+    "what is the robot status",
+    "what is the status of the robot",
     "where are you",
     "what are you doing",
     "mission status",
@@ -111,6 +117,8 @@ _FILLER_WORDS = {
     "an",
     "can",
     "could",
+    "hey",
+    "hi",
     "please",
     "the",
     "to",
@@ -215,6 +223,7 @@ def parse_text_command(
 
 def _normalize(text: str) -> str:
     lowered = text.lower().strip()
+    lowered = re.sub(r"\b(\w+)'s\b", r"\1", lowered)
     table = str.maketrans({char: " " for char in string.punctuation})
     no_punct = lowered.translate(table)
     return re.sub(r"\s+", " ", no_punct).strip()

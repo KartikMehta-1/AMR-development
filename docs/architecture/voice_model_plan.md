@@ -131,10 +131,11 @@ AMR_TTS_DRY_RUN=true ros2 run amr_voice tts_node
 Live playback requires a Piper executable, a Piper voice model, and an audio output:
 
 ```bash
+./scripts/setup_piper_runtime.sh
 ./scripts/setup_piper_voice.sh en_US-lessac-medium
 
-AMR_PIPER_BIN=${HOME}/.local/bin/piper \
-AMR_PIPER_MODEL=/home/kartik/AMR-development/models/piper/en_US-lessac-medium/en_US-lessac-medium.onnx \
+AMR_PIPER_BIN=/workspaces/AMR-development/models/piper-runtime/piper \
+AMR_PIPER_MODEL=/workspaces/AMR-development/models/piper/en_US-lessac-medium/en_US-lessac-medium.onnx \
 ros2 run amr_voice tts_node
 ```
 
@@ -170,6 +171,38 @@ python3 mcp_servers/amr_conversation/smoke_test.py
 
 It remains a planner only. It does not inspect state, speak directly, call mission
 services, clear faults, or start recovery.
+
+For wake-word gated conversation testing:
+
+```bash
+AMR_VOICE_ALSA_DEVICE=plughw:CARD=sofhdadsp,DEV=7 \
+AMR_TTS_OUTPUT_DEVICE=plughw:CARD=sofhdadsp,DEV=0 \
+./scripts/open_amr_voice_conversation.sh
+```
+
+This starts three Foxy nodes inside `amr_devpc`: `voice_pipeline_node`,
+`conversation_runtime_node`, and `tts_node`. The host only provides `/dev/snd`; host
+ROS is not used. The TTS output device defaults to the laptop analog output above
+and can be overridden with `AMR_TTS_OUTPUT_DEVICE`. The default listen mode is
+`wake`, so the system listens for the wake word, captures one utterance, speaks the
+assistant response if the turn is allowed, then returns to wake-word idle. Use
+`AMR_VOICE_LISTEN_MODE=one-shot` for one immediate capture, or
+`AMR_VOICE_LISTEN_MODE=continuous` only with headphones or echo suppression.
+
+For controlled push-to-talk testing:
+
+```bash
+./scripts/open_amr_voice_push_to_talk.sh
+```
+
+The push-to-talk runner keeps TTS and conversation nodes alive, but captures ASR
+only after an explicit Enter press. It is the preferred laptop-speaker test mode
+until wake-word and echo behavior are tuned.
+
+Both launchers apply the current laptop capture-gain profile before starting:
+`Dmic0=60%`, `Dmic1 2nd=60%`, and `Capture=70%`. Override with
+`AMR_VOICE_DMIC_GAIN`, `AMR_VOICE_CAPTURE_GAIN`, or set
+`AMR_VOICE_CONFIGURE_AUDIO=false` to leave mixer gains untouched.
 
 ## Safety Boundary
 
