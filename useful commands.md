@@ -159,8 +159,10 @@ ros2 run amr_voice wake_word_node --model hey_jarvis --threshold 0.5 --dry-run -
 Transcribe a WAV file with local `whisper.cpp` and emit voice-MCP arguments:
 
 ```bash
+./scripts/setup_whisper_cpp.sh
+
 ros2 run amr_voice asr_file_cli input.wav \
-  --whisper-bin /path/to/whisper-cli \
+  --whisper-bin models/whisper.cpp/build/bin/whisper-cli \
   --model /workspaces/AMR-development/models/whisper/ggml-base.en.bin
 ```
 
