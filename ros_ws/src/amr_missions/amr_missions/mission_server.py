@@ -1,6 +1,9 @@
+import json
+import os
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import rclpy
@@ -35,6 +38,7 @@ class MissionServer(Node):
     def __init__(self, places_path: str):
         super().__init__("amr_mission_server")
         self._places_path = places_path
+        self._last_place_path = self._default_last_place_path()
         self._places: Dict[str, NamedPlace] = load_places(places_path)
         self._callback_group = ReentrantCallbackGroup()
         self._client = ActionClient(
@@ -88,6 +92,15 @@ class MissionServer(Node):
         self._mission_state = MissionRuntimeState()
         self._publish_status()
         self.create_timer(1.0, self._publish_status, callback_group=self._callback_group)
+
+    def _default_last_place_path(self) -> Path:
+        configured = os.environ.get("AMR_MISSION_LAST_PLACE_PATH")
+        if configured:
+            return Path(configured)
+        workspace_path = Path("/workspaces/AMR-development/ros_ws/log/amr_last_place.json")
+        if workspace_path.parent.exists() or Path("/workspaces/AMR-development").exists():
+            return workspace_path
+        return Path.home() / ".ros" / "amr_last_place.json"
 
     @property
     def places(self) -> Dict[str, NamedPlace]:
@@ -144,6 +157,24 @@ class MissionServer(Node):
         goal = NavigateToPose.Goal()
         goal.pose = pose
         return goal
+
+    def _record_last_place(self, place: NamedPlace) -> None:
+        payload = {
+            "place": place.name,
+            "frame_id": place.frame_id,
+            "x": place.x,
+            "y": place.y,
+            "yaw": place.yaw,
+            "stamp_sec": time.time(),
+            "source": "mission_server",
+        }
+        try:
+            self._last_place_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self._last_place_path.with_suffix(f"{self._last_place_path.suffix}.tmp")
+            tmp_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            tmp_path.replace(self._last_place_path)
+        except OSError as exc:
+            self.get_logger().warning(f"failed to record last AMR place: {exc}")
 
     def _wait_for_future(self, future, timeout_sec: float) -> bool:
         event = threading.Event()
@@ -216,6 +247,7 @@ class MissionServer(Node):
 
         status = result.status
         if status == GoalStatus.STATUS_SUCCEEDED:
+            self._record_last_place(place)
             return True, f"reached '{place_name}'"
         return False, f"navigation to '{place_name}' finished with status {status}"
 
