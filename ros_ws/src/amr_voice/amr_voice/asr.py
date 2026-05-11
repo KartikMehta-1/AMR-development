@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import subprocess
 import tempfile
@@ -11,6 +12,7 @@ from typing import Callable, Optional, Sequence
 
 DEFAULT_WHISPER_MODEL = "/workspaces/AMR-development/models/whisper/ggml-base.en.bin"
 DEFAULT_WHISPER_LANGUAGE = "en"
+DEFAULT_VOSK_MODEL = "/workspaces/AMR-development/models/vosk-model-small-en-us-0.15"
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,13 @@ class WhisperCppConfig:
     language: str = DEFAULT_WHISPER_LANGUAGE
     threads: int = 4
     extra_args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class VoskConfig:
+    model_path: str = DEFAULT_VOSK_MODEL
+    sample_rate: int = 16000
+    grammar: tuple[str, ...] = ()
 
 
 def default_whisper_cpp_config() -> WhisperCppConfig:
@@ -138,6 +147,95 @@ class WhisperCppTranscriber:
 
 def normalize_transcript(text: str) -> str:
     return " ".join(text.strip().split())
+
+
+class VoskGrammarTranscriber:
+    def __init__(self, config: Optional[VoskConfig] = None):
+        self.config = config or VoskConfig(grammar=default_command_grammar())
+
+    def transcribe_wav(self, wav_path: str | Path) -> AsrTranscript:
+        try:
+            import vosk
+        except Exception as exc:
+            raise RuntimeError("Python package 'vosk' is not available in this runtime") from exc
+        import wave
+        if hasattr(vosk, "SetLogLevel"):
+            vosk.SetLogLevel(-1)
+
+        wav = Path(wav_path).expanduser()
+        if not wav.exists():
+            raise FileNotFoundError(f"ASR input WAV not found: {wav}")
+        model_path = Path(self.config.model_path).expanduser()
+        if not model_path.exists():
+            raise FileNotFoundError(f"Vosk model not found: {model_path}")
+
+        model = vosk.Model(str(model_path))
+        with wave.open(str(wav), "rb") as audio:
+            recognizer = vosk.KaldiRecognizer(
+                model,
+                audio.getframerate(),
+                json.dumps(list(self.config.grammar or default_command_grammar())),
+            )
+            text_parts: list[str] = []
+            while True:
+                data = audio.readframes(4000)
+                if not data:
+                    break
+                if recognizer.AcceptWaveform(data):
+                    text = _extract_vosk_text(recognizer.Result())
+                    if text:
+                        text_parts.append(text)
+            final_text = _extract_vosk_text(recognizer.FinalResult())
+            if final_text:
+                text_parts.append(final_text)
+
+        return AsrTranscript(
+            text=normalize_transcript(" ".join(text_parts)),
+            wav_path=str(wav),
+            model_path=str(model_path),
+            executable="vosk",
+            language="en",
+        )
+
+
+def default_command_grammar(known_places: Optional[Sequence[str]] = None, wake_word: str = "hey jarvis") -> tuple[str, ...]:
+    places = tuple(known_places or ("home", "hall", "kitchen", "door"))
+    phrases = {
+        wake_word,
+        "status",
+        "mission status",
+        "stop",
+        "cancel",
+        "yes",
+        "yeah",
+        "no",
+        "list places",
+        "where are you",
+        "return home",
+        "come home",
+        "[unk]",
+    }
+    for place in places:
+        phrases.update(
+            {
+                place,
+                f"go {place}",
+                f"go to {place}",
+                f"go to the {place}",
+                f"navigate to {place}",
+                f"move to {place}",
+            }
+        )
+    return tuple(sorted(phrases))
+
+
+def _extract_vosk_text(result_json: str) -> str:
+    try:
+        payload = json.loads(result_json)
+    except json.JSONDecodeError:
+        return ""
+    value = payload.get("text", "")
+    return value if isinstance(value, str) else ""
 
 
 def build_mcp_transcript_payload(

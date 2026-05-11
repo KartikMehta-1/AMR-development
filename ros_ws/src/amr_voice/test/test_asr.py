@@ -5,6 +5,7 @@ from amr_voice.asr import (
     WhisperCppConfig,
     WhisperCppTranscriber,
     build_mcp_transcript_payload,
+    default_command_grammar,
     normalize_transcript,
 )
 
@@ -32,6 +33,13 @@ def test_build_mcp_transcript_payload_keeps_asr_separate_from_execution():
     assert payload["dry_run"] is True
     assert payload["require_wake_word"] is False
     assert payload["known_places"] == ["home", "hall", "kitchen"]
+
+
+def test_default_command_grammar_includes_known_places():
+    grammar = default_command_grammar(["kitchen"], wake_word="hey jarvis")
+    assert "hey jarvis" in grammar
+    assert "go to kitchen" in grammar
+    assert "move to kitchen" in grammar
 
 
 def test_whisper_cpp_transcriber_reads_text_output(tmp_path: Path):

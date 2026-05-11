@@ -9,7 +9,7 @@ eventual Orin NX deployment.
 | --- | --- | --- | --- |
 | Wake word | `openWakeWord` built-in `hey_jarvis` | Started | Runs locally on streaming 16 kHz audio. Use `hey jarvis` until a custom AMR wake word is trained. |
 | VAD | Silero VAD through `openwakeword.vad` | Started | Gate ASR after wake detection and detect end-of-utterance. |
-| ASR | `whisper.cpp` with `base.en` first, `small.en` if latency allows | Started | Local transcript producer only; transcripts are submitted to the voice MCP. |
+| ASR | Vosk grammar for commands; `whisper.cpp` for future free-form | Started | Vosk is the default command ASR because it works well with constrained robot intents. |
 | TTS | Piper | Planned | Local speech feedback for accepted, denied, and status messages. |
 
 ## Current Wake-Word Runtime
@@ -49,9 +49,10 @@ Example events:
 
 ## Current ASR Boundary
 
-ASR uses `whisper.cpp` as a local open-source transcript producer. The first target
-model is `ggml-base.en.bin`; `small.en` can be tested later if Orin NX latency is
-acceptable.
+ASR uses an open-source local transcript producer. The default command backend is
+Vosk with a constrained grammar because this laptop microphone path already works well
+with that model. `whisper.cpp` remains available for future free-form dictation or
+larger command vocabularies.
 
 The file-transcription entry point is:
 
@@ -78,6 +79,17 @@ The first live end-to-end dry-run node is:
 ```bash
 ros2 run amr_voice voice_pipeline_node \
   --device 9 \
+  --asr-backend vosk \
+  --vosk-model /workspaces/AMR-development/models/vosk-model-small-en-us-0.15 \
+  --log-audio-level
+```
+
+To test Whisper instead:
+
+```bash
+ros2 run amr_voice voice_pipeline_node \
+  --device 9 \
+  --asr-backend whisper \
   --whisper-bin /workspaces/AMR-development/models/whisper.cpp/build-foxy/bin/whisper-cli \
   --whisper-model /workspaces/AMR-development/models/whisper/ggml-base.en.bin \
   --log-audio-level

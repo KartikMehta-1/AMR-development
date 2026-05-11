@@ -178,6 +178,17 @@ Run the live wake -> VAD -> ASR dry-run pipeline:
 ```bash
 ros2 run amr_voice voice_pipeline_node \
   --device 9 \
+  --asr-backend vosk \
+  --vosk-model /workspaces/AMR-development/models/vosk-model-small-en-us-0.15 \
+  --log-audio-level
+```
+
+Use Whisper instead of the default Vosk command grammar backend:
+
+```bash
+ros2 run amr_voice voice_pipeline_node \
+  --device 9 \
+  --asr-backend whisper \
   --whisper-bin /workspaces/AMR-development/models/whisper.cpp/build-foxy/bin/whisper-cli \
   --whisper-model /workspaces/AMR-development/models/whisper/ggml-base.en.bin \
   --log-audio-level

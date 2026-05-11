@@ -19,7 +19,10 @@ from std_msgs.msg import String
 from amr_voice.asr import (
     WhisperCppConfig,
     WhisperCppTranscriber,
+    VoskConfig,
+    VoskGrammarTranscriber,
     build_mcp_transcript_payload,
+    default_command_grammar,
     default_whisper_cpp_config,
 )
 from amr_voice.audio_devices import parse_device, select_input_device
@@ -51,14 +54,23 @@ class VoicePipelineNode(Node):
             start_frames=args.vad_start_frames,
             end_frames=args.vad_end_frames,
         )
-        self._asr = WhisperCppTranscriber(
-            WhisperCppConfig(
-                executable=args.whisper_bin,
-                model_path=args.whisper_model,
-                language=args.whisper_language,
-                threads=args.whisper_threads,
+        if args.asr_backend == "vosk":
+            self._asr = VoskGrammarTranscriber(
+                VoskConfig(
+                    model_path=args.vosk_model,
+                    sample_rate=args.recognition_rate,
+                    grammar=default_command_grammar(args.known_places, args.wake_phrase),
+                )
             )
-        )
+        else:
+            self._asr = WhisperCppTranscriber(
+                WhisperCppConfig(
+                    executable=args.whisper_bin,
+                    model_path=args.whisper_model,
+                    language=args.whisper_language,
+                    threads=args.whisper_threads,
+                )
+            )
         self._wake_pub = self.create_publisher(String, "/amr_voice/wake_word", 10)
         self._vad_pub = self.create_publisher(String, "/amr_voice/vad", 10)
         self._transcript_pub = self.create_publisher(String, "/amr_voice/transcript", 10)
@@ -242,6 +254,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--whisper-model", default=defaults.model_path)
     parser.add_argument("--whisper-language", default=defaults.language)
     parser.add_argument("--whisper-threads", type=int, default=defaults.threads)
+    parser.add_argument("--asr-backend", choices=["vosk", "whisper"], default=os.environ.get("AMR_ASR_BACKEND", "vosk"))
+    parser.add_argument("--vosk-model", default=os.environ.get("AMR_VOSK_MODEL", "/workspaces/AMR-development/models/vosk-model-small-en-us-0.15"))
     parser.add_argument("--known-place", action="append", dest="known_places", default=["home", "hall", "kitchen", "door"])
     parser.add_argument("--output-dir", type=Path, default=Path("/tmp/amr_voice_pipeline"))
     parser.add_argument("--log-audio-level", action="store_true")

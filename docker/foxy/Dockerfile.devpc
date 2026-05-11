@@ -37,6 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-plotjuggler-ros \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir sounddevice openwakeword
+RUN python3 -m pip install --no-cache-dir sounddevice vosk openwakeword
 
 USER dev
