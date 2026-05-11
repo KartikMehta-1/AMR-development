@@ -73,10 +73,31 @@ def main() -> int:
                 }
             )
         )
+        proc.stdin.write(
+            encode(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "parse_text_intent",
+                        "arguments": {
+                            "text": "hey jarvis debug what failed",
+                            "source": "laptop_transcript",
+                            "known_places": ["home", "hall", "kitchen"],
+                            "wake_word": "hey jarvis",
+                            "require_wake_word": True,
+                            "dry_run": True,
+                        },
+                    },
+                }
+            )
+        )
         proc.stdin.flush()
         init_response = read_response(proc.stdout)
         tools_response = read_response(proc.stdout)
         parse_response = read_response(proc.stdout)
+        diagnose_response = read_response(proc.stdout)
         if init_response["result"]["serverInfo"]["name"] != "amr-voice-interface":
             raise RuntimeError("unexpected server name")
         tool_names = {tool["name"] for tool in tools_response["result"]["tools"]}
@@ -97,6 +118,18 @@ def main() -> int:
             raise RuntimeError(f"unexpected command payload: {command}")
         if next_tool["tool"] != "go_to_named_place" or not next_tool["requires_operator_confirmation"]:
             raise RuntimeError(f"unexpected next tool: {next_tool}")
+        if diagnose_response["result"]["isError"] is not False:
+            raise RuntimeError("diagnose text unexpectedly failed")
+        diagnose_payload = json.loads(diagnose_response["result"]["content"][0]["text"])
+        diagnose_command = diagnose_payload["data"]["command"]
+        diagnose_next_tool = diagnose_payload["data"]["next_tool"]
+        if diagnose_command["action"] != "diagnose":
+            raise RuntimeError(f"unexpected diagnose command: {diagnose_command}")
+        if diagnose_next_tool["server"] != "amr_state_inspection":
+            raise RuntimeError(f"unexpected diagnose tool plan: {diagnose_next_tool}")
+        tool_plan = {step["tool"] for step in diagnose_next_tool["tool_plan"]}
+        if "get_robot_health" not in tool_plan or "get_safety_state" not in tool_plan:
+            raise RuntimeError(f"incomplete diagnose tool plan: {diagnose_next_tool}")
         print("AMR voice-interface MCP smoke test: PASS")
         print(f"tools: {sorted(tool_names)}")
         return 0

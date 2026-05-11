@@ -9,8 +9,8 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_msgs</exec_depend>
 
-  <!-- Optional Python runtime dependencies for live wake-word/audio execution:
-       sounddevice, openwakeword. Kept out of rosdep because they are installed
+  <!-- Optional Python runtime dependencies for live wake-word/audio/TTS execution:
+       sounddevice, vosk, openwakeword, piper. Kept out of rosdep because they are installed
        with pip in the AMR voice runtime image. -->
 
   <test_depend>ament_lint_auto</test_depend>

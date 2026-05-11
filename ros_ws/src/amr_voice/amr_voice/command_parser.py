@@ -8,6 +8,7 @@ GO_TO = "go_to"
 CANCEL = "cancel"
 STATUS = "status"
 LIST_PLACES = "list_places"
+DIAGNOSE = "diagnose"
 WAKE = "wake"
 CONFIRM = "confirm"
 REJECT = "reject"
@@ -52,6 +53,21 @@ _LIST_PHRASES = {
     "where can you go",
     "available places",
     "locations",
+}
+
+_DIAGNOSE_PHRASES = {
+    "debug",
+    "debug robot",
+    "debug what failed",
+    "diagnose",
+    "diagnose robot",
+    "what failed",
+    "what is wrong",
+    "what went wrong",
+    "why did you stop",
+    "why did mission fail",
+    "system check",
+    "run diagnostics",
 }
 
 _CONFIRM_PHRASES = {
@@ -157,6 +173,14 @@ def parse_text_command(
             LIST_PLACES,
             confidence=0.95,
             detail="list places command",
+            wake_word_detected=wake_detected,
+        )
+
+    if _matches_any(command_text, _DIAGNOSE_PHRASES):
+        return ParsedCommand(
+            DIAGNOSE,
+            confidence=0.95,
+            detail="diagnostic/debug command",
             wake_word_detected=wake_detected,
         )
 

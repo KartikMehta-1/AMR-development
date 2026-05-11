@@ -22,6 +22,7 @@ for package_path in [
 from amr_voice.command_parser import (  # noqa: E402
     CANCEL,
     CONFIRM,
+    DIAGNOSE,
     GO_TO,
     LIST_PLACES,
     REJECT,
@@ -120,6 +121,24 @@ def next_tool_for(command: ParsedCommand, *, dry_run: bool) -> dict[str, Any] | 
             "tool": "list_named_places",
             "arguments": {},
             "requires_operator_confirmation": False,
+        }
+    if command.action == DIAGNOSE:
+        return {
+            "server": "amr_state_inspection",
+            "tool_plan": [
+                {"tool": "get_robot_health", "arguments": {"require_localization": True}},
+                {"tool": "get_safety_state", "arguments": {}},
+                {"tool": "get_localization_state", "arguments": {}},
+                {"tool": "get_mission_state", "arguments": {}},
+                {"tool": "get_navigation_state", "arguments": {}},
+                {"tool": "get_stm_diagnostics", "arguments": {}},
+            ],
+            "requires_operator_confirmation": False,
+            "notes": [
+                "Read-only diagnostic plan.",
+                "LLM should summarize failures and may call amr_speaker.speak_text with the summary.",
+                "Do not clear faults, re-enable STM, or start recovery without separate explicit confirmation.",
+            ],
         }
     return None
 

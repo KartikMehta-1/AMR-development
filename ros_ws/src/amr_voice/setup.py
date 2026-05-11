@@ -24,6 +24,7 @@ setup(
             "wake_word_node = amr_voice.wake_word_node:main",
             "vad_node = amr_voice.vad_node:main",
             "voice_pipeline_node = amr_voice.voice_pipeline_node:main",
+            "tts_node = amr_voice.tts_node:main",
         ],
     },
 )

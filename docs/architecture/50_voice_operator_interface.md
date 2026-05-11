@@ -4,8 +4,8 @@ Owner: Voice / Operator Interface Agent
 Secondary: Navigation / Mission / Safety Agent  
 Status: Active, early
 
-This block owns operator-facing wake, transcript, and intent parsing for MCP-based
-mission/status requests.
+This block owns operator-facing wake, transcript, intent parsing, and spoken
+feedback for MCP-based mission/status requests.
 
 ## Responsibility
 
@@ -14,6 +14,8 @@ mission/status requests.
 - Confirmation before motion-causing intents.
 - User feedback for accepted, denied, failed, or unavailable commands.
 - Returning recommended MCP tool calls rather than directly calling mission services.
+- Spoken feedback through a TTS node and speaker MCP, without making TTS a
+  decision-making or motion-command layer.
 
 ## Operator Interface Diagram
 
@@ -24,6 +26,8 @@ flowchart LR
   ASR[ASR transcript]
   VOICEMCP[voice_interface MCP]
   MISSIONMCP[mission_control MCP]
+  SPEAKERMCP[speaker MCP]
+  TTS[TTS node]
   MISSION[mission_server]
 
   USER --> VAD
@@ -31,12 +35,15 @@ flowchart LR
   ASR --> VOICEMCP
   VOICEMCP -->|recommended tool + confirmation requirement| MISSIONMCP
   MISSIONMCP --> MISSION
+  VOICEMCP -->|status/debug summary can be spoken| SPEAKERMCP
+  SPEAKERMCP --> TTS
 ```
 
 ## Detailed Sources
 
 - `ros_ws/src/amr_voice`
 - `mcp_servers/amr_voice_interface`
+- `mcp_servers/amr_speaker`
 - `ros_ws/src/amr_clients`
 - `docs/agentic/roles/voice_operator_interface_agent.md`
 
@@ -87,6 +94,22 @@ then submit transcripts to the voice MCP.
 `ros_ws/src/amr_voice/amr_voice/asr_file_cli.py` is the initial `whisper.cpp`
 transcript-producer boundary. It accepts a WAV file, emits plain transcript text plus
 the MCP argument payload, and does not call mission services.
+
+## Spoken Feedback Stage
+
+`ros_ws/src/amr_voice/amr_voice/tts_node.py` subscribes to `/amr_voice/say` for
+LLM/operator responses and can also subscribe to `/amr_voice/feedback` for concise
+pipeline feedback. It uses Piper as the local TTS engine and refuses playback when
+the Piper binary, model, or audio output is unavailable.
+
+`mcp_servers/amr_speaker` exposes `speak_text`, `get_speaker_status`, and
+`describe_speaker_contract`. The MCP publishes speech requests to `/amr_voice/say`;
+it does not synthesize audio, command motion, clear faults, or decide what failed.
+
+For debug requests such as `debug what failed`, the voice MCP returns a read-only
+`amr_state_inspection` tool plan. The LLM should call those inspection tools,
+summarize the result, then optionally call `amr_speaker.speak_text` with the
+summary.
 
 ## Removed Legacy Path
 

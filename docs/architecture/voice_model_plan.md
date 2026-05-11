@@ -10,7 +10,7 @@ eventual Orin NX deployment.
 | Wake word | `openWakeWord` built-in `hey_jarvis` | Started | Runs locally on streaming 16 kHz audio. Use `hey jarvis` until a custom AMR wake word is trained. |
 | VAD | Silero VAD through `openwakeword.vad` | Started | Gate ASR after wake detection and detect end-of-utterance. |
 | ASR | Vosk grammar for commands; `whisper.cpp` for future free-form | Started | Vosk is the default command ASR because it works well with constrained robot intents. |
-| TTS | Piper | Planned | Local speech feedback for accepted, denied, and status messages. |
+| TTS | Piper | Started | Local speech feedback through `/amr_voice/say` and the speaker MCP. Requires a Piper model before live playback. |
 
 ## Current Wake-Word Runtime
 
@@ -116,8 +116,39 @@ Example event:
 }
 ```
 
+## Current TTS Boundary
+
+TTS uses Piper for local speech output. The ROS node listens for speech requests and
+does not call MCP tools, mission services, recovery tools, or robot motion commands.
+
+Dry-run startup:
+
+```bash
+AMR_TTS_DRY_RUN=true ros2 run amr_voice tts_node
+```
+
+Live playback requires a Piper executable, a Piper voice model, and an audio output:
+
+```bash
+AMR_PIPER_MODEL=/path/to/voice.onnx ros2 run amr_voice tts_node
+```
+
+The speaker MCP publishes text to the node:
+
+```bash
+python3 mcp_servers/amr_speaker/server.py
+python3 mcp_servers/amr_speaker/smoke_test.py
+```
+
+Debug/status speech follows this path:
+
+```text
+operator transcript -> voice MCP -> read-only state MCP tools -> LLM summary -> speaker MCP -> /amr_voice/say -> tts_node
+```
+
 ## Safety Boundary
 
-Wake-word detection, VAD, and ASR only produce attention windows, speech windows, and
-transcripts. They must not call mission services, clear faults, publish `/cmd_vel`, or
-bypass the voice MCP and mission-control MCP confirmation/readiness gates.
+Wake-word detection, VAD, ASR, and TTS only produce attention windows, speech
+windows, transcripts, and spoken feedback. They must not call mission services,
+clear faults, publish `/cmd_vel`, or bypass the voice MCP and mission-control MCP
+confirmation/readiness gates.

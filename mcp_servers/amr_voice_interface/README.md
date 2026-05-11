@@ -25,6 +25,11 @@ Motion-causing intents, such as `go_to kitchen`, return a recommended
 The operator or supervising LLM must still run mission-control readiness checks and
 set confirmation only after supervised approval.
 
+Diagnostic intents, such as `debug what failed`, return a read-only
+`amr_state_inspection` tool plan. The LLM should execute the inspection plan,
+summarize the result, and may then call `amr_speaker.speak_text` for spoken feedback.
+The voice MCP does not clear faults or start recovery.
+
 ## Runtime
 
 Run from the repository root:
