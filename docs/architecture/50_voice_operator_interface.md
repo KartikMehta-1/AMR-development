@@ -84,6 +84,10 @@ commands, submit transcripts, command motion, or call mission services. Later AS
 TTS stages should subscribe to wake/VAD events or share the same audio device pipeline,
 then submit transcripts to the voice MCP.
 
+`ros_ws/src/amr_voice/amr_voice/asr_file_cli.py` is the initial `whisper.cpp`
+transcript-producer boundary. It accepts a WAV file, emits plain transcript text plus
+the MCP argument payload, and does not call mission services.
+
 ## Removed Legacy Path
 
 The old `voice_text_cli`, `voice_command_node`, and `voice_asr_node` nodes directly

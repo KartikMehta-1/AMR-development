@@ -156,6 +156,14 @@ Run the wake-word detector:
 ros2 run amr_voice wake_word_node --model hey_jarvis --threshold 0.5 --dry-run --log-audio-level
 ```
 
+Transcribe a WAV file with local `whisper.cpp` and emit voice-MCP arguments:
+
+```bash
+ros2 run amr_voice asr_file_cli input.wav \
+  --whisper-bin /path/to/whisper-cli \
+  --model /workspaces/AMR-development/models/whisper/ggml-base.en.bin
+```
+
 The removed legacy nodes were:
 - `voice_text_cli`
 - `voice_command_node`
