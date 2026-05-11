@@ -64,10 +64,19 @@ class RosSpeechPublisher:
 
     def publish(self, payload: dict[str, Any]) -> None:
         self.start()
+        match_deadline = time.monotonic() + float(
+            os.environ.get("AMR_SPEAKER_MCP_MATCH_SEC", "1.0")
+        )
+        while self.publisher.get_subscription_count() == 0 and time.monotonic() < match_deadline:
+            self.rclpy.spin_once(self.node, timeout_sec=0.05)
         msg = self.String()
         msg.data = json.dumps(payload, sort_keys=True)
         self.publisher.publish(msg)
-        self.rclpy.spin_once(self.node, timeout_sec=0.05)
+        publish_deadline = time.monotonic() + float(
+            os.environ.get("AMR_SPEAKER_MCP_PUBLISH_SPIN_SEC", "0.2")
+        )
+        while time.monotonic() < publish_deadline:
+            self.rclpy.spin_once(self.node, timeout_sec=0.05)
 
     def shutdown(self) -> None:
         if self.node is not None:

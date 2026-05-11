@@ -27,15 +27,17 @@ flowchart LR
   VOICEMCP[voice_interface MCP]
   MISSIONMCP[mission_control MCP]
   SPEAKERMCP[speaker MCP]
+  CONVMCP[conversation MCP]
   TTS[TTS node]
   MISSION[mission_server]
 
   USER --> VAD
   VAD --> ASR
-  ASR --> VOICEMCP
+  ASR --> CONVMCP
+  CONVMCP --> VOICEMCP
   VOICEMCP -->|recommended tool + confirmation requirement| MISSIONMCP
   MISSIONMCP --> MISSION
-  VOICEMCP -->|status/debug summary can be spoken| SPEAKERMCP
+  CONVMCP -->|spoken response request| SPEAKERMCP
   SPEAKERMCP --> TTS
 ```
 
@@ -43,6 +45,7 @@ flowchart LR
 
 - `ros_ws/src/amr_voice`
 - `mcp_servers/amr_voice_interface`
+- `mcp_servers/amr_conversation`
 - `mcp_servers/amr_speaker`
 - `ros_ws/src/amr_clients`
 - `docs/agentic/roles/voice_operator_interface_agent.md`
@@ -110,6 +113,15 @@ For debug requests such as `debug what failed`, the voice MCP returns a read-onl
 `amr_state_inspection` tool plan. The LLM should call those inspection tools,
 summarize the result, then optionally call `amr_speaker.speak_text` with the
 summary.
+
+## Conversation Stage
+
+`mcp_servers/amr_conversation` plans one conversational turn from typed text or an
+ASR transcript. It returns a short `assistant_response`, optional speaker MCP
+request, and optional mission/state MCP plan. It is intentionally stateless for now:
+callers may carry session history later, but robot facts must still come from
+read-only state MCP tools and motion requests must still pass mission-control
+confirmation gates.
 
 ## Removed Legacy Path
 

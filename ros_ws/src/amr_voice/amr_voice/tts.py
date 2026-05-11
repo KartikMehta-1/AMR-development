@@ -61,12 +61,22 @@ class PiperSpeaker:
         model_path: str = "",
         speaker: Optional[int] = None,
         output_device: str = "",
+        length_scale: Optional[float] = None,
+        noise_scale: Optional[float] = None,
+        noise_w_scale: Optional[float] = None,
+        sentence_silence: Optional[float] = None,
+        volume: Optional[float] = None,
         dry_run: bool = False,
     ):
         self.piper_bin = piper_bin
         self.model_path = model_path
         self.speaker = speaker
         self.output_device = output_device
+        self.length_scale = length_scale
+        self.noise_scale = noise_scale
+        self.noise_w_scale = noise_w_scale
+        self.sentence_silence = sentence_silence
+        self.volume = volume
         self.dry_run = dry_run
 
     def status(self) -> dict:
@@ -78,6 +88,13 @@ class PiperSpeaker:
             "model_available": bool(self.model_path) and Path(self.model_path).expanduser().is_file(),
             "aplay_available": self._bin_available("aplay"),
             "output_device": self.output_device or "default",
+            "voice_tuning": {
+                "length_scale": self.length_scale,
+                "noise_scale": self.noise_scale,
+                "noise_w_scale": self.noise_w_scale,
+                "sentence_silence": self.sentence_silence,
+                "volume": self.volume,
+            },
             "dry_run": self.dry_run,
         }
 
@@ -92,9 +109,24 @@ class PiperSpeaker:
             return TtsResult(False, False, "Piper TTS is not ready", text, "piper", blockers)
         with tempfile.TemporaryDirectory(prefix="amr_tts_") as tmp_dir:
             wav_path = Path(tmp_dir) / "speech.wav"
-            command = [self.piper_bin, "--model", str(Path(self.model_path).expanduser()), "--output_file", str(wav_path)]
+            command = [
+                self.piper_bin,
+                "--model",
+                str(Path(self.model_path).expanduser()),
+                "--output_file",
+                str(wav_path),
+            ]
             if self.speaker is not None:
                 command.extend(["--speaker", str(self.speaker)])
+            for option, value in [
+                ("--length-scale", self.length_scale),
+                ("--noise-scale", self.noise_scale),
+                ("--noise-w-scale", self.noise_w_scale),
+                ("--sentence-silence", self.sentence_silence),
+                ("--volume", self.volume),
+            ]:
+                if value is not None:
+                    command.extend([option, str(value)])
             synth = subprocess.run(
                 command,
                 input=text,

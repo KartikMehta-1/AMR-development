@@ -10,7 +10,8 @@ eventual Orin NX deployment.
 | Wake word | `openWakeWord` built-in `hey_jarvis` | Started | Runs locally on streaming 16 kHz audio. Use `hey jarvis` until a custom AMR wake word is trained. |
 | VAD | Silero VAD through `openwakeword.vad` | Started | Gate ASR after wake detection and detect end-of-utterance. |
 | ASR | Vosk grammar for commands; `whisper.cpp` for future free-form | Started | Vosk is the default command ASR because it works well with constrained robot intents. |
-| TTS | Piper | Started | Local speech feedback through `/amr_voice/say` and the speaker MCP. Requires a Piper model before live playback. |
+| TTS | Piper | Started | Local speech feedback through `/amr_voice/say` and the speaker MCP. Use `medium` voices for a less robotic laptop/Orin experience. |
+| Conversation | `amr_conversation` MCP | Started | Stateless turn planner that returns conversational text plus safe MCP routing. |
 
 ## Current Wake-Word Runtime
 
@@ -130,7 +131,21 @@ AMR_TTS_DRY_RUN=true ros2 run amr_voice tts_node
 Live playback requires a Piper executable, a Piper voice model, and an audio output:
 
 ```bash
-AMR_PIPER_MODEL=/path/to/voice.onnx ros2 run amr_voice tts_node
+./scripts/setup_piper_voice.sh en_US-lessac-medium
+
+AMR_PIPER_BIN=${HOME}/.local/bin/piper \
+AMR_PIPER_MODEL=/home/kartik/AMR-development/models/piper/en_US-lessac-medium/en_US-lessac-medium.onnx \
+ros2 run amr_voice tts_node
+```
+
+Optional Piper tuning is available through:
+
+```text
+AMR_TTS_LENGTH_SCALE
+AMR_TTS_NOISE_SCALE
+AMR_TTS_NOISE_W_SCALE
+AMR_TTS_SENTENCE_SILENCE
+AMR_TTS_VOLUME
 ```
 
 The speaker MCP publishes text to the node:
@@ -145,6 +160,16 @@ Debug/status speech follows this path:
 ```text
 operator transcript -> voice MCP -> read-only state MCP tools -> LLM summary -> speaker MCP -> /amr_voice/say -> tts_node
 ```
+
+The conversation MCP can prepare the response and tool route:
+
+```bash
+python3 mcp_servers/amr_conversation/server.py
+python3 mcp_servers/amr_conversation/smoke_test.py
+```
+
+It remains a planner only. It does not inspect state, speak directly, call mission
+services, clear faults, or start recovery.
 
 ## Safety Boundary
 

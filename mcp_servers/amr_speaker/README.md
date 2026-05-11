@@ -21,6 +21,9 @@ LLM / MCP diagnosis summary -> amr_speaker.speak_text -> /amr_voice/say -> tts_n
 For debugging requests, the LLM should first call read-only inspection tools, summarize
 the result, and then call `speak_text` with the final operator-facing message.
 
+For conversation, `amr_conversation.plan_conversation_turn` can return a
+`speaker_request` shaped for `speak_text`.
+
 ## Smoke Test
 
 ```bash

@@ -22,6 +22,11 @@ class TtsNode(Node):
             model_path=args.model,
             speaker=args.speaker,
             output_device=args.output_device,
+            length_scale=args.length_scale,
+            noise_scale=args.noise_scale,
+            noise_w_scale=args.noise_w_scale,
+            sentence_silence=args.sentence_silence,
+            volume=args.volume,
             dry_run=args.dry_run,
         )
         self._last_spoken: dict[str, float] = {}
@@ -49,7 +54,14 @@ class TtsNode(Node):
             self.get_logger().debug(f"deduped speech: {text}")
             return
         self._last_spoken[text] = now
-        result = self._speaker.speak(SpeechRequest(text=text, source=request.source, priority=request.priority, interrupt=request.interrupt))
+        result = self._speaker.speak(
+            SpeechRequest(
+                text=text,
+                source=request.source,
+                priority=request.priority,
+                interrupt=request.interrupt,
+            )
+        )
         if result.ok:
             action = "spoke" if result.spoken else "accepted"
             self.get_logger().info(f"{action}: {result.text}")
@@ -63,10 +75,44 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=os.environ.get("AMR_PIPER_MODEL", ""))
     parser.add_argument("--speaker", type=int, default=None)
     parser.add_argument("--output-device", default=os.environ.get("AMR_TTS_OUTPUT_DEVICE", ""))
+    parser.add_argument(
+        "--length-scale",
+        type=_optional_float,
+        default=_env_float("AMR_TTS_LENGTH_SCALE"),
+    )
+    parser.add_argument(
+        "--noise-scale",
+        type=_optional_float,
+        default=_env_float("AMR_TTS_NOISE_SCALE"),
+    )
+    parser.add_argument(
+        "--noise-w-scale",
+        type=_optional_float,
+        default=_env_float("AMR_TTS_NOISE_W_SCALE"),
+    )
+    parser.add_argument(
+        "--sentence-silence",
+        type=_optional_float,
+        default=_env_float("AMR_TTS_SENTENCE_SILENCE"),
+    )
+    parser.add_argument("--volume", type=_optional_float, default=_env_float("AMR_TTS_VOLUME"))
     parser.add_argument("--dedupe-sec", type=float, default=2.0)
     parser.add_argument("--speak-feedback", action="store_true", default=os.environ.get("AMR_TTS_SPEAK_FEEDBACK", "true").lower() in {"1", "true", "yes"})
     parser.add_argument("--dry-run", action="store_true", default=os.environ.get("AMR_TTS_DRY_RUN", "false").lower() in {"1", "true", "yes"})
     return parser.parse_args()
+
+
+def _env_float(name: str) -> Optional[float]:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    return float(value)
+
+
+def _optional_float(value: str) -> Optional[float]:
+    if str(value).strip() == "":
+        return None
+    return float(value)
 
 
 def main() -> None:
