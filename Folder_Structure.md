@@ -22,18 +22,33 @@ AMR-development/
 - docker/                     # Docker setup for ROS/dev environments
   - foxy/
 - docs/                       # Project documentation and trackers
-  - AMR_project.md
-  - Component_specifications.md
-  - STM_architecture.md
-  - hardware_block_diagram.md
-  - jetson_architecture.md
-  - pin_map.yaml
-  - wiring_schematic.md
-  - datasheets/
+  - README.md
+  - architecture/             # Agent-owned architecture entry points and detailed diagrams
+  - agentic/                  # Agent contracts, ownership, runbooks, permissions, roadmap
+  - hardware/                 # Physical hardware block diagrams, wiring, component specs
+  - perception/               # RGB-D, VLA, dataset, and proposal/execution boundaries
+  - safety/                   # Safety baseline, supervisor steps, recovery procedures
+  - project/                  # Project tracker and planning docs
+- mcp_servers/                # MCP servers for agent/tool integration
+  - amr_state_inspection/     # Read-only robot state/health inspection
+  - amr_mission_control/      # Guarded named-place mission control
+  - amr_robot_launch/         # Guarded standard runtime launch
+  - amr_voice_interface/      # Transcript intent routing
+  - amr_conversation/         # Conversation turn planner
+  - amr_speaker/              # Spoken feedback publisher
+  - amr_perception_inspection/ # Read-only RGB-D scene/object/grasp proposal MCP
+- agent_harness/              # Source-only agent behavior and acceptance harness
 - ros_ws/                     # ROS 2 workspace
   - src/
+    - amr_clients/
     - amr_description/
     - amr_hardware/
+    - amr_missions/
+    - amr_missions_msgs/
+    - amr_perception/
+    - amr_safety/
+    - amr_semantic_nav/
+    - amr_voice/
     - my_pkg/
   - build/                    # Colcon build output
   - install/                  # Colcon install output

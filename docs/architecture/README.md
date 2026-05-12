@@ -12,8 +12,8 @@ This folder is organized around agent-owned system responsibilities. The older d
 | `30_navigation_mission_safety.md` | Navigation / Mission / Safety Agent | ROS Core / Hardware Interface Agent | SLAM, AMCL, Nav2, mission server, safety supervisor, named places. |
 | `40_stm_firmware.md` | STM Firmware Agent | ROS Core / Hardware Interface Agent | STM32 firmware, motor control, micro-ROS, E-stop, fault masks. |
 | `50_voice_operator_interface.md` | Voice / Operator Interface Agent | Navigation / Mission / Safety Agent | Voice/text operator path, parser, confirmation, mission client use. |
-| `60_manipulator_moveit.md` | Manipulator / MoveIt Agent | ROS Core / Hardware Interface Agent | Future SO-101 arm, URDF, MoveIt, gripper, guarded execution. |
-| `70_perception_calibration.md` | Perception / Calibration Agent | Manipulator / MoveIt Agent | Future camera/depth perception, calibration, object/grasp proposals. |
+| `60_manipulator_moveit.md` | Manipulator / MoveIt Agent | ROS Core / Hardware Interface Agent | SO-101 arm, URDF, MoveIt, gripper, guarded execution, and VLA proposal handoff. |
+| `70_perception_calibration.md` | Perception / Calibration Agent | Manipulator / MoveIt Agent | RGB-D perception, calibration, read-only perception MCP, object/grasp proposals. |
 | `80_physical_hardware.md` | STM Firmware Agent | Runtime Environment Agent | Power, wiring, sensors, drive hardware, physical integration. |
 
 ## Current Detailed Diagram Homes

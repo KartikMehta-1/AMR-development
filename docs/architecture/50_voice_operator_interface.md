@@ -14,6 +14,8 @@ feedback for MCP-based mission/status requests.
 - Confirmation before motion-causing intents.
 - User feedback for accepted, denied, failed, or unavailable commands.
 - Returning recommended MCP tool calls rather than directly calling mission services.
+- Local LLM intent routing for conversational phrasing, pending confirmations, and
+  read-only status/diagnostic requests.
 - Spoken feedback through a TTS node and speaker MCP, without making TTS a
   decision-making or motion-command layer.
 
@@ -24,8 +26,11 @@ flowchart LR
   USER[Operator]
   VAD[VAD]
   ASR[ASR transcript]
+  ROUTER[LocalIntentRouter\nQwen-backed classifier]
+  LLM[LocalQwenResponder\nfallback response]
   VOICEMCP[voice_interface MCP]
   MISSIONMCP[mission_control MCP]
+  STATEMCP[state_inspection MCP]
   SPEAKERMCP[speaker MCP]
   CONVMCP[conversation MCP]
   TTS[TTS node]
@@ -33,11 +38,17 @@ flowchart LR
 
   USER --> VAD
   VAD --> ASR
+  ASR --> ROUTER
+  ROUTER --> CONVMCP
   ASR --> CONVMCP
+  CONVMCP --> LLM
   CONVMCP --> VOICEMCP
+  CONVMCP --> STATEMCP
   VOICEMCP -->|recommended tool + confirmation requirement| MISSIONMCP
   MISSIONMCP --> MISSION
   CONVMCP -->|spoken response request| SPEAKERMCP
+  STATEMCP -->|read-only data for summary| CONVMCP
+  LLM -->|general answers only| CONVMCP
   SPEAKERMCP --> TTS
 ```
 
@@ -123,6 +134,18 @@ callers may carry session history later, but robot facts must still come from
 read-only state MCP tools and motion requests must still pass mission-control
 confirmation gates.
 
+The push-to-talk conversation path can also use `LocalIntentRouter` backed by the
+local Qwen server. The router classifies natural phrasing into a small allowed
+intent set: status, diagnostics, list places, go-to-place, cancel, confirm, reject,
+general question, or unknown. Read-only intents may execute state-inspection tool
+plans through the local tool executor. Motion and cancellation intents create a
+pending request and must not execute from voice alone; they still require supervised
+mission-control confirmation.
+
+`LocalQwenResponder` is a fallback response generator for non-action conversation.
+It is not a source of robot truth and must not replace state-inspection MCP calls
+for health, localization, mission, or diagnostics answers.
+
 ## Removed Legacy Path
 
 The old `voice_text_cli`, `voice_command_node`, and `voice_asr_node` nodes directly
@@ -135,4 +158,6 @@ mission-control MCP boundaries.
 - Parser unit tests.
 - Dry-run command parsing.
 - Confirmation behavior tests.
+- Intent router JSON parsing tests.
+- Push-to-talk conversation tests for read-only tool execution and blocked motion.
 - No microphone loops, TTS/audio device tests, or mission commands without explicit request.

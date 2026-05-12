@@ -104,8 +104,12 @@ Owned launch scope:
 - Read-only MCP server under `mcp_servers/amr_state_inspection`.
 - Guarded mission-control MCP server under `mcp_servers/amr_mission_control`.
 - Guarded host-side launch MCP server under `mcp_servers/amr_robot_launch`.
+- Voice intent MCP server under `mcp_servers/amr_voice_interface`.
+- Conversation turn-planning MCP server under `mcp_servers/amr_conversation`.
+- Spoken-feedback MCP server under `mcp_servers/amr_speaker`.
 - State-inspection and mission-control MCP servers must attach to an already-running Foxy graph. They should not implicitly launch hardware or Nav2.
 - Robot-launch MCP may invoke the standard launcher only through an explicit supervised operator confirmation flag; dry-run/preflight must remain available and non-hardware-facing.
+- Voice, conversation, and speaker MCPs may plan responses, recommend safe tool calls, and publish spoken feedback, but they must not execute motion, clear faults, or replace mission-control readiness gates.
 
 Required state-inspection verification:
 

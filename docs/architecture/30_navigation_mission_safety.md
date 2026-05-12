@@ -12,6 +12,7 @@ This block owns navigation behavior above the core hardware interface.
 - Mission server and mission CLI behavior.
 - Safety supervisor state, motion denial logic, and recovery procedures.
 - Readiness checks for localization, safety, mission, and navigation.
+- Last-known-place persistence after successful named-place arrivals.
 
 ## Navigation And Mission Diagram
 
@@ -33,7 +34,9 @@ flowchart TB
   CLIENTS --> MISSION
   CLIENTS --> SAFETY
   PLACES --> MISSION
-  SAFETY -->|allow / block| MISSION
+  SAFETY -->|status / intervention state| CLIENTS
+  CLIENTS -->|readiness checks before guarded MCP calls| MISSION
+  SAFETY -.enforces stop / STM disable when configured.-> BASE
   MISSION -->|NavigateToPose goals| NAV2
   LOCALIZE --> NAV2
   NAV2 --> PLANNER
@@ -52,6 +55,8 @@ flowchart TB
 - `ros_ws/src/amr_safety`
 - `ros_ws/src/amr_description/config/nav2_params_amr.yaml`
 - `ros_ws/src/amr_missions/config/places.yaml`
+- `mcp_servers/amr_mission_control`
+- `mcp_servers/amr_state_inspection`
 
 ## Current Detailed Diagrams Owned Here
 

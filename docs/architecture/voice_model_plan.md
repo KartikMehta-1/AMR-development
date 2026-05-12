@@ -12,6 +12,7 @@ eventual Orin NX deployment.
 | ASR | Vosk grammar for commands; `whisper.cpp` for future free-form | Started | Vosk is the default command ASR because it works well with constrained robot intents. |
 | TTS | Piper | Started | Local speech feedback through `/amr_voice/say` and the speaker MCP. Use `medium` voices for a less robotic laptop/Orin experience. |
 | Conversation | `amr_conversation` MCP | Started | Stateless turn planner that returns conversational text plus safe MCP routing. |
+| Local intent routing | `LocalIntentRouter` + local Qwen server | Started | Classifies natural push-to-talk utterances into a fixed allowed intent set before any tool call. |
 
 ## Current Wake-Word Runtime
 
@@ -198,6 +199,25 @@ For controlled push-to-talk testing:
 The push-to-talk runner keeps TTS and conversation nodes alive, but captures ASR
 only after an explicit Enter press. It is the preferred laptop-speaker test mode
 until wake-word and echo behavior are tuned.
+
+The push-to-talk runtime can use a local Qwen-backed `LocalIntentRouter` before
+falling back to general LLM conversation. The router emits only fixed intents:
+`read_status`, `diagnostics`, `list_places`, `go_to_place`, `cancel`, `confirm`,
+`reject`, `general_question`, or `unknown`. Read-only routes may call the local
+state-inspection tool executor. Motion and cancellation routes create a pending
+request and remain blocked from voice-only execution until the mission-control MCP
+gets explicit supervised confirmation.
+
+Useful local LLM setup and startup scripts:
+
+```bash
+./scripts/setup_qwen_llama_cpp.sh
+./scripts/start_qwen_server.sh
+./scripts/run_qwen_chat.sh
+```
+
+Use `--no-intent-router` or `--no-llm` on the push-to-talk conversation entry point
+when isolating deterministic parser behavior from model behavior.
 
 Both launchers apply the current laptop capture-gain profile before starting:
 `Dmic0=60%`, `Dmic1 2nd=60%`, and `Capture=70%`. Override with

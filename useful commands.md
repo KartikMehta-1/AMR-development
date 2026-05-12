@@ -150,6 +150,22 @@ Run the MCP voice intent smoke test:
 python3 mcp_servers/amr_voice_interface/smoke_test.py
 ```
 
+Run the current conversation and speaker MCP smoke tests:
+
+```bash
+python3 mcp_servers/amr_conversation/smoke_test.py
+python3 mcp_servers/amr_speaker/smoke_test.py
+```
+
+Set up and start the local Qwen server used by the push-to-talk intent router and
+fallback responder:
+
+```bash
+./scripts/setup_qwen_llama_cpp.sh
+./scripts/start_qwen_server.sh
+./scripts/run_qwen_chat.sh
+```
+
 Run the wake-word detector:
 
 ```bash
@@ -200,6 +216,18 @@ Bypass wake detection while tuning VAD/ASR:
 ros2 run amr_voice voice_pipeline_node --start-listening --device 9 ...
 ```
 
+Run the controlled push-to-talk conversation path:
+
+```bash
+./scripts/open_amr_voice_push_to_talk.sh
+```
+
+The push-to-talk conversation can use Faster Whisper for capture, `LocalIntentRouter`
+for fixed-intent classification, Qwen for non-action fallback responses, the
+state-inspection MCP for read-only status/diagnostics, and Piper/speaker MCP for
+spoken feedback. Use `--no-intent-router` or `--no-llm` on the console entry point
+when isolating deterministic parser behavior.
+
 The removed legacy nodes were:
 - `voice_text_cli`
 - `voice_command_node`
@@ -209,7 +237,10 @@ The removed legacy nodes were:
 MCP transcript flow:
 
 ```text
-hey jarvis -> wake event -> VAD/ASR transcript -> amr_voice_interface MCP -> mission-control MCP
+hey jarvis -> wake event -> VAD/ASR transcript -> conversation / voice MCPs
+  -> state-inspection MCP for read-only answers
+  -> mission-control MCP only after supervised confirmation for motion
+  -> speaker MCP / TTS for spoken feedback
 ```
 
 Current named places:

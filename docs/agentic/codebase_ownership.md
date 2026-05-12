@@ -26,6 +26,7 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `ros_ws/src/amr_missions_msgs` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | Shared message/service contracts. |
 | `ros_ws/src/amr_safety` | Navigation / Mission / Safety Agent | STM Firmware Agent | active | Safety supervisor and robot-side safety state handling. |
 | `ros_ws/src/amr_voice` | Voice / Operator Interface Agent | Navigation / Mission / Safety Agent | active | Voice/text intent layer over mission and safety. |
+| `ros_ws/src/amr_perception` | Perception / Calibration Agent | Manipulator / MoveIt Agent | active | RGB-D perception contracts and proposal helpers. Outputs are not actuator commands. |
 | `ros_ws/src/amr_semantic_nav` | Navigation / Mission / Safety Agent | Perception / Calibration Agent | active | Navigation-owned for now; coordinate with perception if semantic perception/VLM behavior becomes central. |
 | `ros_ws/src/my_pkg` | Code Review Agent | Test Runner Agent | archived | Appears to be a stray/tutorial package. Do not expand unless it is reclassified. |
 | `ros_ws/maps` | Navigation / Mission / Safety Agent | Runtime Environment Agent | artifact | Map artifacts used by localization/navigation. Track provenance when maps become release artifacts. |
@@ -33,7 +34,14 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `scripts` | Navigation / Mission / Safety Agent | Test Runner Agent | active | Mission, safety, localization, monitor, and bring-up scripts. Hardware-facing scripts require explicit confirmation before running. |
 | `docker` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Dockerfiles and runtime images for dev PC, Jetson Nano, and upcoming Jetson Orin NX. |
 | `docker-compose.slam.yml` | Runtime Environment Agent | Navigation / Mission / Safety Agent | active | Runtime orchestration; do not start hardware-facing services without explicit request. |
-| `mcp_servers` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | MCP servers for agent/tool integration. Read-only state servers may inspect ROS graph state; motion or fault-changing tools require explicit permission and harness coverage first. |
+| `mcp_servers/amr_state_inspection` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | Read-only robot health, safety, localization, mission, places, STM diagnostics, navigation, and last-known-place inspection. |
+| `mcp_servers/amr_mission_control` | Navigation / Mission / Safety Agent | ROS Core / Hardware Interface Agent | active | Guarded named-place mission MCP. Motion-capable calls require readiness checks and explicit supervised confirmation. |
+| `mcp_servers/amr_robot_launch` | Runtime Environment Agent | Navigation / Mission / Safety Agent | active | Guarded host-side launch MCP for standard AMR navigation runtime. Live launch requires explicit supervised confirmation. |
+| `mcp_servers/amr_voice_interface` | Voice / Operator Interface Agent | Navigation / Mission / Safety Agent | active | Input-agnostic transcript-to-intent MCP. It recommends safe next tool calls but does not execute motion. |
+| `mcp_servers/amr_conversation` | Voice / Operator Interface Agent | Code Review Agent | active | Stateless conversation turn planner returning responses and safe MCP tool plans. |
+| `mcp_servers/amr_speaker` | Voice / Operator Interface Agent | Runtime Environment Agent | active | Spoken-feedback MCP publishing to `/amr_voice/say`; it does not decide robot actions. |
+| `mcp_servers/amr_perception_inspection` | Perception / Calibration Agent | Manipulator / MoveIt Agent | active | Read-only RGB-D/camera/scene/object/grasp proposal MCP. It must not command motion or manipulation. |
+| other `mcp_servers` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | New MCP servers need explicit ownership, permission class, and smoke tests before use. |
 | `docs/architecture/README.md` | ROS Core / Hardware Interface Agent | all domain agents | active | Architecture index and agent-owned diagram routing map. |
 | `docs/architecture/00_system_hierarchy.md` | ROS Core / Hardware Interface Agent | all domain agents | active | Top-level communication hierarchy from high-level input to actuators and sensor feedback. Keep this stable and link block-level diagrams from it. |
 | `docs/architecture/10_runtime_environment.md` | Runtime Environment Agent | ROS Core / Hardware Interface Agent | active | Runtime environment architecture entry point for Docker, dev PC, Nano, and Orin profiles. |
@@ -41,8 +49,9 @@ This document maps repo areas to the current agent structure. It is a routing ai
 | `docs/architecture/30_navigation_mission_safety.md` | Navigation / Mission / Safety Agent | ROS Core / Hardware Interface Agent | active | Navigation, mission, localization, and safety architecture entry point. |
 | `docs/architecture/40_stm_firmware.md` | STM Firmware Agent | ROS Core / Hardware Interface Agent | active | STM firmware architecture entry point. Detailed source remains `STM_architecture.md`. |
 | `docs/architecture/50_voice_operator_interface.md` | Voice / Operator Interface Agent | Navigation / Mission / Safety Agent | active | Voice/text operator interface architecture entry point. |
-| `docs/architecture/60_manipulator_moveit.md` | Manipulator / MoveIt Agent | ROS Core / Hardware Interface Agent | future | Future SO-101 manipulator and MoveIt architecture entry point. |
-| `docs/architecture/70_perception_calibration.md` | Perception / Calibration Agent | Manipulator / MoveIt Agent | future | Future perception, calibration, and proposal-output architecture entry point. |
+| `docs/architecture/60_manipulator_moveit.md` | Manipulator / MoveIt Agent | ROS Core / Hardware Interface Agent | active | SO-101 manipulator, MoveIt, guarded execution, and VLA proposal handoff architecture entry point. |
+| `docs/architecture/70_perception_calibration.md` | Perception / Calibration Agent | Manipulator / MoveIt Agent | active | RGB-D perception, calibration, read-only perception MCP, and proposal-output architecture entry point. |
+| `docs/perception` | Perception / Calibration Agent | Manipulator / MoveIt Agent | active | Perception, VLA, dataset, and proposal/execution boundary notes. |
 | `docs/architecture/80_physical_hardware.md` | STM Firmware Agent | Runtime Environment Agent | active | Physical hardware architecture summary that links to detailed hardware docs. |
 | `docs/architecture/STM_architecture.md` | STM Firmware Agent | ROS Core / Hardware Interface Agent | active | Firmware architecture and micro-ROS contract docs. |
 | `docs/architecture/ros_stack_diagrams.md` | ROS Core / Hardware Interface Agent | Navigation / Mission / Safety Agent | active | ROS graph, topic ownership, TF, and stack wiring. |

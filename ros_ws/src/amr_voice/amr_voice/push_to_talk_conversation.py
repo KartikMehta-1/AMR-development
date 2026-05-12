@@ -15,7 +15,19 @@ from typing import Optional
 
 from amr_voice.asr import FasterWhisperConfig, FasterWhisperTranscriber
 from amr_voice.command_parser import UNKNOWN
-from amr_voice.conversation import DEFAULT_KNOWN_PLACES, plan_turn
+from amr_voice.conversation import DEFAULT_KNOWN_PLACES, next_tool_for, plan_turn
+from amr_voice.intent_router import (
+    CANCEL as ROUTED_CANCEL,
+    CONFIRM as ROUTED_CONFIRM,
+    DIAGNOSTICS as ROUTED_DIAGNOSTICS,
+    GENERAL_QUESTION as ROUTED_GENERAL_QUESTION,
+    GO_TO_PLACE as ROUTED_GO_TO_PLACE,
+    LIST_PLACES as ROUTED_LIST_PLACES,
+    READ_STATUS as ROUTED_READ_STATUS,
+    REJECT as ROUTED_REJECT,
+    LocalIntentRouter,
+    RoutedIntent,
+)
 from amr_voice.local_llm import LocalQwenResponder, qwen_responder_from_env
 from amr_voice.tts import PiperSpeaker, SpeechRequest
 from amr_voice.vad import (
@@ -35,6 +47,8 @@ class AssistantReply:
     fallback_used: bool
     blockers: list[str]
     tool_result: dict | None = None
+    intent: str | None = None
+    pending_request: dict | None = None
 
 
 def build_assistant_reply(
@@ -43,10 +57,13 @@ def build_assistant_reply(
     llm: Optional[LocalQwenResponder] = None,
     known_places: Optional[list[str]] = None,
     tool_executor=None,
+    intent_router=None,
+    pending_request: dict | None = None,
 ) -> AssistantReply:
+    places = known_places or list(DEFAULT_KNOWN_PLACES)
     turn = plan_turn(
         text,
-        known_places=known_places or list(DEFAULT_KNOWN_PLACES),
+        known_places=places,
         require_wake_word=False,
         dry_run=True,
     )
@@ -60,6 +77,7 @@ def build_assistant_reply(
                 fallback_used=False,
                 blockers=list(turn.blockers) + list(tool_result.get("blockers", [])),
                 tool_result=tool_result,
+                intent=str(turn.command.get("action")),
             )
         return AssistantReply(
             text=turn.assistant_response,
@@ -67,7 +85,19 @@ def build_assistant_reply(
             fallback_used=False,
             blockers=list(turn.blockers),
             tool_result=tool_result,
+            intent=str(turn.command.get("action")),
+            pending_request=turn.next_tool if turn.requires_confirmation else None,
         )
+    routed = _route_intent(intent_router, text, known_places=places, pending_request=pending_request)
+    if routed is not None and routed.intent != ROUTED_GENERAL_QUESTION:
+        routed_reply = _reply_for_routed_intent(
+            routed,
+            known_places=places,
+            tool_executor=tool_executor,
+            pending_request=pending_request,
+        )
+        if routed_reply is not None:
+            return routed_reply
     if llm is not None:
         result = llm.respond(text)
         if result.ok:
@@ -77,6 +107,7 @@ def build_assistant_reply(
                 fallback_used=False,
                 blockers=[],
                 tool_result=None,
+                intent=routed.intent if routed is not None else ROUTED_GENERAL_QUESTION,
             )
     return AssistantReply(
         text=turn.assistant_response,
@@ -84,7 +115,142 @@ def build_assistant_reply(
         fallback_used=True,
         blockers=list(turn.blockers),
         tool_result=None,
+        intent=routed.intent if routed is not None else None,
     )
+
+
+def _route_intent(intent_router, text: str, *, known_places: list[str], pending_request: dict | None) -> RoutedIntent | None:
+    if intent_router is None:
+        return None
+    route = intent_router.route(text, known_places=known_places, pending_request=pending_request)
+    if route.confidence < 0.45:
+        return None
+    return route
+
+
+def _reply_for_routed_intent(
+    routed: RoutedIntent,
+    *,
+    known_places: list[str],
+    tool_executor,
+    pending_request: dict | None,
+) -> AssistantReply | None:
+    if routed.intent == ROUTED_CONFIRM:
+        if pending_request is None:
+            return AssistantReply(
+                text="I heard the confirmation, but I need an active pending request before taking action.",
+                llm_used=False,
+                fallback_used=False,
+                blockers=[],
+                intent=routed.intent,
+            )
+        if _read_only_tool_allowed(pending_request) and tool_executor is not None:
+            tool_result = tool_executor(pending_request)
+            return AssistantReply(
+                text=_tool_reply("I will proceed with the pending read-only request.", tool_result),
+                llm_used=False,
+                fallback_used=False,
+                blockers=list(tool_result.get("blockers", [])),
+                tool_result=tool_result,
+                intent=routed.intent,
+            )
+        return AssistantReply(
+            text="I heard the confirmation, but voice control will not start robot motion without supervised operator approval in the mission interface.",
+            llm_used=False,
+            fallback_used=False,
+            blockers=["supervised_confirmation_required"],
+            intent=routed.intent,
+            pending_request=pending_request,
+        )
+    if routed.intent == ROUTED_REJECT:
+        return AssistantReply(
+            text="Understood. I will not continue with the pending request.",
+            llm_used=False,
+            fallback_used=False,
+            blockers=[],
+            intent=routed.intent,
+        )
+    next_tool = _next_tool_for_routed_intent(routed, known_places=known_places)
+    if next_tool is not None and _read_only_tool_allowed(next_tool) and tool_executor is not None:
+        tool_result = tool_executor(next_tool)
+        return AssistantReply(
+            text=_tool_reply(_prefix_for_routed_intent(routed), tool_result),
+            llm_used=False,
+            fallback_used=False,
+            blockers=list(tool_result.get("blockers", [])),
+            tool_result=tool_result,
+            intent=routed.intent,
+        )
+    if routed.intent == ROUTED_GO_TO_PLACE:
+        place = str(routed.arguments.get("place", "")).strip().lower()
+        if place in set(known_places):
+            return AssistantReply(
+                text=f"I can help send the robot to {place}, but I need supervised confirmation before motion starts.",
+                llm_used=False,
+                fallback_used=False,
+                blockers=[],
+                intent=routed.intent,
+                pending_request=next_tool,
+            )
+        return AssistantReply(
+            text="I heard a motion request, but I could not map it to a known place.",
+            llm_used=False,
+            fallback_used=False,
+            blockers=["unknown_place"],
+            intent=routed.intent,
+        )
+    if routed.intent == ROUTED_CANCEL:
+        return AssistantReply(
+            text="I can request mission cancellation after confirmation.",
+            llm_used=False,
+            fallback_used=False,
+            blockers=[],
+            intent=routed.intent,
+            pending_request=next_tool,
+        )
+    if routed.intent in {ROUTED_READ_STATUS, ROUTED_DIAGNOSTICS, ROUTED_LIST_PLACES}:
+        return AssistantReply(
+            text=_prefix_for_routed_intent(routed),
+            llm_used=False,
+            fallback_used=False,
+            blockers=["read_only_tool_executor_unavailable"] if next_tool else ["no_safe_tool_route"],
+            intent=routed.intent,
+        )
+    return None
+
+
+def _next_tool_for_routed_intent(routed: RoutedIntent, *, known_places: list[str]) -> dict | None:
+    if routed.intent == ROUTED_READ_STATUS:
+        return {
+            "server": "amr_state_inspection",
+            "tool_plan": [
+                {"tool": "get_robot_health", "arguments": {"require_localization": True}},
+                {"tool": "get_mission_state", "arguments": {}},
+                {"tool": "get_localization_state", "arguments": {}},
+            ],
+            "requires_operator_confirmation": False,
+        }
+    if routed.intent == ROUTED_DIAGNOSTICS:
+        return next_tool_for("diagnose", None, dry_run=True)
+    if routed.intent == ROUTED_LIST_PLACES:
+        return next_tool_for("list_places", None, dry_run=True)
+    if routed.intent == ROUTED_GO_TO_PLACE:
+        place = str(routed.arguments.get("place", "")).strip().lower()
+        if place in set(known_places):
+            return next_tool_for("go_to", place, dry_run=True)
+    if routed.intent == ROUTED_CANCEL:
+        return next_tool_for("cancel", None, dry_run=True)
+    return None
+
+
+def _prefix_for_routed_intent(routed: RoutedIntent) -> str:
+    if routed.intent == ROUTED_READ_STATUS:
+        return "I checked the robot status."
+    if routed.intent == ROUTED_DIAGNOSTICS:
+        return "I checked the robot diagnostics."
+    if routed.intent == ROUTED_LIST_PLACES:
+        return "I checked the known places."
+    return "I checked the request."
 
 
 def _read_only_tool_allowed(next_tool: dict | None) -> bool:
@@ -129,6 +295,20 @@ def _summarize_tool_data(data) -> str:
             if isinstance(places, list):
                 return "Known places: " + ", ".join(map(str, places)) + "."
     if isinstance(data, list):
+        if data and all(isinstance(item, dict) and "tool" in item and "result" in item for item in data):
+            parts = []
+            for item in data:
+                result = item.get("result") if isinstance(item.get("result"), dict) else {}
+                if not result.get("ok", False):
+                    parts.append(f"{item.get('tool')}: unavailable")
+                    continue
+                payload = result.get("data")
+                if isinstance(payload, dict):
+                    state = payload.get("state") or payload.get("current_place") or payload.get("last_place")
+                    if state not in (None, "", []):
+                        parts.append(f"{str(item.get('tool')).replace('_', ' ')}: {state}")
+            if parts:
+                return "Current status: " + "; ".join(parts) + "."
         return "Result: " + ", ".join(map(str, data[:8])) + "."
     if data not in (None, ""):
         return f"Result: {data}."
@@ -148,6 +328,8 @@ class PushToTalkConversation:
             )
         )
         self.llm = None if args.no_llm else qwen_responder_from_env()
+        self.intent_router = None if args.no_intent_router else LocalIntentRouter.from_env()
+        self.pending_request: dict | None = None
         self.speaker = PiperSpeaker(
             piper_bin=args.piper_bin,
             model_path=args.piper_model,
@@ -178,9 +360,20 @@ class PushToTalkConversation:
                 llm=self.llm,
                 known_places=list(self.args.known_places),
                 tool_executor=self._call_read_only_tool,
+                intent_router=self.intent_router,
+                pending_request=self.pending_request,
             )
+            if reply.intent == ROUTED_REJECT:
+                self.pending_request = None
+            elif reply.pending_request is not None:
+                self.pending_request = reply.pending_request
+            elif reply.intent == ROUTED_CONFIRM and reply.tool_result is not None:
+                self.pending_request = None
             print(f"assistant: {reply.text}")
-            print(f"llm_used={reply.llm_used} fallback_used={reply.fallback_used} blockers={reply.blockers}")
+            print(
+                f"intent={reply.intent} llm_used={reply.llm_used} "
+                f"fallback_used={reply.fallback_used} blockers={reply.blockers}"
+            )
             speech = self.speaker.speak(
                 SpeechRequest(
                     text=reply.text,
@@ -487,6 +680,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=Path(os.environ.get("AMR_VOICE_OUTPUT_DIR", "/tmp/amr_voice_pipeline")))
     parser.add_argument("--repo-root", default=os.environ.get("AMR_REPO_ROOT", "/workspaces/AMR-development"))
     parser.add_argument("--no-llm", action="store_true")
+    parser.add_argument("--no-intent-router", action="store_true")
     parser.add_argument("--no-tts", action="store_true")
     parser.add_argument("--log-audio-level", action="store_true")
     return parser.parse_args()
