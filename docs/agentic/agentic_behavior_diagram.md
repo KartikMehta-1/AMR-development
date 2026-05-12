@@ -6,7 +6,7 @@ The key rule is that agents, skills, and MCP servers sit above the deterministic
 
 ## Runtime Command Flow
 
-This is the main operating path for a voice, text, or UI command. The skill guides the agent; the agent calls an MCP tool; the MCP tool calls a shared ROS client; the ROS stack and firmware decide and execute.
+This is the main operating path for a voice, text, or UI command. The skill guides the agent; the agent calls an MCP tool; the MCP tool calls a shared ROS client or ROS-facing node; the ROS stack and firmware decide and execute.
 
 ```mermaid
 flowchart TB
@@ -15,7 +15,13 @@ flowchart TB
   AGENT[Agent / LLM coordinator]
   SKILL[Relevant skill\npolicy and workflow]
   CONFIRM[Permission and confirmation check]
-  MCP[MCP tool call\nread-only now, command tools later]
+  MCP[MCP tool call\nread-only or guarded]
+  MCP_STATE[amr_state_inspection\nread-only]
+  MCP_MISSION[amr_mission_control\nguarded mission]
+  MCP_LAUNCH[amr_robot_launch\nguarded launch]
+  MCP_VOICE[amr_voice_interface\nintent routing]
+  MCP_CONV[amr_conversation\nturn planner]
+  MCP_SPEAKER[amr_speaker\nspoken feedback]
   CLIENT[amr_clients\nshared ROS client library]
   MISSION[mission_server]
   SAFETY[safety_supervisor]
@@ -34,7 +40,20 @@ flowchart TB
   SKILL -->|tells agent allowed workflow and preferred tool| AGENT
   AGENT --> CONFIRM
   CONFIRM -->|allowed tool call| MCP
-  MCP --> CLIENT
+  MCP --> MCP_STATE
+  MCP --> MCP_MISSION
+  MCP --> MCP_LAUNCH
+  MCP --> MCP_VOICE
+  MCP --> MCP_CONV
+  MCP --> MCP_SPEAKER
+  MCP_STATE --> CLIENT
+  MCP_MISSION --> CLIENT
+  MCP_LAUNCH -.starts standard operator session only after confirmation.-> CLIENT
+  MCP_VOICE --> MCP_MISSION
+  MCP_CONV --> MCP_VOICE
+  MCP_CONV --> MCP_STATE
+  MCP_CONV --> MCP_SPEAKER
+  MCP_SPEAKER --> OP
   CLIENT --> MISSION
   CLIENT --> SAFETY
   MISSION --> SAFETY
@@ -65,7 +84,8 @@ flowchart TB
 - The skill does not directly command the MCP server.
 - The skill tells the agent how the task should be completed: which checks matter, which actions are blocked, and which MCP tool is preferred.
 - The agent decides whether it is allowed to call an MCP tool.
-- The MCP tool is the callable API surface. It should call shared ROS clients rather than duplicate mission or safety logic.
+- The MCP tool is the callable API surface. State-inspection is read-only; mission-control and robot-launch are guarded and confirmation-required where they can change robot state.
+- MCP servers should call shared ROS clients or ROS-facing nodes rather than duplicate mission or safety logic.
 - ROS clients call existing ROS services, actions, and topics.
 - `amr_clients` is a consumer of ROS state; it is not a low-level sensor ingestion layer.
 - Mission, safety, Nav2, MoveIt, `ros2_control`, and STM firmware remain the deterministic control path.
@@ -84,7 +104,8 @@ flowchart TB
   SKILLS[Repo-local AMR skills]
   HARNESS[Agent harness and CI]
   MCP_STATE[amr_state_inspection MCP\nread-only]
-  MCP_CMD[Future command MCPs\nconfirmation-required]
+  MCP_CMD[Guarded command MCPs\nconfirmation-required]
+  MCP_VOICE[Voice / conversation / speaker MCPs]
 
   subgraph ROLESET[Working agent roles]
     TEST[Test Runner]
@@ -106,9 +127,10 @@ flowchart TB
   ROLESET --> SKILLS
   SKILLS --> AGENT
   AGENT --> MCP_STATE
-  AGENT -.future guarded calls.-> MCP_CMD
+  AGENT --> MCP_VOICE
+  AGENT --> MCP_CMD
   HARNESS -.validates contracts and scenarios.-> CONTRACTS
-  HARNESS -.gates future command tools.-> MCP_CMD
+  HARNESS -.gates command tools.-> MCP_CMD
   HARNESS -.runs in CI for source-only checks.-> SKILLS
 ```
 
@@ -124,25 +146,25 @@ ROS + firmware = real robot authority
 
 ## Current And Future Boundaries
 
-Current implemented path:
+Current implemented read-only and voice/status paths:
 
 ```text
 User request
   -> Codex
   -> agent contract + skill
-  -> source-only harness or read-only MCP state inspection
+  -> source-only harness, voice/conversation/speaker MCPs, or read-only MCP state inspection
   -> shared ROS clients
   -> existing ROS state interfaces
 ```
 
-Future supervised command path:
+Current guarded command path:
 
 ```text
 User request
   -> Codex
   -> agent contract + skill
   -> permission check + explicit confirmation
-  -> harness-covered command MCP
+  -> guarded mission-control or robot-launch MCP
   -> shared ROS client
   -> mission server / safety supervisor
   -> Nav2 / MoveIt / ros2_control

@@ -8,6 +8,7 @@ GO_TO = "go_to"
 CANCEL = "cancel"
 STATUS = "status"
 LIST_PLACES = "list_places"
+DIAGNOSE = "diagnose"
 WAKE = "wake"
 CONFIRM = "confirm"
 REJECT = "reject"
@@ -40,7 +41,13 @@ _STOP_PHRASES = {
 
 _STATUS_PHRASES = {
     "status",
+    "robot status",
+    "check status",
+    "check robot status",
     "what is your status",
+    "what is robot status",
+    "what is the robot status",
+    "what is the status of the robot",
     "where are you",
     "what are you doing",
     "mission status",
@@ -52,6 +59,21 @@ _LIST_PHRASES = {
     "where can you go",
     "available places",
     "locations",
+}
+
+_DIAGNOSE_PHRASES = {
+    "debug",
+    "debug robot",
+    "debug what failed",
+    "diagnose",
+    "diagnose robot",
+    "what failed",
+    "what is wrong",
+    "what went wrong",
+    "why did you stop",
+    "why did mission fail",
+    "system check",
+    "run diagnostics",
 }
 
 _CONFIRM_PHRASES = {
@@ -95,6 +117,8 @@ _FILLER_WORDS = {
     "an",
     "can",
     "could",
+    "hey",
+    "hi",
     "please",
     "the",
     "to",
@@ -112,7 +136,7 @@ _PLACE_ALIASES = {
 def parse_text_command(
     text: str,
     known_places: Optional[Iterable[str]] = None,
-    wake_word: str = "lovely",
+    wake_word: str = "hey jarvis",
     require_wake_word: bool = False,
 ) -> ParsedCommand:
     normalized = _normalize(text)
@@ -120,7 +144,7 @@ def parse_text_command(
         return ParsedCommand(UNKNOWN, detail="empty command")
 
     wake_word_normalized = _normalize(wake_word)
-    wake_detected = wake_word_normalized in normalized.split()
+    wake_detected = _contains_wake_word(normalized, wake_word_normalized)
     command_text = _strip_wake_word(normalized, wake_word_normalized)
     if wake_detected and not command_text:
         return ParsedCommand(
@@ -160,6 +184,14 @@ def parse_text_command(
             wake_word_detected=wake_detected,
         )
 
+    if _matches_any(command_text, _DIAGNOSE_PHRASES):
+        return ParsedCommand(
+            DIAGNOSE,
+            confidence=0.95,
+            detail="diagnostic/debug command",
+            wake_word_detected=wake_detected,
+        )
+
     place = _match_place(command_text, known)
     if place is not None and (_looks_like_go_to(command_text, place) or command_text == place):
         return ParsedCommand(
@@ -191,6 +223,7 @@ def parse_text_command(
 
 def _normalize(text: str) -> str:
     lowered = text.lower().strip()
+    lowered = re.sub(r"\b(\w+)'s\b", r"\1", lowered)
     table = str.maketrans({char: " " for char in string.punctuation})
     no_punct = lowered.translate(table)
     return re.sub(r"\s+", " ", no_punct).strip()
@@ -199,8 +232,29 @@ def _normalize(text: str) -> str:
 def _strip_wake_word(text: str, wake_word: str) -> str:
     if not wake_word:
         return text
-    words = [word for word in text.split() if word != wake_word]
-    return " ".join(words)
+    words = text.split()
+    wake_words = wake_word.split()
+    if not wake_words:
+        return text
+    stripped = []
+    index = 0
+    while index < len(words):
+        if words[index : index + len(wake_words)] == wake_words:
+            index += len(wake_words)
+            continue
+        stripped.append(words[index])
+        index += 1
+    return " ".join(stripped)
+
+
+def _contains_wake_word(text: str, wake_word: str) -> bool:
+    if not wake_word:
+        return False
+    words = text.split()
+    wake_words = wake_word.split()
+    if not wake_words:
+        return False
+    return any(words[index : index + len(wake_words)] == wake_words for index in range(len(words)))
 
 
 def _drop_polite_prefix(text: str) -> str:

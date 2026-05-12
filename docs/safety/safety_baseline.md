@@ -1,11 +1,11 @@
 # AMR Safety Baseline
 
-This baseline is the known-good operating record to capture before enabling or changing safety layers. The goal is to prove that the robot, STM firmware, Jetson link, odometry, lidar, localization, and navigation are stable without the ROS safety supervisor adding intervention.
+This baseline is the known-good operating record to capture before changing safety layers. The goal is to prove that the robot, STM firmware, Jetson link, odometry, lidar, localization, and navigation are stable while the ROS safety supervisor is present in monitor mode, without adding intervention unless explicitly configured.
 
 ## Current Baseline Scope
 
 - STM firmware safety checks may remain enabled.
-- ROS safety supervisor is disabled unless explicitly started.
+- ROS safety supervisor is launched by the standard navigation bringup in monitor mode unless explicitly configured otherwise.
 - Navigation is launched with the normal map and mission stack.
 - The baseline must pass while idle, during motion, and after motion.
 
@@ -52,10 +52,10 @@ Wait for localization to become valid:
 docker exec amr_devpc /entrypoint.sh bash -lc 'cd /workspaces/AMR-development/ros_ws && source install/setup.bash && python3 ../scripts/amr_wait_for_localization.py --timeout 180 --print-period 2'
 ```
 
-Confirm the ROS safety supervisor is not running during this baseline:
+Confirm the ROS safety supervisor is present and not enforcing intervention during this baseline:
 
 ```bash
-docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && ros2 node list | grep amr_safety || true'
+docker exec amr_devpc /entrypoint.sh bash -lc 'source /workspaces/AMR-development/ros_ws/install/setup.bash && ros2 topic echo /amr/safety_supervisor/status --once'
 ```
 
 ## Baseline Probe

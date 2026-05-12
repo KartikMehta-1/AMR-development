@@ -49,25 +49,13 @@ AMR_RVIZ_CONFIG_PATH=/workspaces/AMR-development/ros_ws/src/amr_description/conf
   ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
-Voice modes for the navigation launcher:
+The navigation launcher no longer starts legacy voice panes. Voice development is MCP-based:
 
 ```bash
-AMR_VOICE_MODE=text ./scripts/open_amr_devpc_navigation.sh my_new_map
-AMR_VOICE_MODE=asr ./scripts/open_amr_devpc_navigation.sh my_new_map
-AMR_VOICE_MODE=both ./scripts/open_amr_devpc_navigation.sh my_new_map
 AMR_VOICE_MODE=off ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
-ASR uses the laptop microphone through `/dev/snd`. Override the microphone when needed:
-
-```bash
-AMR_VOICE_MODE=asr AMR_VOICE_DEVICE=auto ./scripts/open_amr_devpc_navigation.sh my_new_map
-AMR_VOICE_MODE=asr AMR_VOICE_DEVICE=8 ./scripts/open_amr_devpc_navigation.sh my_new_map
-AMR_VOICE_ASR_EXTRA_ARGS="--log-audio-level --log-partials" \
-  ./scripts/open_amr_devpc_full.sh my_new_map
-```
-
-The launcher creates two or three tmux windows, depending on voice mode. Each pane has a title in the top border. RViz starts as a GUI from the Nav2 pane, not as a separate tmux window; RViz logs are written inside the container at `/tmp/amr_rviz.log`.
+The launcher creates the navigation and monitor tmux windows. RViz starts as a GUI from the Nav2 pane, not as a separate tmux window; RViz logs are written inside the container at `/tmp/amr_rviz.log`.
 
 Window `0:navigation` is selected after launch:
 - `Nav2 + AMCL`: launches Nav2, AMCL, and waits for fresh localization before enabling missions.
@@ -81,10 +69,6 @@ Window `1:monitor`:
 - `Mission Status`: clean live mission summary with elapsed time and warnings for navigation that looks stuck, idle, or stale.
 - `Safety`: runs `safety_supervisor`.
 - `Safety Status`: clean live summary of safety health, intervention reasons, STM fault bits, comm state, stale topics, and odom speed.
-
-Window `2:voice`:
-- `Voice Text` and/or `Voice ASR`, depending on `AMR_VOICE_MODE`.
-- Say `lovely status`, `lovely go kitchen`, then `yes` to confirm motion. `stop` works without the wake word.
 
 Tune graph monitor refresh rate if needed:
 
@@ -154,94 +138,109 @@ Watch structured mission status:
 ros2 topic echo /amr_missions/status
 ```
 
-Watch voice feedback text, which is also the future TTS input:
+Watch wake-word feedback text, which is also a future TTS input:
 
 ```bash
 ros2 topic echo /amr_voice/feedback
 ```
 
-Text command interface:
+Run the MCP voice intent smoke test:
 
 ```bash
-ros2 run amr_voice voice_text_cli
+python3 mcp_servers/amr_voice_interface/smoke_test.py
 ```
 
-Wake-gated text command interface:
+Run the current conversation and speaker MCP smoke tests:
 
 ```bash
-ros2 run amr_voice voice_text_cli --wake-gated
+python3 mcp_servers/amr_conversation/smoke_test.py
+python3 mcp_servers/amr_speaker/smoke_test.py
 ```
 
-Example typed commands:
+Set up and start the local Qwen server used by the push-to-talk intent router and
+fallback responder:
+
+```bash
+./scripts/setup_qwen_llama_cpp.sh
+./scripts/start_qwen_server.sh
+./scripts/run_qwen_chat.sh
+```
+
+Run the wake-word detector:
+
+```bash
+ros2 run amr_voice wake_word_node --model hey_jarvis --threshold 0.5 --dry-run --log-audio-level
+```
+
+Transcribe a WAV file with local `whisper.cpp` and emit voice-MCP arguments:
+
+```bash
+./scripts/setup_whisper_cpp.sh
+
+# For use from the Foxy container:
+AMR_WHISPER_BUILD_DIR=/workspaces/AMR-development/models/whisper.cpp/build-foxy \
+  ./scripts/setup_whisper_cpp.sh
+
+ros2 run amr_voice asr_file_cli input.wav \
+  --whisper-bin models/whisper.cpp/build-foxy/bin/whisper-cli \
+  --model /workspaces/AMR-development/models/whisper/ggml-base.en.bin
+```
+
+`asr_file_cli` assumes the wake word was already detected, so the MCP payload does not
+require the wake phrase in the transcript text unless `--require-wake-word` is passed.
+
+Run the live wake -> VAD -> ASR dry-run pipeline:
+
+```bash
+ros2 run amr_voice voice_pipeline_node \
+  --device 9 \
+  --asr-backend vosk \
+  --vosk-model /workspaces/AMR-development/models/vosk-model-small-en-us-0.15 \
+  --log-audio-level
+```
+
+Use Whisper instead of the default Vosk command grammar backend:
+
+```bash
+ros2 run amr_voice voice_pipeline_node \
+  --device 9 \
+  --asr-backend whisper \
+  --whisper-bin /workspaces/AMR-development/models/whisper.cpp/build-foxy/bin/whisper-cli \
+  --whisper-model /workspaces/AMR-development/models/whisper/ggml-base.en.bin \
+  --log-audio-level
+```
+
+Bypass wake detection while tuning VAD/ASR:
+
+```bash
+ros2 run amr_voice voice_pipeline_node --start-listening --device 9 ...
+```
+
+Run the controlled push-to-talk conversation path:
+
+```bash
+./scripts/open_amr_voice_push_to_talk.sh
+```
+
+The push-to-talk conversation can use Faster Whisper for capture, `LocalIntentRouter`
+for fixed-intent classification, Qwen for non-action fallback responses, the
+state-inspection MCP for read-only status/diagnostics, and Piper/speaker MCP for
+spoken feedback. Use `--no-intent-router` or `--no-llm` on the console entry point
+when isolating deterministic parser behavior.
+
+The removed legacy nodes were:
+- `voice_text_cli`
+- `voice_command_node`
+- `voice_asr_node`
+- `scripts/open_amr_voice_asr.sh`
+
+MCP transcript flow:
 
 ```text
-lovely go kitchen
-lovely
-go hall
-return home
-stop
-status
-list places
-```
-
-In wake-gated mode, `lovely` opens a short listening window for the next command. `stop` / `cancel` is still accepted without the wake word.
-Motion commands now require confirmation by default. After `lovely go kitchen`, say or type `yes` to start the mission, or `no` to discard it. Use `--no-confirm-motion` only for controlled testing.
-Motion commands also require AMCL localization by default. Set RViz `2D Pose Estimate` first; use `--no-require-localization` only for controlled parser/service testing.
-
-One-shot dry run, useful before enabling motion:
-
-```bash
-ros2 run amr_voice voice_text_cli --wake-gated --dry-run --command "lovely go to the kitchen"
-```
-
-Laptop microphone ASR setup:
-
-```bash
-mkdir -p /workspaces/AMR-development/models
-cd /workspaces/AMR-development/models
-wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-unzip vosk-model-small-en-us-0.15.zip
-```
-
-List microphone devices:
-
-```bash
-ros2 run amr_voice voice_asr_node --list-devices
-```
-
-Run ASR in dry-run mode:
-
-```bash
-ros2 run amr_voice voice_asr_node --dry-run
-```
-
-Run ASR against mission commands:
-
-```bash
-ros2 run amr_voice voice_asr_node
-```
-
-One-command ASR launcher from the laptop host:
-
-```bash
-./scripts/open_amr_voice_asr.sh
-```
-
-Pass debug flags or an alternate device when needed:
-
-```bash
-./scripts/open_amr_voice_asr.sh --log-audio-level --log-partials
-./scripts/open_amr_voice_asr.sh 8 --dry-run --log-audio-level
-```
-
-If recognition becomes poor after a container or laptop audio restart, rerun `ros2 run amr_voice voice_asr_node --list-devices`. The node defaults to `--device auto`, which prefers the digital mic input-only device with a 16 kHz default rate (`hw:1,7`, often index `9` on this laptop); avoid HDMI output-only devices and the silent headset/analog input path.
-
-ASR motion-command flow:
-
-```text
-lovely
-go to kitchen
-yes
+hey jarvis -> wake event -> VAD/ASR transcript -> conversation / voice MCPs
+  -> state-inspection MCP for read-only answers
+  -> mission-control MCP only after supervised confirmation for motion
+  -> speaker MCP / TTS for spoken feedback
 ```
 
 Current named places:

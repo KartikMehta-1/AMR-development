@@ -16,8 +16,8 @@ This folder is organized by documentation purpose.
 - `architecture/30_navigation_mission_safety.md` - SLAM, AMCL, Nav2, mission, safety
 - `architecture/40_stm_firmware.md` - STM32 firmware architecture entry point
 - `architecture/50_voice_operator_interface.md` - voice/text operator interface architecture
-- `architecture/60_manipulator_moveit.md` - future SO-101 manipulator and MoveIt architecture
-- `architecture/70_perception_calibration.md` - future perception and calibration architecture
+- `architecture/60_manipulator_moveit.md` - SO-101 manipulator, MoveIt, guarded execution architecture
+- `architecture/70_perception_calibration.md` - RGB-D perception, calibration, and proposal architecture
 - `architecture/80_physical_hardware.md` - physical hardware architecture summary
 - `architecture/ros_stack_diagrams.md` - ROS 2 graph, TF ownership, navigation stack
 - `architecture/STM_architecture.md` - STM32 firmware architecture
@@ -46,3 +46,7 @@ This folder is organized by documentation purpose.
 - `agentic/agent_interaction_examples.md` - example interactions
 - `agentic/codebase_ownership.md` - repo area ownership by agent
 - `agentic/roles/` - subagent role contracts
+
+## Perception
+
+- `perception/vla_manipulation_layers.md` - RGB-D, VLA, MCP, MoveIt, and guarded execution boundary model

@@ -19,6 +19,7 @@ RUN rm -f /etc/apt/sources.list.d/ros2-snapshots.list \
       > /etc/apt/sources.list.d/ros2.list \
     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    alsa-utils \
     python3-pip \
     portaudio19-dev \
     ros-${ROS_DISTRO}-desktop \
@@ -37,6 +38,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-plotjuggler-ros \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir sounddevice vosk
+RUN python3 -m pip install --no-cache-dir sounddevice vosk openwakeword
 
 USER dev

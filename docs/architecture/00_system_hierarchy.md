@@ -27,6 +27,10 @@ flowchart TB
     LLM[LLM / Codex / Agent]
     SKILLS[AMR Skills]
     MCP[MCP Tools]
+    MCPVOICE[voice / conversation / speaker MCPs]
+    MCPSTATE[state inspection MCP]
+    MCPMISSION[mission control MCP]
+    MCPLAUNCH[robot launch MCP]
     HARNESS[Harness / Self-Tests]
   end
 
@@ -35,7 +39,6 @@ flowchart TB
     ROSCLIENTS[Shared ROS Clients]
     MISSION[Mission Server]
     SAFETY[Safety Supervisor]
-    MCPREAD[Read-Only State MCP Server]
   end
 
   subgraph PlanningLayer[Planning, Localization, And Runtime Layer]
@@ -76,19 +79,27 @@ flowchart TB
   OPERATOR --> LLM
   LLM --> SKILLS
   SKILLS --> MCP
+  MCP --> MCPVOICE
+  MCP --> MCPSTATE
+  MCP --> MCPMISSION
+  MCP --> MCPLAUNCH
   HARNESS -.validates.-> SKILLS
   HARNESS -.validates.-> MCP
 
-  VOICE --> ROSCLIENTS
+  VOICE --> MCPVOICE
+  MCPVOICE --> ROSCLIENTS
+  MCPVOICE --> MCPSTATE
+  MCPVOICE --> MCPMISSION
+  MCPVOICE -->|spoken response| VOICE
   CLI --> ROSCLIENTS
-  MCP --> ROSCLIENTS
-  MCPREAD --> ROSCLIENTS
+  MCPSTATE --> ROSCLIENTS
+  MCPMISSION --> ROSCLIENTS
+  MCPLAUNCH -.guarded standard runtime launch.-> RUNTIME
   ROSCLIENTS --> MISSION
   ROSCLIENTS --> SAFETY
 
   MISSION -->|named goals / patrol sequencing| NAV2
-  SAFETY -->|allow / block / intervention state| MISSION
-  SAFETY -->|health state| ROSCLIENTS
+  SAFETY -->|health / intervention state| ROSCLIENTS
   NAV2 --> COSTMAPS
   LOCALIZE --> NAV2
   RSP --> NAV2

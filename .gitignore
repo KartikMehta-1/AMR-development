@@ -8,6 +8,7 @@ ros_ws/maps/
 __pycache__/
 *.pyc
 *.csv
+.venv/
 models/
 
 # STM32CubeIDE project metadata and build outputs

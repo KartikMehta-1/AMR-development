@@ -40,15 +40,16 @@ The current sequence is:
 5. Harness CI for source-only checks                    [baseline implemented]
 6. Shared ROS client libraries                          [baseline implemented]
 7. Read-only AMR state MCP server                       [baseline implemented]
-8. Software-only functional validation of skills/MCPs   [active next step]
-9. Fake-ROS or fixture-backed MCP integration tests      [next]
-10. Confirmation-required command MCP tools             [future, gated]
-11. Subagent PR workflow and review discipline          [ongoing]
-12. Supervised hardware acceptance workflow             [future, physical AMR required]
-13. Manipulation, perception, and Orin expansion         [future expansion]
+8. Guarded mission, launch, voice, conversation MCPs     [baseline implemented]
+9. Software-only functional validation of skills/MCPs    [active next step]
+10. Fake-ROS or fixture-backed MCP integration tests     [next]
+11. Confirmation-required command hardening              [active, gated]
+12. Subagent PR workflow and review discipline           [ongoing]
+13. Supervised hardware acceptance workflow              [future, physical AMR required]
+14. Manipulation, perception, and Orin expansion         [future expansion]
 ```
 
-The next practical work should be software-only validation and test fixtures for the skills, harness, shared ROS clients, and read-only MCP server. Motion-causing MCP tools should wait until the read-only path is stable, command preconditions are documented, and hardware acceptance procedures are ready to supervise real robot behavior.
+The next practical work should be software-only validation and test fixtures for the skills, harness, shared ROS clients, and MCP servers. Motion-causing MCP calls remain gated by explicit supervised confirmation, readiness checks, and hardware acceptance procedures.
 
 ## Phase 1 - Agent Contracts And Permission Model
 
@@ -586,6 +587,7 @@ Initial read-only tools:
 - `get_localization_state`
 - `get_mission_state`
 - `list_named_places`
+- `get_last_known_place`
 - `get_stm_diagnostics`
 - `get_navigation_state`
 
@@ -612,15 +614,14 @@ Done criteria:
 
 ## Phase 6 - Confirmation-Required MCP Tools
 
-After read-only tools work and harness scenarios exist, add tools that can change robot state.
+Guarded command MCPs now exist for named-place mission control and standard robot runtime launch. Continue hardening these tools with fixture-backed tests, readiness checks, and supervised hardware acceptance instead of widening their authority.
 
 Confirmation-required tools:
 
 ```text
 go_to_named_place(place)
-cancel_current_mission()
-request_safety_recovery_check()
-clear_fault_after_operator_confirmation()
+cancel_mission()
+robot_launch preflight / supervised launch
 ```
 
 Each motion-capable tool must:

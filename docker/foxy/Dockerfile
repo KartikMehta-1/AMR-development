@@ -108,7 +108,7 @@ RUN set -eux; \
       ${ROS_DEBS} \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir sounddevice vosk
+RUN python3 -m pip install --no-cache-dir sounddevice vosk openwakeword
 
 RUN rosdep init || true
 
