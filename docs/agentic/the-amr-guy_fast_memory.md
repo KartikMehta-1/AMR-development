@@ -1,0 +1,124 @@
+# the-amr-guy Fast Memory
+
+This is the first file `the-amr-guy` should read when the user says "AMR", "robot", "base", "firmware", "navigation", "mission", "voice", "MCP", or similar in this repo.
+
+## Identity
+
+- Agent name: `the-amr-guy`.
+- Repo: `AMR-development`.
+- Role: AMR developer/operator agent for hardware-aware software work, not an autonomous robot controller.
+- Default posture: inspect current files first, preserve safety boundaries, and separate source-only validation from live robot validation.
+- Project tracker: `docs/project/AMR_project.md` is the live development tracker. Continuously update it when meaningful progress, status changes, completed checks, blockers, or next-focus changes happen.
+
+## System Shape
+
+- Physical base: differential-drive AMR with STM32 Nucleo-F401RE, Cytron MDD20A motor driver, left/right drive motors, encoders, E-stop, YDLidar G4, RealSense D455, planned BNO080 IMU, planned INA226 battery telemetry, and planned HC-SR04 proximity sensors.
+- Runtime computer: current robot profile is Jetson Nano with ROS 2 Foxy containers. Orin NX/Humble is planned as a separate runtime profile, not a silent replacement.
+- Firmware: active source is `STM/STM_Firmware_AMR_v2`, not legacy STM folders.
+- ROS workspace: active packages live under `ros_ws/src`.
+- Agent surfaces: root contract `AGENTS.md`, skills in `.codex/skills`, MCP servers in `mcp_servers`, source-only harness in `agent_harness`.
+
+## Current Active Workstream
+
+- The user is currently hooking up proximity sensors, the IMU, and a battery measurement development board to the STM side.
+- The expected firmware additions are STM I2C/GPIO/telemetry support for these sensors while preserving existing motor control, E-stop, command timeout, and fault behavior.
+- The expected ROS additions are typed `/amr_stm/*` telemetry topics and downstream clients/docs that can consume them safely.
+- The navigation hypothesis to validate after IMU integration is that fusing wheel odometry with IMU data can improve localization stability.
+- Treat sensor fusion as a validation task, not an assumption: compare odom-only versus odom+IMU behavior with repeatable logs before retuning Nav2 or mission behavior.
+
+## Motion Path
+
+Current real hardware motion path:
+
+```text
+operator / Nav2 / mission_server
+-> /diff_drive_controller/cmd_vel_unstamped
+-> diff_drive_controller
+-> amr_hardware ros2_control plugin
+-> /amr_stm/wheel_cmd_left and /amr_stm/wheel_cmd_right
+-> micro_ros_agent
+-> STM32 firmware speed PI loop
+-> Cytron MDD20A
+-> drive motors
+```
+
+Do not assume STM subscribes directly to `/cmd_vel`. Older notes may say that; current code routes through `diff_drive_controller` and `/amr_stm/wheel_cmd_left/right`.
+
+## Hard Safety Rules
+
+- Never publish direct motor PWM.
+- Never publish raw `/cmd_vel` for unsupervised motion.
+- Never bypass `mission_server`, `safety_supervisor`, `ros2_control`, or STM fault handling.
+- Never clear faults, reset safety intervention, re-enable STM, start missions, launch hardware runtime, run teleop, move the arm, or run hardware acceptance without explicit supervised confirmation in the current interaction.
+- Missing safety, localization, STM diagnostics, Nav2 lifecycle, or mission state means not ready.
+- Perception outputs and grasp candidates are proposals only, never actuator commands.
+
+## Firmware Memory
+
+- Board: Nucleo-F401RE, 84 MHz.
+- Control loop: TIM4 at 100 Hz, per-wheel speed PI, duty ramp, command staleness timeout 500 ms.
+- PWM/dir: TIM1 CH1 PA8 left, TIM1 CH2 PA9 right, DIR PB4/PB5, PWM 20 kHz, duty cap 70%.
+- Encoders: left TIM3 PA6/PA7, right TIM2 PA0/PA1, 2400 counts/rev target.
+- Current sense: ADC1 CH8 PB0 and CH11 PC1, ACS758, protection/diagnostics only.
+- E-stop: PB10 active low pull-up, physical motor-power cut preferred.
+- micro-ROS: USART2 PA2/PA3 at 460800 bps.
+- Planned STM sensor expansion: BNO080 IMU and INA226 battery telemetry on planned STM I2C PB8/PB9; HC-SR04 proximity sensors on provisional GPIO trigger/echo pins from `docs/hardware/pin_map.yaml`.
+- STM subscribers: `/amr_stm/wheel_cmd_left`, `/amr_stm/wheel_cmd_right`, `/amr_stm/enable`, `/amr_stm/estop`, `/amr_stm/clear_fault`.
+- STM publishers: `/amr_stm/wheel_state`, `/amr_stm/fault_mask`, `/amr_stm/safety_state`, duty/current/ADC/zero topics, `/amr_stm/ros_diag`.
+- Fault bits: ESTOP, OC_LEFT, OC_RIGHT, STALL_LEFT, STALL_RIGHT, ENC_TIMEOUT_LEFT, ENC_TIMEOUT_RIGHT, ADC_STUCK, GENERIC.
+
+## ROS Memory
+
+- `amr_description`: URDF/Xacro, launch files, Nav2/SLAM/controller config.
+- `amr_hardware`: `ros2_control` hardware interface from wheel command/state interfaces to STM micro-ROS topics.
+- `amr_clients`: shared client helpers for mission, safety, localization, navigation, robot health, STM diagnostics.
+- `amr_missions_msgs`: service interfaces for mission layer.
+- `amr_missions`: named-place `mission_server`, CLI, `places.yaml`.
+- `amr_safety`: safety supervisor and safety diagnostics.
+- `amr_voice`: voice/text intent, ASR/TTS helpers, local intent routing, confirmation behavior.
+- `amr_perception`: structured RGB-D perception contracts and proposal helpers.
+- `my_pkg`: archived/tutorial-style, do not expand unless reclassified.
+
+## Navigation And Mission Memory
+
+- Mapping mode: SLAM Toolbox owns `map -> odom`.
+- Localization/navigation mode: AMCL owns `map -> odom`; `diff_drive_controller` owns `odom -> base_footprint`; `robot_state_publisher` owns robot body and sensor TF.
+- SLAM and AMCL must not be treated as simultaneously active localization owners.
+- Named-place missions go through `mission_server` and Nav2 `NavigateToPose`.
+- Before any named-place mission, check place exists, mission idle, safety healthy, STM diagnostics healthy, fresh `/scan`, fresh `/amcl_pose`, `map -> odom`, and active Nav2 lifecycle nodes.
+
+## MCP Memory
+
+- `amr_state_inspection`: read-only robot health/safety/localization/mission/STM/navigation/places/last-known-place.
+- `amr_mission_control`: guarded named-place mission tools. Live `go_to_named_place` requires readiness and `operator_confirmed_supervised=true`; dry-run is preferred.
+- `amr_robot_launch`: guarded host-side standard navigation launch wrapper. Live launch is hardware-facing.
+- `amr_voice_interface`: transcript-to-intent parser; recommends next MCP calls but does not execute motion.
+- `amr_conversation`: stateless turn planner; does not execute tools.
+- `amr_speaker`: publishes text to `/amr_voice/say`; does not decide actions.
+- `amr_perception_inspection`: read-only camera/scene/object/grasp proposal surface.
+
+## Safe Validation
+
+- Source-only harness:
+
+```bash
+python3 agent_harness/software/validate_harness.py
+python3 agent_harness/software/run_static_contract_checks.py
+```
+
+- Host-safe compile:
+
+```bash
+python3 -m py_compile agent_harness/software/validate_harness.py agent_harness/software/run_static_contract_checks.py mcp_servers/*/server.py mcp_servers/*/smoke_test.py
+```
+
+- ROS-attached state/mission MCP smoke tests require a sourced Foxy workspace with `rclpy` and `amr_clients`.
+- Do not claim hardware readiness from source-only checks.
+
+## When Unsure
+
+- Read `AGENTS.md`, then this file, then `docs/agentic/the-amr-guy_context.md`.
+- Check `docs/project/AMR_project.md` for current project status and update it when work changes the project tracker state.
+- Use `docs/agentic/codebase_ownership.md` to route work.
+- Use `docs/agentic/agent_tool_permissions.md` to decide whether an action is read-only, source-only, confirmation-required, or blocked.
+- Prefer current code and launch files over older notes.

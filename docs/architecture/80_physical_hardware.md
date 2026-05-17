@@ -20,6 +20,7 @@ flowchart TB
   ESTOP[E-stop]
   POWER[5 V / 12 V power rails]
   JETSON[Jetson runtime computer]
+  USBEXT[Powered USB extension / hub]
   STM[STM32 controller]
   DRIVER[Cytron MDD20A]
   MOTORS[Drive motors]
@@ -28,6 +29,7 @@ flowchart TB
   BAT --> ESTOP
   BAT --> POWER
   POWER --> JETSON
+  POWER --> USBEXT
   POWER --> STM
   POWER --> SENSORS
   ESTOP --> DRIVER
@@ -35,9 +37,15 @@ flowchart TB
   DRIVER --> MOTORS
   MOTORS --> SENSORS
   SENSORS --> STM
-  SENSORS --> JETSON
+  SENSORS --> USBEXT
+  USBEXT --> JETSON
   STM <--> JETSON
 ```
+
+The powered USB extension/hub has its own regulated 5 V input from the Jetson/USB
+buck/boost branch. High-draw USB peripherals such as LiDAR and RealSense should
+draw peripheral power from that branch instead of from the Jetson USB port; the
+Jetson should primarily carry the USB data connection.
 
 ## Detailed Sources
 

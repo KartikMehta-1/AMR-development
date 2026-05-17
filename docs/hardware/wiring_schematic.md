@@ -11,18 +11,18 @@ This document captures the practical wiring plan for the AMR project: power dist
   - Main switch to cut all rails (upstream of fuse/E-stop); E-stop contactor in motor path (see E-stop section)
   - Branches:
     - Motor Power Bus + Motor Driver VM (Cytron MDD20A)
-    - DC-DC Buck 5 V (Jetson Nano, USB hub) — XH-M401 / XL4016 class
+    - DC-DC Buck/Boost 5 V (Jetson Nano, powered USB extension/hub) — XH-M401 / XL4016 class or equivalent regulated 5 V supply
     - DC-DC Buck 5 V/12 V for sensors (LiDAR, depth cam, HC-SR04 proximity) — LM2596 for 5 V logic rail; 12 V optional if needed
   - Battery voltage display (DSN-DVM-368) fed after main switch so it is off when the robot is off
 
 Notes
 - Use star ground: join motor return, STM32 GND, Jetson GND, and sensor grounds at a solid common point.
-- Size DC-DC modules with margin (Jetson Nano can draw 3-4 A peak on 5 V; depth cameras and LiDAR add significant load).
+- Size DC-DC modules with margin (Jetson Nano can draw 3-4 A peak on 5 V; depth cameras and LiDAR add significant load). The powered USB extension/hub should take its peripheral 5 V from the buck/boost, not from the Jetson USB port.
 - Keep motor currents off the logic 5 V/3.3 V rails; separate power domains that meet at ground.
 
 ### 1a) Power Distribution Details
 - Battery Pack: 12.8 V LiFePO4 4S 18 Ah with internal basic BMS. Outputs raw pack voltage; no regulated 5 V/12 V and limited telemetry.
-- DC-DC 5 V Rail (shared): 5 V buck with ~6-8 A continuous to power Jetson Nano plus STM32 (and light sensors). Use inline fuses per branch (Jetson 4-5 A, STM32 0.5-1 A). If noise or capacity is a concern, split into a second 5 V buck for logic.
+- DC-DC 5 V Jetson/USB Rail: 5 V buck/boost with ~6-8 A continuous to power Jetson Nano plus the powered USB extension/hub. Use inline fuses per branch (Jetson 4-5 A, USB extension/hub sized to attached sensors). The USB extension/hub 5 V input should come from this rail so LiDAR/depth-camera current is not sourced through the Jetson.
 - Jetson Nano power: feed the barrel jack (J48 set for DC-in). Avoid micro-USB for full load.
 - STM32 power: feed E5V/VIN on the Nucleo. Avoid back-powering if USB is also connected (set the Nucleo power select to external or remove the USB 5 V link per board manual).
 - DC-DC 12 V Sensors (optional): only if any sensor requires 12 V; otherwise omit.
@@ -39,7 +39,7 @@ Battery monitoring (planned)
 
 Wiring intent
 - Battery/BMS + Main Fuse + external shunt + power distribution + E-stop + Motor Power Bus + Motor driver VM.
-- Battery/BMS + DC-DC 5 V Jetson (XH-M401) + Jetson Nano, USB hub.
+- Battery/BMS + DC-DC 5 V Jetson/USB buck/boost + Jetson Nano, powered USB extension/hub.
 - Battery/BMS + DC-DC 5 V Logic (LM2596) + STM32, proximity sensors.
 - Battery/BMS + DC-DC 12 V Sensors + 12 V sensors (if used).
 
@@ -69,7 +69,7 @@ graph TD
   MSW --> DVM[DSN-DVM-368 Volt Display]
   SHUNT --> INA226[INA226 Battery Monitor<br/>I2C + VBUS + IN+/IN- sense]
   MSW --> BATT_TAP[Optional Voltage Sense Tap<br/>fused/current-limited]
-  PWRDIST --> BUCK5V[5 V Buck >=6-8 A]
+  PWRDIST --> BUCK5V[5 V Buck/Boost >=6-8 A]
   VM --> CS_L[ACS758L Left<br/>IP+ + IP-]
   VM --> CS_R[ACS758R Right<br/>IP+ + IP-]
   CS_L --> MDD_L[MDD20A M1 VM]
@@ -104,8 +104,11 @@ graph TD
   INA226 -.->|STM I2C PB8/PB9, future telemetry| MCU
 
   BUCK5V --> FUSE_JET[5 V Fuse 4-5 A]
+  BUCK5V --> FUSE_USB[5 V Fuse USB extension/hub]
   BUCK5V --> FUSE_MCU[5 V Fuse 0.5-1 A]
-  FUSE_JET --> JET[Jetson Nano + Powered Hub]
+  FUSE_JET --> JET[Jetson Nano]
+  FUSE_USB --> USBEXT[Powered USB Extension / Hub]
+  USBEXT --> JET
   FUSE_MCU --> MCU[STM32F401RE (E5V/VIN)]
   JET -->|USB VCP or UART| MCU
   ESTOP_SENSE -.-> MCU
@@ -121,7 +124,7 @@ graph TD
 Notes
 - Insert one ACS758 per wheel supply. Keep IP+/IP- loops short. Route Vout away from motor leads.
 - Insert the battery shunt after the main fuse and before branch distribution so total robot current is measured. Do not route main battery current through the INA226 PCB.
-- Jetson/hub on dedicated high-current 5 V buck. Logic on separate 5 V buck or shared if capacity/noise is acceptable.
+- Jetson and powered USB extension/hub on a dedicated high-current 5 V buck/boost, preferably with separate branch fuses. Logic on separate 5 V buck or shared only if capacity/noise is acceptable.
 - All grounds meet at a solid star point near the power entry.
 
 ---
@@ -130,7 +133,7 @@ Notes
 
 - Battery + Fuse + E-stop + Motor driver VM/GND: AWG 12-14, keep short and well-crimped.
 - Motor driver + Motors (each channel): AWG 14-16 depending on run length and expected current; shorter runs can use 16.
-- DC-DC 5 V Jetson rail: AWG 16-18 from buck to Jetson/hub to minimize drop; use quality connectors.
+- DC-DC 5 V Jetson/USB rail: AWG 16-18 from buck/boost to Jetson and powered USB extension/hub branches to minimize drop; use quality connectors.
 - DC-DC 5 V Logic rail: AWG 20-22 (STM32 and light sensors).
 - Encoder A/B and logic signals: AWG 24-26 twisted pair with ground return; optionally shield if noisy.
 - Sensor USB cables: use powered hub for LiDAR/RealSense; keep USB leads short and rated for current.
@@ -214,6 +217,7 @@ Data link options
 
 Power (Jetson)
 - Provide dedicated 5 V rail with sufficient current (target ~6-8 A to cover Jetson plus USB peripherals). Power Jetson via 5 V header or barrel jack per NVIDIA guidance; keep harness short and low resistance.
+- Add the powered USB extension/hub as a separately powered device on the Jetson/USB 5 V buck/boost branch. Its 5 V input must come from the buck/boost, not from the Jetson USB port, so LiDAR/depth-camera current does not load the Jetson carrier.
 
 ROS topic exchange
 - Run the micro-ROS agent on the Jetson; it bridges STM32 topics into the ROS 2 graph over the selected serial link.
@@ -222,15 +226,15 @@ ROS topic exchange
 
 ## 6) Sensors + Jetson (typical)
 
-- LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB hub; 5 V power from sensor/USB rail (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
-- Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson (prefer powered hub if multiple devices). Power from USB 5 V; ensure USB 3 bandwidth.
+- LiDAR (YDLidar G4): USB (USB-to-UART) to Jetson via powered USB extension/hub; 5 V power from the extension/hub's buck/boost-fed input (budget ~0.5 A nominal; confirm peaks). Keep cable short; ensure stable 5 V.
+- Depth Camera (Intel RealSense D455): USB 3.x (Type-C cable) to Jetson through the powered USB extension/hub when possible. Power from the extension/hub's regulated 5 V input; ensure USB 3 bandwidth.
 - IMU dev board (Adafruit BNO080 or equivalent): I2C to STM32 (3.3 V logic, STEMMA QT/Qwiic or short jumper wiring). Power from the 3.3 V logic rail; ensure common ground and keep cable short.
   - STM planned I2C pins: SCL = `PB8` (Arduino D15 / Nucleo header), SDA = `PB9` (Arduino D14 / Nucleo header).
 - Proximity Sensors: 4x HC-SR04 ultrasonic to STM32 (trigger/echo). Keep wiring short; avoid firing multiple sensors simultaneously to reduce crosstalk; level-shift echo to 3.3 V (HC-SR04 echo is 5 V). Use a simple divider (10 kOhm top / 20 kOhm bottom) or a BSS138 level shifter.
 - Battery voltage sense: planned STM32 ADC input from protected pack-voltage divider. Do not connect the battery's unused 5/6-pin connector until its pinout is identified at home.
 
 Notes
-- Use powered USB hub if multiple high-draw USB devices are attached.
+- Use the powered USB extension/hub for high-draw USB devices so the Jetson USB port carries data and does not source sensor power.
 - Keep sensor grounds tied to the logic ground.
 
 ---
@@ -250,7 +254,28 @@ graph LR
   STM -- "GND" --> INA
   STM -- "PB9 / D14 (SDA, planned I2C1)" --> INA
   STM -- "PB8 / D15 (SCL, planned I2C1)" --> INA
+  SHUNT[External battery shunt]
+  BUS[Robot bus/load side after shunt]
+  SHUNT -- "Kelvin IN+" --> INA
+  SHUNT -- "Kelvin IN-" --> INA
+  BUS -- "fused/current-limited VBUS sense" --> INA
 ```
+
+STM-side INA226 connector:
+
+| INA226 signal | STM / robot connection | Conditioning |
+| --- | --- | --- |
+| `VCC` | STM `3.3V` logic | 100 nF close to module, plus 1-10 uF bulk near connector |
+| `GND` | STM logic GND / robot ground | Same low-voltage ground reference as STM and IMU |
+| `SCL` | STM `PB8` / Arduino `D15` / planned I2C1 SCL | 3.3 V pull-up, start with 4.7 kOhm; optional 22-100 ohm series damping near STM |
+| `SDA` | STM `PB9` / Arduino `D14` / planned I2C1 SDA | 3.3 V pull-up, start with 4.7 kOhm; optional 22-100 ohm series damping near STM |
+| `IN+` | External shunt battery/fuse side Kelvin sense | Thin Kelvin sense lead only; optional 10-100 ohm series resistor near INA226 |
+| `IN-` | External shunt robot/load side Kelvin sense | Thin Kelvin sense lead only; optional 10-100 ohm series resistor near INA226 |
+| `VBUS` | Robot/load positive after shunt | Fused/current-limited sense tap, 100-1 kOhm series resistance if the wire leaves the shield |
+
+Do not route main battery current through the STM carrier, Arduino headers, or the
+INA226 breakout PCB. Only the shunt's low-current Kelvin sense leads and the VBUS
+sense tap should reach the INA226 module.
 
 ## 7) Proximity Sensors + STM32 (4x HC-SR04 Ultrasonic)
 
@@ -262,8 +287,10 @@ Interface and pin map (STM32 3.3 V GPIO; echo level-shift to 3.3 V):
 - S3 rear_left: TRIG -> PA4 (Arduino A2), ECHO -> PC0 (Arduino A5)
 - S4 rear_right: TRIG -> PB12 candidate, ECHO -> PB13 candidate
 Notes:
-- These are provisional pin candidates. Verify Nucleo header availability and update CubeMX before wiring.
+- This keeps the original four-sensor plan. S1 and S3 can land on the Arduino-style carrier headers. S2 and S4 require jumper leads from the carrier/sensor harness to the STM pins because the current carrier does not expose those Morpho-side pins.
+- These are provisional pin candidates. Verify Nucleo header availability and update CubeMX before permanent wiring.
 - `PB3` is reserved for SWO in the current CubeMX configuration and should not be used for proximity unless debug trace is intentionally changed.
+- `PA5` is reserved for the status LED and should not be reused for proximity.
 - `PB8/PB9` are reserved for planned STM I2C shared by the IMU and INA226 and should not be consumed by proximity.
 - Echo: use 10 kOhm / 20 kOhm divider (or level shifter) to keep MCU input at 3.3 V max.
 
@@ -313,6 +340,7 @@ Preferred path:
 - Placement: battery positive -> main switch -> main fuse -> external shunt -> robot power distribution.
 - Current sensing: use an external 50 A minimum shunt, preferably 75 A or 100 A for transient headroom. Common shunts are rated by full-scale current and millivolt drop, such as 50 A / 75 mV.
 - INA226 connections: `IN+` to battery/fuse side of shunt, `IN-` to robot/load side of shunt, `VBUS` to robot/load positive through a fused/current-limited sense tap, `GND` to robot ground, `VCC` to 3.3 V logic, `SDA` to STM `PB9`, and `SCL` to STM `PB8`.
+- On the carrier/shield, expose INA226 as a low-voltage sensor connector. Bring only `VCC`, `GND`, `SCL`, `SDA`, `IN+`, `IN-`, and protected `VBUS` to the module.
 - Mechanical wiring: high-current battery wiring must use the shunt's main bolts or terminals. INA226 sense wires are thin Kelvin sense leads only.
 - Planned software values: battery voltage, battery current, battery power, and eventually accumulated energy/charge.
 - Planned ROS topics after STM firmware/micro-ROS implementation: `/amr_stm/battery_voltage_mv`, `/amr_stm/battery_current_ma`, and `/amr_stm/battery_power_mw`.

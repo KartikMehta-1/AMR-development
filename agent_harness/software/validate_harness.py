@@ -14,6 +14,20 @@ CONTRACT_FILE = ROOT / "agent_harness" / "software_contracts" / "static_contract
 TEST_PLAN_FILE = ROOT / "agent_harness" / "software_tests" / "software_test_plan.yaml"
 ACCEPTANCE_FILE = ROOT / "agent_harness" / "hardware_acceptance" / "acceptance_checklist.yaml"
 REPORT_TEMPLATE = ROOT / "agent_harness" / "hardware_acceptance" / "report_template.md"
+AGENT_MEMORY_FILES = [
+    ROOT / "AGENTS.md",
+    ROOT / "docs" / "agentic" / "the-amr-guy_fast_memory.md",
+    ROOT / "docs" / "agentic" / "the-amr-guy_context.md",
+]
+MCP_SERVERS = [
+    "amr_state_inspection",
+    "amr_mission_control",
+    "amr_robot_launch",
+    "amr_voice_interface",
+    "amr_conversation",
+    "amr_speaker",
+    "amr_perception_inspection",
+]
 
 
 def read(path: Path) -> str:
@@ -92,8 +106,19 @@ def validate_file_exists(errors: list[str], path: Path) -> None:
 
 
 def validate_support_files(errors: list[str]) -> None:
-    for path in [CONTRACT_FILE, TEST_PLAN_FILE, ACCEPTANCE_FILE, REPORT_TEMPLATE]:
+    for path in [*AGENT_MEMORY_FILES, CONTRACT_FILE, TEST_PLAN_FILE, ACCEPTANCE_FILE, REPORT_TEMPLATE]:
         validate_file_exists(errors, path)
+
+    agent_text = read(ROOT / "AGENTS.md") if (ROOT / "AGENTS.md").exists() else ""
+    if "the-amr-guy" not in agent_text:
+        fail(errors, "AGENTS.md must name the AMR agent as the-amr-guy")
+    if "the-door-guy" in agent_text:
+        fail(errors, "AGENTS.md still references the-door-guy")
+
+    for name in MCP_SERVERS:
+        server_dir = ROOT / "mcp_servers" / name
+        for filename in ["README.md", "server.py", "smoke_test.py"]:
+            validate_file_exists(errors, server_dir / filename)
 
     if CONTRACT_FILE.exists():
         contract_text = read(CONTRACT_FILE)

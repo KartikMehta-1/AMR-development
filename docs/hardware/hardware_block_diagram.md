@@ -15,7 +15,7 @@ graph TD
   %% DC-DC supplies and rails
   subgraph Power_Supplies
     MPBUS[Motor Bus 12-14.6V]
-    BUCK_JET[5V Buck Jetson/Hub ~6A XH-M401]
+    BUCK_JET[5V Buck/Boost Jetson + USB Extension ~6-8A]
     BUCK_LOGIC[5V Buck Logic/Enc/Prox ~2A LM2596]
     BUCK_12V[12V Buck Spare/Opt Sensors]
     ESTOP --> MPBUS
@@ -47,7 +47,7 @@ graph TD
   subgraph Control
     STM[STM32 Nucleo F401RE]
     JET[Jetson Nano Dev Kit]
-    USBHUB[Powered USB Hub]
+    USBHUB[Powered USB Extension / Hub]
     PWRBTN[Jetson Soft Power Button<br/>momentary to PWR_BTN]
   end
 
@@ -95,7 +95,8 @@ graph TD
 ```
 
 - Encoders are powered from the 5 V logic rail and feed open-collector signals to the STM32 with pull-ups.
-- Powered USB hub arrows are correct: LiDAR and RealSense data go to the hub, hub data to Jetson; hub + Jetson 5 V both come from the Jetson/USB buck.
+- Powered USB extension/hub arrows are correct: LiDAR and RealSense data go to the hub, hub data goes to Jetson, and the hub receives its own regulated 5 V input from the Jetson/USB buck/boost. This reduces USB peripheral power draw from the Jetson carrier and keeps the Jetson responsible primarily for data.
+- The 5 V buck/boost feeding the Jetson/USB branch must be adjusted to 5.00 V before connection and sized for Jetson plus USB peripherals with derating and branch fusing.
 - Power links are thick/orange; data/sense links are thinner/blue for quick visual separation.
 - Main power switch sits at pack output ahead of fuse and E-Stop for full isolation during service/storage.
 - Battery voltage display (DSN-DVM/DUM-368) taps the pack after the main switch so it is off when the robot is off; it is treated as display-only unless its exact module proves otherwise.

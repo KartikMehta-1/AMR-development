@@ -241,14 +241,15 @@ Notes
 | Intended Telemetry | Pack voltage, total battery current, battery power, later Ah/Wh estimate in software |
 | Planned ROS Topics | `/amr_stm/battery_voltage_mv`, `/amr_stm/battery_current_ma`, `/amr_stm/battery_power_mw` |
 | Shield Components | 3.3 V I2C pull-ups around 4.7 kOhm unless breakout pull-ups already exist; 22-100 Ohm optional SCL/SDA series damping; 100 nF local decoupling; fused/current-limited VBUS sense tap; optional 10-100 Ohm shunt-sense series resistors plus 10-100 nF differential filter near INA226 |
-| Notes | Do not pass main battery current through a small INA226 breakout PCB. Use bolted/crimped high-current wiring through the external shunt and Kelvin sense wires to INA226 `IN+`/`IN-`. If the INA226 module includes an onboard shunt, bypass/remove it or use a module designed for external shunt input. |
+| STM-side Wiring | `VCC` to 3.3 V, `GND` to logic ground, `SCL` to `PB8/D15`, `SDA` to `PB9/D14`, `IN+`/`IN-` to external shunt Kelvin sense screws, `VBUS` to protected load-side bus voltage tap |
+| Notes | Do not pass main battery current through a small INA226 breakout PCB, STM carrier, or Arduino headers. Use bolted/crimped high-current wiring through the external shunt and Kelvin sense wires to INA226 `IN+`/`IN-`. If the INA226 module includes an onboard shunt, bypass/remove it or use a module designed for external shunt input. |
 
 ---
 
 ## 13. DC-DC Converters
 Three supplies recommended; exact models TBD.
 
-### 13.1 Jetson 5 V Supply
+### 13.1 Jetson / Powered USB 5 V Supply
 **Model (planned):** XH-M401 / XL4016-class buck module (adjustable, higher current)
 | Parameter | Value |
 |------------|--------|
@@ -256,7 +257,16 @@ Three supplies recommended; exact models TBD.
 | Output | 5.0 V |
 | Max Current | ~5-8 A with heatsink/airflow (spec 8 A/200 W is optimistic) |
 | Ripple/Noise | Higher than branded supplies; consider extra output caps if needed |
-| Notes | Powers Jetson Nano and powered USB hub; set to 5.00 V with a meter before use; fuse input and allow airflow/derating |
+| Notes | Powers Jetson Nano and powered USB extension/hub; set to 5.00 V with a meter before use; fuse input and allow airflow/derating |
+
+### 13.1a Powered USB Extension / Hub
+**Model:** TBD powered USB extension/hub
+| Parameter | Value |
+|------------|--------|
+| Data Interface | USB data link to Jetson Nano / future Orin carrier |
+| Power Input | Regulated 5.0 V from Jetson/USB buck/boost branch |
+| Purpose | Power LiDAR, RealSense, and other USB peripherals without drawing their 5 V load from Jetson USB ports |
+| Notes | Use separate branch fuse where practical; verify polarity, backfeed behavior, cable quality, and USB 3 bandwidth before connecting RealSense |
 
 ### 13.2 Logic 5 V Supply
 **Model:** LM2596 buck module (adjustable)

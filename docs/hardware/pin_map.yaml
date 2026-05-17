@@ -39,7 +39,18 @@ power:
       sda_pin: PB9
       vcc: 3v3_preferred
       signals: [VCC, GND, SDA, SCL, IN_PLUS, IN_MINUS, VBUS]
-      notes: Use a module that exposes I2C and supports external shunt wiring. STM ownership is planned on PB8/PB9, sharing the STM I2C bus with the IMU. STM firmware/CubeMX must enable I2C before wiring this as an active interface.
+      connector_to_stm:
+        vcc: 3v3_logic
+        gnd: logic_gnd
+        scl: PB8
+        sda: PB9
+        scl_series_ohms: 22_to_100_optional
+        sda_series_ohms: 22_to_100_optional
+      connector_to_power_path:
+        in_plus: external_shunt_battery_fuse_side_kelvin
+        in_minus: external_shunt_robot_load_side_kelvin
+        vbus: robot_load_positive_after_shunt_fused_current_limited
+      notes: Use a module that exposes I2C and supports external shunt wiring. STM ownership is planned on PB8/PB9, sharing the STM I2C bus with the IMU. Only low-current Kelvin/sense wires should reach the INA226; main battery current must not pass through the STM carrier or INA226 PCB. STM firmware/CubeMX must enable I2C before wiring this as an active interface.
     fallback_voltage_only:
       path: STM32_ADC_pack_voltage_divider
       adc_pin_candidate: TBD
@@ -168,7 +179,7 @@ sensors:
     units: distance           # mm in firmware
     level_shift: echo_divider_to_3v3   # ensure echo is 3.3 V safe
     firing_strategy: staggered_round_robin
-    notes: Stagger triggers to avoid crosstalk; HC-SR04 echo is 5 V (level-shift to 3.3 V); add 0.1 uF + 10 uF per module; keep leads short. Pin candidates avoid PB3/SWO and reserve PB8/PB9 for STM I2C unless intentionally changed in CubeMX.
+    notes: Stagger triggers to avoid crosstalk; HC-SR04 echo is 5 V (level-shift to 3.3 V); add 0.1 uF + 10 uF per module; keep leads short. S1/S3 fit the Arduino-style carrier headers; S2/S4 use jumper leads to STM pins not exposed on the carrier. Pin candidates avoid PB3/SWO and PA5/status LED, and reserve PB8/PB9 for STM I2C unless intentionally changed in CubeMX.
     shield_conditioning:
       trig_series_ohms: 100_to_330
       trig_pulldown_ohms: 100000
@@ -192,7 +203,7 @@ sensors:
         position: front_right
         trig_pin: PC2          # candidate GPIO; verify Nucleo header/CubeMX before wiring
         echo_pin: PC3          # candidate GPIO; verify Nucleo header/CubeMX before wiring
-        notes: add divider or level shifter on echo if module drives 5 V high; avoids PB3 because PB3 is SWO in current CubeMX
+        notes: jumper from carrier/sensor harness to STM pin; add divider or level shifter on echo if module drives 5 V high; avoids PB3 because PB3 is SWO in current CubeMX
       - id: S3
         position: rear_left
         trig_pin: PA4          # Arduino A2
@@ -202,7 +213,7 @@ sensors:
         position: rear_right
         trig_pin: PB12         # candidate Morpho GPIO; verify Nucleo header/CubeMX before wiring
         echo_pin: PB13         # candidate Morpho GPIO; verify Nucleo header/CubeMX before wiring
-        notes: add divider or level shifter on echo if module drives 5 V high; PB8/PB9 are reserved as STM I2C candidates
+        notes: jumper from carrier/sensor harness to STM pin; add divider or level shifter on echo if module drives 5 V high; PB8/PB9 are reserved as STM I2C candidates
 
 buses:
   jetson_i2c1:
