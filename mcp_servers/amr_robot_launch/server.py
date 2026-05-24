@@ -149,6 +149,7 @@ class LaunchTools:
         operator_confirmed = bool(arguments.get("operator_confirmed_supervised", False))
         timeout_sec = float(arguments.get("timeout_sec", DEFAULT_TIMEOUT_SEC))
         recreate_session = bool(arguments.get("recreate_session", True))
+        start_rviz = bool(arguments.get("start_rviz", True))
         map_arg = str(arguments.get("map", "")).strip()
 
         preflight = self.preflight_launch(arguments)
@@ -156,6 +157,7 @@ class LaunchTools:
         env_overrides = {
             "AMR_ATTACH_TMUX": "false",
             "AMR_RECREATE_SESSION": "1" if recreate_session else "0",
+            "AMR_START_RVIZ": "true" if start_rviz else "false",
         }
         preflight["data"]["command"] = command
         preflight["data"]["env_overrides"] = env_overrides
@@ -247,6 +249,7 @@ TOOL_DEFINITIONS = [
                 "operator_confirmed_supervised": {"type": "boolean", "default": False},
                 "dry_run": {"type": "boolean", "default": True},
                 "recreate_session": {"type": "boolean", "default": True},
+                "start_rviz": {"type": "boolean", "default": True},
                 "timeout_sec": {"type": "number", "default": DEFAULT_TIMEOUT_SEC},
                 "jetson_host": {"type": "string", "default": DEFAULT_JETSON_HOST},
             },

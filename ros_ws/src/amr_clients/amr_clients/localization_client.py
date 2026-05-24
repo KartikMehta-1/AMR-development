@@ -56,6 +56,9 @@ class LocalizationClient:
         except Exception:
             return False
 
+    def wait_for_status(self, timeout_sec: float = 2.0) -> bool:
+        return self.cache.wait_for([self.pose_topic, self.scan_topic], timeout_sec)
+
     def status(self, max_pose_age_sec: float = 3.0, max_scan_age_sec: float = 1.0) -> LocalizationStatus:
         pose = self.cache.get(self.pose_topic)
         scan = self.cache.get(self.scan_topic)

@@ -114,14 +114,20 @@ class SafetySupervisor(Node):
         be = best_effort_qos()
         rel = reliable_qos()
 
-        self.create_subscription(Int32, "/amr_stm/fault_mask", self.handle_fault_mask, be)
-        self.create_subscription(UInt32, "/amr_stm/safety_state", self.handle_safety_state, be)
-        self.create_subscription(String, "/amr_stm/comm_status", self.handle_comm_status, rel)
-        self.create_subscription(UInt32, "/amr_stm/comm_fault_mask", self.handle_comm_fault_mask, rel)
-        self.create_subscription(Odometry, self.odom_topic, self.handle_odom, rel)
-        self.create_subscription(LaserScan, self.scan_topic, self.handle_scan, be)
-        self.create_subscription(PoseWithCovarianceStamped, self.amcl_topic, self.handle_amcl_pose, rel)
-        self.create_service(Trigger, "/amr/safety_supervisor/reset_intervention", self.handle_reset_intervention)
+        self.subscription_handles = [
+            self.create_subscription(Int32, "/amr_stm/fault_mask", self.handle_fault_mask, be),
+            self.create_subscription(UInt32, "/amr_stm/safety_state", self.handle_safety_state, be),
+            self.create_subscription(String, "/amr_stm/comm_status", self.handle_comm_status, rel),
+            self.create_subscription(UInt32, "/amr_stm/comm_fault_mask", self.handle_comm_fault_mask, rel),
+            self.create_subscription(Odometry, self.odom_topic, self.handle_odom, rel),
+            self.create_subscription(LaserScan, self.scan_topic, self.handle_scan, be),
+            self.create_subscription(PoseWithCovarianceStamped, self.amcl_topic, self.handle_amcl_pose, rel),
+        ]
+        self.reset_service = self.create_service(
+            Trigger,
+            "/amr/safety_supervisor/reset_intervention",
+            self.handle_reset_intervention,
+        )
 
         self.last_seen = {}
         self.fault_mask = None

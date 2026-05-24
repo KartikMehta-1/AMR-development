@@ -93,9 +93,12 @@ class TopicCache:
     def __init__(self, node: Node):
         self.node = node
         self.samples: dict[str, TopicSample] = {}
+        self.subscriptions = []
 
     def subscribe(self, topic: str, msg_type, qos: Optional[QoSProfile] = None) -> None:
-        self.node.create_subscription(msg_type, topic, self._callback(topic), qos or reliable_qos())
+        self.subscriptions.append(
+            self.node.create_subscription(msg_type, topic, self._callback(topic), qos or reliable_qos())
+        )
 
     def _callback(self, topic: str):
         def callback(msg) -> None:

@@ -48,50 +48,52 @@ class MissionServer(Node):
             callback_group=self._callback_group,
         )
         self._status_pub = self.create_publisher(MissionStatus, "/amr_missions/status", 10)
-        self.create_subscription(
+        self._command_sub = self.create_subscription(
             String,
             "/amr_missions/command",
             self._handle_command,
             10,
             callback_group=self._callback_group,
         )
-        self.create_service(
-            ListPlaces,
-            "/amr_missions/list_places",
-            self._handle_list_places,
-            callback_group=self._callback_group,
-        )
-        self.create_service(
-            GoToNamedPose,
-            "/amr_missions/go_to",
-            self._handle_go_to,
-            callback_group=self._callback_group,
-        )
-        self.create_service(
-            PatrolNamedPoses,
-            "/amr_missions/patrol",
-            self._handle_patrol,
-            callback_group=self._callback_group,
-        )
-        self.create_service(
-            GetMissionState,
-            "/amr_missions/state",
-            self._handle_state,
-            callback_group=self._callback_group,
-        )
-        self.create_service(
-            Trigger,
-            "/amr_missions/cancel",
-            self._handle_cancel,
-            callback_group=self._callback_group,
-        )
+        self._services = [
+            self.create_service(
+                ListPlaces,
+                "/amr_missions/list_places",
+                self._handle_list_places,
+                callback_group=self._callback_group,
+            ),
+            self.create_service(
+                GoToNamedPose,
+                "/amr_missions/go_to",
+                self._handle_go_to,
+                callback_group=self._callback_group,
+            ),
+            self.create_service(
+                PatrolNamedPoses,
+                "/amr_missions/patrol",
+                self._handle_patrol,
+                callback_group=self._callback_group,
+            ),
+            self.create_service(
+                GetMissionState,
+                "/amr_missions/state",
+                self._handle_state,
+                callback_group=self._callback_group,
+            ),
+            self.create_service(
+                Trigger,
+                "/amr_missions/cancel",
+                self._handle_cancel,
+                callback_group=self._callback_group,
+            ),
+        ]
         self._lock = threading.Lock()
         self._mission_thread: Optional[threading.Thread] = None
         self._cancel_requested = threading.Event()
         self._active_goal_handle = None
         self._mission_state = MissionRuntimeState()
         self._publish_status()
-        self.create_timer(1.0, self._publish_status, callback_group=self._callback_group)
+        self._status_timer = self.create_timer(1.0, self._publish_status, callback_group=self._callback_group)
 
     def _default_last_place_path(self) -> Path:
         configured = os.environ.get("AMR_MISSION_LAST_PLACE_PATH")

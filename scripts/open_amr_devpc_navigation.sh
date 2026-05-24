@@ -31,6 +31,7 @@ VOICE_MODE="${AMR_VOICE_MODE:-off}"
 GRAPH_MONITOR_PERIOD="${AMR_GRAPH_MONITOR_PERIOD:-3.0}"
 MAP_READY_TIMEOUT_SEC="${AMR_MAP_READY_TIMEOUT_SEC:-12}"
 MAP_FALLBACK_PUBLISHER="${AMR_MAP_FALLBACK_PUBLISHER:-true}"
+START_RVIZ="${AMR_START_RVIZ:-true}"
 ATTACH_TMUX="${AMR_ATTACH_TMUX:-true}"
 
 usage() {
@@ -48,12 +49,13 @@ Optional environment:
   AMR_VOICE_MODE=off
   AMR_GRAPH_MONITOR_PERIOD=3.0
   AMR_MAP_FALLBACK_PUBLISHER=true|false
+  AMR_START_RVIZ=true|false
   AMR_ATTACH_TMUX=true|false
 
 This starts:
   - Jetson hardware stack (amr_foxy)
   - Jetson ST-LINK reset of the STM after startup
-  - RViz
+  - RViz when AMR_START_RVIZ=true
   - Nav2 localization + navigation on the given saved map
   - mission_server
   - live mission status pane
@@ -423,11 +425,15 @@ if ! python3 /workspaces/AMR-development/scripts/amr_wait_for_map.py --timeout $
     echo 'Map was not receivable and AMR_MAP_FALLBACK_PUBLISHER=false.'; \
   fi; \
 fi; \
-echo 'Starting RViz in the background. RViz logs: /tmp/amr_rviz.log'; \
-export LIBGL_ALWAYS_SOFTWARE=1; \
-rviz2 -d ${RVIZ_CONFIG_PATH} >/tmp/amr_rviz.log 2>&1 & \
-rviz_pid=\$!; \
-echo 'Set the initial pose in RViz with 2D Pose Estimate.'; \
+if [ '${START_RVIZ}' = 'true' ]; then \
+  echo 'Starting RViz in the background. RViz logs: /tmp/amr_rviz.log'; \
+  export LIBGL_ALWAYS_SOFTWARE=1; \
+  rviz2 -d ${RVIZ_CONFIG_PATH} >/tmp/amr_rviz.log 2>&1 & \
+  rviz_pid=\$!; \
+  echo 'Set the initial pose in RViz with 2D Pose Estimate.'; \
+else \
+  echo 'RViz disabled by AMR_START_RVIZ=false. Set /initialpose from an external RViz or helper before missions.'; \
+fi; \
 echo 'Waiting for fresh AMCL pose and map->odom before enabling mission commands...'; \
 if ! python3 /workspaces/AMR-development/scripts/amr_wait_for_localization.py --timeout 180.0; then \
   echo 'Localization did not become ready. Leave Nav2 running and set RViz 2D Pose Estimate again.'; \
@@ -450,7 +456,7 @@ tmux set-window-option -t "${SESSION_NAME}:monitor" pane-border-format ' #{pane_
 tmux select-pane -t "${topics_pane}" -T "Topics"
 nodes_pane="$(tmux split-window -h -p 50 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_graph_monitor.py --mode nodes --period ${GRAPH_MONITOR_PERIOD}")")"
 tmux select-pane -t "${nodes_pane}" -T "Nodes"
-mission_server_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; ros2 run amr_missions mission_server")")"
+mission_server_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; echo 'Mission server waiting for AMCL localization readiness...'; ${wait_for_localization}; echo 'Starting mission_server after localization readiness.'; ros2 run amr_missions mission_server")")"
 tmux select-pane -t "${mission_server_pane}" -T "Mission Server"
 mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; python3 /workspaces/AMR-development/scripts/amr_mission_status_monitor.py")")"
 tmux select-pane -t "${mission_status_pane}" -T "Mission Status"

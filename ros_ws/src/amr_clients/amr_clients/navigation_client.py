@@ -25,9 +25,13 @@ class NavigationClient:
     def __init__(self, node: Node):
         self.node = node
         self.cancel_client = node.create_client(CancelGoal, "/navigate_to_pose/_action/cancel_goal")
+        self.lifecycle_clients = {}
 
     def get_lifecycle_state(self, node_name: str, timeout_sec: float = 2.0) -> ClientResult:
-        client = self.node.create_client(GetState, f"{node_name}/get_state")
+        client = self.lifecycle_clients.get(node_name)
+        if client is None:
+            client = self.node.create_client(GetState, f"{node_name}/get_state")
+            self.lifecycle_clients[node_name] = client
         result = call_service(self.node, client, GetState.Request(), f"{node_name}/get_state", timeout_sec)
         if not result.ok:
             return result

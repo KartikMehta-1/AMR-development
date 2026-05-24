@@ -192,11 +192,13 @@ class MissionControlTools:
             if state not in self.IDLE_STATES:
                 blockers.append("mission_not_idle")
 
+        self.ros.safety.wait_for_status(timeout_sec=timeout_sec)
         safety = self.ros.safety.snapshot()
         data["safety"] = to_jsonable(safety)
         if not safety.healthy:
             blockers.extend(safety.blockers or ["safety_not_healthy"])
 
+        self.ros.localization.wait_for_status(timeout_sec=timeout_sec)
         localization = self.ros.localization.status(
             max_pose_age_sec=max_pose_age_sec,
             max_scan_age_sec=max_scan_age_sec,
