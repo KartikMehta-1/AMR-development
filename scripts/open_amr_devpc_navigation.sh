@@ -443,9 +443,9 @@ fi; \
 touch ${localization_ready_file}; \
 echo 'AMCL localization is fresh; mission commands are enabled.'; \
 wait \${nav2_pid}"
-nav_pane="$(tmux split-window -h -p 45 -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "${nav_runtime_cmd}")")"
+nav_pane="$(tmux split-window -h -l 45% -P -F '#{pane_id}' -t "${mission_shell_pane}" "$(container_cmd "${nav_runtime_cmd}")")"
 tmux select-pane -t "${nav_pane}" -T "Nav2 + AMCL"
-teleop_pane="$(tmux split-window -v -p 35 -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
+teleop_pane="$(tmux split-window -v -l 35% -P -F '#{pane_id}' -t "${nav_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_teleop_keyboard.py --speed 0.1 --turn 0.15 --topic /diff_drive_controller/cmd_vel_unstamped")")"
 tmux select-pane -t "${teleop_pane}" -T "Teleop"
 select_build_packages="build_packages='amr_missions_msgs amr_clients amr_missions'; [ -f src/amr_safety/package.xml ] && build_packages=\"\${build_packages} amr_safety\"; [ -f src/amr_voice/package.xml ] && build_packages=\"\${build_packages} amr_voice\""
 tmux select-layout -t "${SESSION_NAME}:navigation" tiled
@@ -454,16 +454,16 @@ topics_pane="$(tmux new-window -d -P -F '#{pane_id}' -t "${SESSION_NAME}" -n mon
 tmux set-window-option -t "${SESSION_NAME}:monitor" pane-border-status top
 tmux set-window-option -t "${SESSION_NAME}:monitor" pane-border-format ' #{pane_index}: #{pane_title} '
 tmux select-pane -t "${topics_pane}" -T "Topics"
-nodes_pane="$(tmux split-window -h -p 50 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_graph_monitor.py --mode nodes --period ${GRAPH_MONITOR_PERIOD}")")"
+nodes_pane="$(tmux split-window -h -l 50% -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_graph_monitor.py --mode nodes --period ${GRAPH_MONITOR_PERIOD}")")"
 tmux select-pane -t "${nodes_pane}" -T "Nodes"
-mission_server_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; echo 'Mission server waiting for AMCL localization readiness...'; ${wait_for_localization}; echo 'Starting mission_server after localization readiness.'; ros2 run amr_missions mission_server")")"
+mission_server_pane="$(tmux split-window -v -l 66% -P -F '#{pane_id}' -t "${topics_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; rm -f ${build_ready_file}; source /opt/ros/foxy/setup.bash; ${select_build_packages}; COLCON_LOG_PATH=/tmp/amr_missions_colcon_logs colcon build --merge-install --packages-select \${build_packages}; touch ${build_ready_file}; source install/setup.bash; echo 'Mission server waiting for AMCL localization readiness...'; ${wait_for_localization}; echo 'Starting mission_server after localization readiness.'; ros2 run amr_missions mission_server")")"
 tmux select-pane -t "${mission_server_pane}" -T "Mission Server"
-mission_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; python3 /workspaces/AMR-development/scripts/amr_mission_status_monitor.py")")"
+mission_status_pane="$(tmux split-window -v -l 50% -P -F '#{pane_id}' -t "${mission_server_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; python3 /workspaces/AMR-development/scripts/amr_mission_status_monitor.py")")"
 tmux select-pane -t "${mission_status_pane}" -T "Mission Status"
 safety_args="-p odom_topic:=/odom -p enforce:=${SAFETY_ENFORCE} -p require_amcl:=${SAFETY_REQUIRE_AMCL} -p auto_reenable_when_safe:=false"
-safety_pane="$(tmux split-window -v -p 66 -P -F '#{pane_id}' -t "${nodes_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then echo 'Starting safety_supervisor with enforce=${SAFETY_ENFORCE}, require_amcl=${SAFETY_REQUIRE_AMCL}'; ros2 run amr_safety safety_supervisor --ros-args ${safety_args}; else echo 'amr_safety package not present; safety pane disabled.'; exec bash -i; fi")")"
+safety_pane="$(tmux split-window -v -l 66% -P -F '#{pane_id}' -t "${nodes_pane}" "$(container_cmd "cd /workspaces/AMR-development/ros_ws; source /opt/ros/foxy/setup.bash; ${wait_for_build}; source install/setup.bash; if [ -f src/amr_safety/package.xml ]; then echo 'Starting safety_supervisor with enforce=${SAFETY_ENFORCE}, require_amcl=${SAFETY_REQUIRE_AMCL}'; ros2 run amr_safety safety_supervisor --ros-args ${safety_args}; else echo 'amr_safety package not present; safety pane disabled.'; exec bash -i; fi")")"
 tmux select-pane -t "${safety_pane}" -T "Safety"
-safety_status_pane="$(tmux split-window -v -p 50 -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_safety_status_monitor.py")")"
+safety_status_pane="$(tmux split-window -v -l 50% -P -F '#{pane_id}' -t "${safety_pane}" "$(container_cmd "source /opt/ros/foxy/setup.bash; python3 /workspaces/AMR-development/scripts/amr_safety_status_monitor.py")")"
 tmux select-pane -t "${safety_status_pane}" -T "Safety Status"
 
 tmux select-window -t "${SESSION_NAME}:navigation"

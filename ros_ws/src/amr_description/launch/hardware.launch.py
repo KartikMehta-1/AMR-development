@@ -69,7 +69,7 @@ def generate_launch_description():
         actions=[
             Node(
                 package="controller_manager",
-                executable="spawner.py",
+                executable="spawner",
                 arguments=["joint_state_broadcaster", "--controller-manager", "/controller_manager"],
                 output="screen",
             )
@@ -81,7 +81,7 @@ def generate_launch_description():
         actions=[
             Node(
                 package="controller_manager",
-                executable="spawner.py",
+                executable="spawner",
                 arguments=["diff_drive_controller", "--controller-manager", "/controller_manager"],
                 output="screen",
             )
@@ -163,8 +163,14 @@ def generate_launch_description():
                     "launch",
                     "realsense2_camera",
                     "rs_launch.py",
-                    "pointcloud.enable:=true",
-                    "align_depth.enable:=true",
+                    "rgb_camera.color_profile:=640x480x15",
+                    "depth_module.depth_profile:=640x480x15",
+                    "pointcloud.enable:=false",
+                    "align_depth.enable:=false",
+                    "spatial_filter.enable:=false",
+                    "temporal_filter.enable:=false",
+                    "hole_filling_filter.enable:=false",
+                    "colorizer.enable:=false",
                 ],
                 output="screen",
             ),

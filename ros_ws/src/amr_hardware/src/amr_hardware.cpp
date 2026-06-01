@@ -8,15 +8,17 @@
 
 namespace amr_hardware {
 
-hardware_interface::return_type AMRHardware::configure(
+hardware_interface::CallbackReturn AMRHardware::on_init(
     const hardware_interface::HardwareInfo & info) {
-  info_ = info;
+  if (hardware_interface::SystemInterface::on_init(info) !=
+      hardware_interface::CallbackReturn::SUCCESS) {
+    return hardware_interface::CallbackReturn::ERROR;
+  }
 
   if (info_.joints.size() != 2) {
     RCLCPP_ERROR(rclcpp::get_logger("amr_hardware"),
                  "Expected 2 joints, got %zu", info_.joints.size());
-    status_ = hardware_interface::status::UNKNOWN;
-    return hardware_interface::return_type::ERROR;
+    return hardware_interface::CallbackReturn::ERROR;
   }
 
   left_joint_ = info_.joints[0].name;
@@ -41,6 +43,11 @@ hardware_interface::return_type AMRHardware::configure(
   pending_positions_ = std::vector<double>(2, 0.0);
   pending_velocities_ = std::vector<double>(2, 0.0);
 
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn AMRHardware::on_configure(
+    const rclcpp_lifecycle::State & /*previous_state*/) {
   ensure_ros();
 
   node_ = std::make_shared<rclcpp::Node>("amr_hardware");
@@ -56,8 +63,7 @@ hardware_interface::return_type AMRHardware::configure(
   executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   executor_->add_node(node_);
 
-  status_ = hardware_interface::status::CONFIGURED;
-  return hardware_interface::return_type::OK;
+  return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 std::vector<hardware_interface::StateInterface> AMRHardware::export_state_interfaces() {
@@ -82,7 +88,8 @@ std::vector<hardware_interface::CommandInterface> AMRHardware::export_command_in
   return command_interfaces;
 }
 
-hardware_interface::return_type AMRHardware::start() {
+hardware_interface::CallbackReturn AMRHardware::on_activate(
+    const rclcpp_lifecycle::State & /*previous_state*/) {
   hw_positions_[0] = 0.0;
   hw_positions_[1] = 0.0;
   hw_velocities_[0] = 0.0;
@@ -100,24 +107,27 @@ hardware_interface::return_type AMRHardware::start() {
   }
 
   start_spinning();
-  status_ = hardware_interface::status::STARTED;
-  return hardware_interface::return_type::OK;
+  return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::return_type AMRHardware::stop() {
+hardware_interface::CallbackReturn AMRHardware::on_deactivate(
+    const rclcpp_lifecycle::State & /*previous_state*/) {
   stop_spinning();
-  status_ = hardware_interface::status::STOPPED;
-  return hardware_interface::return_type::OK;
+  return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-hardware_interface::return_type AMRHardware::read() {
+hardware_interface::return_type AMRHardware::read(
+    const rclcpp::Time & /*time*/,
+    const rclcpp::Duration & /*period*/) {
   std::lock_guard<std::mutex> lock(state_mutex_);
   hw_positions_ = pending_positions_;
   hw_velocities_ = pending_velocities_;
   return hardware_interface::return_type::OK;
 }
 
-hardware_interface::return_type AMRHardware::write() {
+hardware_interface::return_type AMRHardware::write(
+    const rclcpp::Time & /*time*/,
+    const rclcpp::Duration & /*period*/) {
   if (!left_cmd_pub_ || !right_cmd_pub_) {
     return hardware_interface::return_type::ERROR;
   }
@@ -156,14 +166,6 @@ hardware_interface::return_type AMRHardware::write() {
   return hardware_interface::return_type::OK;
 }
 
-std::string AMRHardware::get_name() const {
-  return info_.name.empty() ? std::string("amr_hardware") : info_.name;
-}
-
-hardware_interface::status AMRHardware::get_status() const {
-  return status_;
-}
-
 void AMRHardware::handle_joint_state(const sensor_msgs::msg::JointState::SharedPtr msg) {
   std::lock_guard<std::mutex> lock(state_mutex_);
   for (size_t i = 0; i < msg->name.size(); ++i) {
@@ -188,7 +190,7 @@ void AMRHardware::handle_joint_state(const sensor_msgs::msg::JointState::SharedP
 }
 
 void AMRHardware::ensure_ros() {
-  if (!rclcpp::is_initialized()) {
+  if (!rclcpp::ok()) {
     int argc = 0;
     char ** argv = nullptr;
     rclcpp::init(argc, argv);

@@ -2,8 +2,8 @@
 
 Owner: Kartik Mehta  
 Device role: AMR upgraded on-robot compute, perception runtime, LeRobot/SO-101 runtime, future ROS 2 container host  
-Last updated: 2026-05-08 06:38 IST  
-SSH aliases from laptop: `orin`, `jetson-orin`  
+Last updated: 2026-06-01  
+SSH aliases from laptop/NUC: `orin`, `jetson-orin`  
 Static DHCP IP: `192.168.1.20`
 
 This document is the local source of truth for the Jetson Orin NX currently being brought up for the AMR project. It separates the official module capability from the actual installed software and drivers observed on the device.
@@ -179,8 +179,155 @@ Static DHCP reservation:
 
 ```text
 Orin NX Wi-Fi IP: 192.168.1.20
-Laptop SSH aliases: orin, jetson-orin
+Laptop/NUC SSH aliases: orin, jetson-orin
 ```
+
+NUC connectivity checkpoint on 2026-06-01:
+
+```text
+NUC host: ubuntu@ubuntu-EQ
+NUC Wi-Fi IP: 192.168.1.8
+Orin hostname: kartik-Orin
+Orin IP: 192.168.1.20
+Orin MAC seen from NUC: 14:75:5b:15:25:3e
+SSH aliases added on NUC: orin, jetson-orin
+SSH user: kartik
+NUC key: /home/ubuntu/.ssh/id_ed25519
+```
+
+NUC SSH config entry:
+
+```sshconfig
+Host orin jetson-orin
+  HostName 192.168.1.20
+  User kartik
+  IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
+```
+
+Verification from the NUC:
+
+```bash
+ssh orin 'hostnamectl --static; hostname -I; cat /etc/nv_tegra_release | head -1'
+```
+
+## AMR Docker Runtime
+
+Initial Orin runtime image built successfully on 2026-06-01.
+
+```text
+Image: amr/ros2-humble-orin:arm64
+Image ID at latest build checkpoint: ada285aeee01
+Approx size: 18.4 GB
+Base image: nvcr.io/nvidia/l4t-jetpack:r36.4.0
+Host L4T: R36.5.0
+ROS distro: Humble
+librealsense: 2.57.7, built from source with RSUSB backend
+Driver overlay: /opt/ros/driver_ws/install
+Included drivers: micro-ROS Agent, YDLidar ROS 2 driver, RealSense ROS driver
+AMR workspace: /workspaces/AMR-development/ros_ws/install
+```
+
+Build command from the Orin:
+
+```bash
+cd ~/AMR-development
+docker build -f docker/orin/Dockerfile -t amr/ros2-humble-orin:arm64 .
+```
+
+Smoke check used from the NUC:
+
+```bash
+ssh orin 'docker run --rm --net=host --runtime nvidia amr/ros2-humble-orin:arm64 bash -lc "echo ROS_DISTRO=\$ROS_DISTRO; ros2 pkg prefix ydlidar_ros2_driver; ros2 pkg prefix realsense2_camera; ros2 pkg prefix micro_ros_agent; rs-enumerate-devices --version"'
+```
+
+Expected checkpoint output:
+
+```text
+ROS_DISTRO=humble
+/opt/ros/driver_ws/install
+/opt/ros/driver_ws/install
+/opt/ros/driver_ws/install
+rs-enumerate-devices  version: 2.57.7.0
+```
+
+Notes:
+
+- The default image base remains `l4t-jetpack:r36.4.0` because exact `r36.5.0` NGC image tags were not available when checked from the Orin.
+- The YDLidar ROS 2 driver is patched during Docker build for ROS 2 Humble `declare_parameter` API compatibility and Humble launch-file argument names.
+- RealSense D455 container bring-up works when the test container runs as root with `--privileged -v /dev:/dev`. Non-root container access currently sees the USB device but `librealsense` fails to open the USB interface; fix this with explicit USB device permissions/udev/container group handling before the production launch profile.
+- The Orin image is not yet the primary AMR runtime. It must still pass AMR workspace build, lidar/micro-ROS device checks, supervised hardware bring-up, and acceptance tests.
+
+AMR workspace build checkpoint on 2026-06-01:
+
+```text
+Workspace path on Orin: ~/AMR-development/ros_ws
+Container image: amr/ros2-humble-orin:arm64, image ID ada285aeee01
+Build command: colcon build --merge-install --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+Result: 9 packages finished
+Packages: amr_clients, amr_description, amr_hardware, amr_missions, amr_missions_msgs, amr_perception, amr_safety, amr_voice, my_pkg
+Smoke checks: package prefixes resolve from install space, Xacro renders, hardware launch arguments render
+```
+
+Migration notes:
+
+- `amr_hardware` was ported from the older Foxy-style `ros2_control` `SystemInterface` API to Humble lifecycle callbacks: `on_init`, `on_configure`, `on_activate`, `on_deactivate`, and `read/write(time, period)`.
+- `amr_description/launch/hardware.launch.py` was updated to use the Humble controller-manager executable `spawner` instead of the Foxy-era `spawner.py`.
+- Gazebo ROS dependencies in `amr_description` are sim-only for this Orin hardware bring-up. `ros-humble-gazebo-ros` and `ros-humble-gazebo-ros2-control` were not available from the current arm64 Humble apt repositories during rosdep install.
+- `rosdep` reported unresolved `ament_python` keys for Python packages, but the workspace built because the Humble image already includes the needed `ament_python` build tooling.
+- Added Orin-specific launch/config files: `amr_description/config/ydlidar_orin.yaml` and `amr_description/launch/orin_hardware.launch.py`. The wrapper uses stable by-id paths for the YDLidar CP2102 and STM ST-LINK serial devices.
+
+Combined static bring-up checkpoint on 2026-06-01:
+
+```text
+Launch: ros2 launch amr_description orin_hardware.launch.py start_camera:=true
+Robot state: physically suspended, supervised, no navigation, no manual wheel commands
+Container image: amr/ros2-humble-orin:arm64, image ID ada285aeee01
+Result after Humble spawner patch: launch remained up
+Controllers: joint_state_broadcaster active, diff_drive_controller active
+Hardware interfaces: left/right velocity command interfaces available and claimed; left/right position and velocity state interfaces available
+LiDAR: /scan approximately 9.68 Hz
+RealSense: depth and color image topics approximately 29-30 Hz
+STM: required reset after agent start; /amr_stm/wheel_state approximately 9.79 Hz after reset
+STM link status: /amr_stm/comm_status = stm_link_ok
+Joint states: /joint_states present with left_wheel_joint and right_wheel_joint at zero position/velocity during suspended static test
+```
+
+NUC/RViz/Nav2 checkpoint on 2026-06-01:
+
+```text
+DDS: CycloneDDS peer path between NUC 192.168.1.8 and Orin 192.168.1.20
+UDP: Orin -> NUC and NUC -> Orin checks passed after allowing inbound UDP from the Orin on the NUC firewall
+NUC RViz image: amr/ros2-humble-rviz-nuc:amd64
+RViz config: amr_description/config/orin_rviz.rviz
+Nav2: Humble lifecycle nodes active after parameter/plugin updates
+RViz goal path: /rviz and /rviz_navigation_dialog_action_client present as /navigate_to_pose action clients
+Suspended Nav2 smoke: tiny CLI goal accepted and succeeded, and /amr_stm/wheel_cmd_left/right changed then returned to zero
+Camera view: RealSense color visible in RViz; depth display kept disabled by default
+```
+
+Supervised suspended command-path checkpoint on 2026-06-01:
+
+```text
+Precondition: robot physically suspended and supervised
+Fix required: stop/start the ROS 2 daemon in the Orin container after launch so the CLI sees the live graph
+Command topic: /diff_drive_controller/cmd_vel_unstamped
+Controller subscription: present, geometry_msgs/msg/Twist, use_stamped_vel=false
+Test command: linear.x=0.04 m/s for 5 samples, then zero
+Observed result: /amr_stm/wheel_cmd_left and /amr_stm/wheel_cmd_right rose to approximately 0.65 rad/s, then returned to zero
+Helper: scripts/open_amr_orin_teleop.sh opens teleop through ssh -> docker exec with the runtime DDS environment detected from the hardware container
+```
+
+Observed issues and follow-ups:
+
+- Old STM firmware may not reannounce XRCE entities if the Agent is restarted after the STM is already running. For now, start the Agent/launch first, then press STM reset if `/amr_stm/wheel_state` does not publish.
+- The hardware plugin suppresses outgoing wheel commands while `/amr_stm/wheel_state` is stale or missing. During the successful combined check, the controllers were active only after supervised static setup, and no explicit motion command was sent.
+- Orin teleop, dashboard, and RViz must use the same DDS family as the hardware container. Current helper scripts detect the runtime RMW where possible and use CycloneDDS for the NUC RViz path. If graph discovery looks stale, restart the ROS 2 daemon inside the container with the Orin ROS environment, then verify `ros2 topic info -v /diff_drive_controller/cmd_vel_unstamped` shows the `diff_drive_controller` subscription.
+- YDLidar still emits repeated `Real points 931 > fixed points 930` warnings. This does not block initial bring-up, but it should be tuned before reliability clearance.
+- The upstream YDLidar launch still emits a static `base_link -> laser_frame`; AMR TF should rely on URDF/`robot_state_publisher` for `base_link -> lidar_link`.
+- RealSense depth remains diagnostic-only for now. Color is usable in RViz, but depth showed flashing/noisy behavior plus USB/control-transfer and Right MIPI warnings. Keep depth unchecked in RViz until the camera/cable/USB path is rechecked.
+- Suspended wheel tests are useful only for command-path validation. They are not useful for localization quality because wheel odom changes while the room-relative LiDAR scan does not.
+- Floor-motion testing is paused until the Orin enclosure is printed/installed and the Orin can be powered from the AMR.
 
 Active NetworkManager devices at capture:
 
@@ -273,6 +420,88 @@ Intel Bluetooth wireless interface
 Logitech Unifying Receiver x2
 ```
 
+AMR device checkpoint from the NUC on 2026-06-01:
+
+```text
+Intel RealSense D455: lsusb ID 8086:0b5c, detected on USB 3.2
+D455 serial: 236322300171
+D455 firmware: 5.16.0.1
+librealsense recommended firmware: 5.17.0.10
+CP210x UART bridge: lsusb ID 10c4:ea60, attached as /dev/ttyUSB0
+CP210x stable path: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+D455 video nodes: /dev/video0 through /dev/video5
+```
+
+Container RealSense smoke test:
+
+```bash
+docker run --rm --net=host --runtime nvidia --privileged -v /dev:/dev --user root \
+  amr/ros2-humble-orin:arm64 \
+  bash -lc 'ros2 launch realsense2_camera rs_launch.py depth_module.depth_profile:=640x480x30 rgb_camera.color_profile:=640x480x30 enable_gyro:=false enable_accel:=false'
+```
+
+Observed ROS topics and rates:
+
+```text
+/camera/camera/depth/image_rect_raw: approximately 30 Hz
+/camera/camera/color/image_raw: approximately 30 Hz
+/camera/camera/depth/camera_info
+/camera/camera/color/camera_info
+/tf_static
+```
+
+Initial D455 reliability checkpoint on 2026-06-01:
+
+```text
+Test duration: 120 s topic-rate soak inside Docker
+Depth rate: 29.77 Hz average, 3519-sample final window
+Color rate: 29.56 Hz average, 3495-sample final window
+USB topology: D455 on SuperSpeed path at 5000M through the USB3 hub
+Thermals during camera-only test: roughly mid-50s C, no GPU load
+Status: initial streaming pass with warnings
+```
+
+The RealSense ROS node came up and streamed depth/color near 30 Hz, but logs included repeated `control_transfer` warnings. Earlier short tests also produced one `Depth stream start failure` hardware notification. Treat this as functional for initial bring-up, not full reliability clearance. Follow up with non-root USB permissions, firmware/cable/hub/USB-load review, a 30-60 minute camera soak, lidar/micro-ROS concurrent load, and supervised robot acceptance before promoting Orin as the primary AMR runtime.
+
+YDLidar G4 checkpoint on 2026-06-01:
+
+```text
+Device path: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+Baud: 230400
+Detected model: G4
+Serial: 2022021800075185
+Firmware: 3.2
+Hardware: 3
+SDK: 1.2.20
+ROS topic: /scan
+Frame: lidar_link
+Observed scan rate: approximately 9.67 Hz
+Status: operational for initial bring-up, with warnings
+```
+
+The YDLidar driver connected and published `/scan` from inside the Orin Docker image. The upstream launch file originally failed on Humble due old `LifecycleNode` argument names; image `ada285aeee01` includes the Dockerfile patch and `ros2 launch ydlidar_ros2_driver ydlidar_launch.py params_file:=...` now starts successfully. The launch smoke test published `/scan` at approximately 9.68 Hz.
+
+The upstream YDLidar launch still publishes a static transform from `base_link` to `laser_frame`, while the AMR scan frame is `lidar_link`. The AMR launch should rely on `robot_state_publisher`/URDF for the correct `base_link` to `lidar_link` transform instead of treating the driver launch's static TF as authoritative.
+
+Driver logs showed initial checksum errors and repeated fixed-resolution warnings such as `Real points 931 > fixed points 930`. Treat this as usable for bring-up, but tune or soak-test before calling the lidar reliability-cleared. Candidate follow-ups: verify `fixed_resolution` behavior, run a 10-30 minute `/scan` soak, inspect range quality in RViz, and test concurrently with RealSense.
+
+STM32 micro-ROS checkpoint on 2026-06-01:
+
+```text
+USB device: STMicroelectronics ST-LINK/V2.1, lsusb ID 0483:374b
+Serial device: /dev/ttyACM0
+Stable path: /dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066CFF34314B4E3043064322-if02
+Agent command: micro_ros_agent serial --dev <stable path> -b 460800
+Observed topics: /amr_stm/wheel_state, /amr_stm/ros_diag, /amr_stm/fault_mask, /amr_stm/safety_state, current/duty topics, and command topics
+Wheel state rate: approximately 9.45 Hz
+Fault mask: 0
+Status: old Nano-era STM firmware connects to the Orin Docker micro-ROS Agent
+```
+
+This was a read-only connectivity check. No wheel commands, enable commands, e-stop commands, clear-fault commands, or navigation launch were sent.
+
+After rebuilding the Docker image, the micro-ROS Agent executable still starts cleanly. The old STM firmware did not reannounce topics during a later agent-only restart without resetting the STM, so for repeated checks start the agent first and press reset/replug the STM if topics do not appear.
+
 No SO-101 serial controllers were connected at the time of capture:
 
 ```text
@@ -316,11 +545,11 @@ The Orin is ready for:
 
 Still pending for AMR migration:
 
-- Build or select an Orin/JetPack 6 container image for ROS 2 / AMR runtime.
-- Define the Orin runtime as a separate Docker profile, likely ROS 2 Humble in Docker on JetPack 6.
+- Print/install the Orin enclosure and power the Orin from the AMR.
+- Run supervised floor hardware acceptance with Orin physically mounted and powered from the robot.
 - Keep the existing Nano/dev PC workflow on Foxy Docker until the migration is explicit and validated.
 - Do not use host ROS on the dev PC as proof of Orin or Nano runtime compatibility.
-- Verify STM32 micro-ROS, LiDAR, RealSense, and SO-101 USB device IDs on Orin.
+- Recheck STM32 micro-ROS, LiDAR, RealSense, and SO-101 USB device IDs after final mounting/cable routing.
 - Add Orin-specific launch variables/scripts instead of reusing the Nano host defaults.
 - Install or containerize LeRobot for SO-101 teleoperation.
 
