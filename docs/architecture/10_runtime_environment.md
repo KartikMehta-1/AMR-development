@@ -12,6 +12,7 @@ This block owns how the AMR software is built and run across the dev PC, Jetson 
 - Treat Foxy Docker as the authoritative current Nano/dev PC workflow.
 - Treat host ROS on the dev PC as non-authoritative unless explicitly requested.
 - Keep Orin NX migration as a separate Humble Docker profile, not a silent replacement for Nano/Foxy.
+- Track the NUC as a new x86_64 migration host separately from both the laptop/dev-PC role and the Jetson Nano robot-computer role. See `docs/agentic/nuc_migration_context.md`.
 - Maintain Dockerfiles, runtime scripts, device-mount policy, and runtime environment docs.
 
 ## Runtime Block Diagram

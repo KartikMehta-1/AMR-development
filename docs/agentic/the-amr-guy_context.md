@@ -19,6 +19,7 @@ This is the deeper persistent context for `the-amr-guy`. It tells the agent wher
 - Top-level hierarchy: `docs/architecture/00_system_hierarchy.md`
 - Architecture index: `docs/architecture/README.md`
 - Runtime/Docker/Jetson: `docs/architecture/10_runtime_environment.md`, `docs/architecture/jetson_architecture.md`, `docs/architecture/jetson_orin_nx_device_profile.md`
+- NUC migration context: `docs/agentic/nuc_migration_context.md`
 - ROS stack and TF: `docs/architecture/20_ros_core_hardware_interface.md`, `docs/architecture/ros_stack_diagrams.md`
 - Navigation/mission/safety: `docs/architecture/30_navigation_mission_safety.md`, `docs/safety/safety_fault_recovery.md`, `docs/safety/safety_baseline.md`
 - STM firmware: `docs/architecture/40_stm_firmware.md`, `docs/architecture/STM_architecture.md`
@@ -38,6 +39,7 @@ Primary components:
 - Motor driver: Cytron MDD20A.
 - Controller: STM32 Nucleo-F401RE.
 - Runtime: Jetson Nano currently; Orin NX planned separately.
+- NUC migration: the repo is now cloned on an Ubuntu 24.04 x86_64 NUC at `/home/ubuntu/agent/repos/AMR-development`. The existing validated runtime remains laptop/dev-PC + Jetson Nano until the NUC path is explicitly validated. See `docs/agentic/nuc_migration_context.md`.
 - Sensors: YDLidar G4, RealSense D455, encoders, ACS758 current sensors, E-stop. BNO080 IMU, INA226 battery telemetry, and HC-SR04 proximity are planned/provisional.
 - USB power: high-draw USB peripherals should use the powered USB branch/hub, not Jetson USB power alone.
 

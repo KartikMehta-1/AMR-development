@@ -4,11 +4,30 @@ This file is ordered by day-to-day usefulness. Prefer the one-command launchers 
 
 ## 1. Navigation Bringup
 
-Start the full navigation workflow from the laptop/dev PC:
+Start the full navigation workflow from the NUC dev PC:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+AMR_REMOTE_REPO=/home/kartik/AMR-development \
+AMR_SAFETY_ENFORCE=false \
+./scripts/open_amr_devpc_navigation.sh my_new_map
+```
+
+For non-attaching agent validation on the NUC:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+AMR_ATTACH_TMUX=false \
+AMR_REMOTE_REPO=/home/kartik/AMR-development \
+AMR_SAFETY_ENFORCE=false \
+./scripts/open_amr_devpc_navigation.sh my_new_map
+```
+
+Start the full navigation workflow from the older laptop/dev PC checkout:
 
 ```bash
 cd ~/AMR-development
-AMR_SAFETY_ENFORCE=true ./scripts/open_amr_devpc_navigation.sh my_new_map
+AMR_SAFETY_ENFORCE=false ./scripts/open_amr_devpc_navigation.sh my_new_map
 ```
 
 Start the full robot workflow with microphone ASR enabled:
@@ -33,6 +52,8 @@ After RViz opens:
 - Set the AMR pose with `2D Pose Estimate`.
 - Wait for the Nav2 pane to report that AMCL localization is ready.
 - Then use mission commands or voice commands.
+
+Validation note: on 2026-05-30 the NUC one-command launch completed successfully after updating tmux split syntax for tmux 3.4. The launch created `amr_devpc_nav`, started Jetson `amr_foxy`, reset STM, started NUC `amr_devpc`, brought up Nav2/RViz/mission/safety panes, accepted the known `home` initial pose, and passed guarded dry-run readiness for `hall` with STM fault mask `0`.
 
 Map arguments:
 
