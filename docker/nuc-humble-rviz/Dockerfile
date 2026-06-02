@@ -16,6 +16,8 @@ RUN set -eux; \
       ros-humble-cv-bridge \
       ros-humble-image-transport \
       ros-humble-image-transport-plugins \
+      ros-humble-joint-state-publisher \
+      ros-humble-joint-state-publisher-gui \
       ros-humble-nav2-rviz-plugins \
       ros-humble-rmw-cyclonedds-cpp \
       ros-humble-rqt-image-view \

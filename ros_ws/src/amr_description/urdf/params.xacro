@@ -45,7 +45,8 @@
   <xacro:property name="camera_height" value="0.03"/>
   <xacro:property name="camera_x" value="${plate_radius - (camera_length * 0.5)}"/>
   <xacro:property name="camera_y" value="0.0"/>
-  <xacro:property name="camera_z" value="${pillar_height + (plate_thickness * 1.5) + (camera_height * 0.5)}"/>
+  <!-- AMR RealSense/depth camera sits on the lower plate, not the top plate. -->
+  <xacro:property name="camera_z" value="${chassis_z + (plate_thickness * 0.5) + (camera_height * 0.5)}"/>
 
   <xacro:property name="lidar_mass" value="0.20"/>
   <xacro:property name="camera_mass" value="0.10"/>

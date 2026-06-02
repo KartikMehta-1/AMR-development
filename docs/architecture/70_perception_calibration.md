@@ -11,11 +11,13 @@ command robot motion.
 
 ## Planned Responsibility
 
-- RealSense and future camera/depth pipelines.
+- AMR RealSense and SO-101 wrist-webcam pipelines.
 - Camera and depth calibration.
 - Frame, timestamp, and confidence handling.
 - Object or grasp proposals that do not directly command actuators.
 - VLA-style manipulation proposals and task plans, kept separate from execution.
+- Wrist-camera-to-tool and arm-base-to-AMR calibration for close-range grasp
+  verification.
 - Dataset/log capture for offline perception and VLA evaluation.
 
 ## Planned Diagram

@@ -1,0 +1,47 @@
+# Planning-only starter poses for the single mounted SO-101 arm.
+# Verify joint directions, limits, and mount calibration before execution.
+so101:
+  joints:
+    - so101_shoulder_pan
+    - so101_shoulder_lift
+    - so101_elbow_flex
+    - so101_wrist_flex
+    - so101_wrist_roll
+    - so101_gripper
+
+  poses:
+    home:
+      so101_shoulder_pan: 0.0
+      so101_shoulder_lift: 0.0
+      so101_elbow_flex: 0.0
+      so101_wrist_flex: 0.0
+      so101_wrist_roll: 0.0
+      so101_gripper: 0.0
+    stow:
+      so101_shoulder_pan: 0.0
+      so101_shoulder_lift: 1.20
+      so101_elbow_flex: -1.60
+      so101_wrist_flex: 0.80
+      so101_wrist_roll: 0.0
+      so101_gripper: 0.0
+    ready:
+      so101_shoulder_pan: 0.0
+      so101_shoulder_lift: -0.40
+      so101_elbow_flex: 0.80
+      so101_wrist_flex: -0.40
+      so101_wrist_roll: 0.0
+      so101_gripper: 0.0
+    observe:
+      so101_shoulder_pan: 0.0
+      so101_shoulder_lift: -0.20
+      so101_elbow_flex: 0.60
+      so101_wrist_flex: -0.80
+      so101_wrist_roll: 0.0
+      so101_gripper: 0.0
+    pre_grasp:
+      so101_shoulder_pan: 0.0
+      so101_shoulder_lift: -0.65
+      so101_elbow_flex: 1.05
+      so101_wrist_flex: -0.40
+      so101_wrist_roll: 0.0
+      so101_gripper: 0.20

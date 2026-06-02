@@ -1,11 +1,20 @@
 <?xml version="1.0"?>
 <robot name="amr" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="enable_so101" default="false"/>
+  <xacro:arg name="so101_mount_x" default="0.14"/>
+  <xacro:arg name="so101_mount_y" default="0.00"/>
+  <xacro:arg name="so101_mount_z" default="0.125"/>
+  <xacro:arg name="so101_mount_roll" default="0.0"/>
+  <xacro:arg name="so101_mount_pitch" default="0.0"/>
+  <xacro:arg name="so101_mount_yaw" default="0.0"/>
+
   <xacro:include filename="params.xacro"/>
   <xacro:include filename="base.xacro"/>
   <xacro:include filename="casters.xacro"/>
   <xacro:include filename="wheels.xacro"/>
   <xacro:include filename="lidar.xacro"/>
   <xacro:include filename="camera.xacro"/>
+  <xacro:include filename="so101.xacro"/>
   <xacro:include filename="ros2_control.xacro"/>
 
   <xacro:base_link/>
@@ -13,5 +22,11 @@
   <xacro:wheels/>
   <xacro:lidar_sensor/>
   <xacro:camera_sensor/>
+  <xacro:if value="$(arg enable_so101)">
+    <xacro:so101_arm
+      parent="base_link"
+      xyz="$(arg so101_mount_x) $(arg so101_mount_y) $(arg so101_mount_z)"
+      rpy="$(arg so101_mount_roll) $(arg so101_mount_pitch) $(arg so101_mount_yaw)"/>
+  </xacro:if>
   <xacro:ros2_control_block/>
 </robot>
