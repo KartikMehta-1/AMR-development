@@ -42,6 +42,23 @@ docker run --rm --net=host --runtime nvidia \
   bash -lc 'source /opt/ros/humble/setup.bash && source /opt/ros/driver_ws/install/setup.bash && colcon build --merge-install --symlink-install'
 ```
 
+Planning-only SO-101 MoveIt2 demo on the Orin:
+
+```bash
+docker run -it --rm --name amr_orin_moveit --net=host --privileged --runtime nvidia \
+  -e DISPLAY=$DISPLAY \
+  -e ROS_DOMAIN_ID=0 \
+  -e ROS_LOCALHOST_ONLY=0 \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v ~/AMR-development:/workspaces/AMR-development \
+  amr/ros2-humble-orin:arm64 \
+  bash -lc 'source /opt/ros/humble/setup.bash && source /opt/ros/driver_ws/install/setup.bash && cd /workspaces/AMR-development/ros_ws && colcon build --merge-install --symlink-install --packages-select amr_description amr_so101_moveit_config && source install/setup.bash && ros2 launch amr_so101_moveit_config demo.launch.py'
+```
+
+This MoveIt2 path is planning-only. It starts `move_group`, RViz, robot state
+publisher, and joint-state GUI sliders; it does not define an arm hardware
+driver, trajectory controller, gripper controller, or servo execution path.
+
 Hardware-facing shell:
 
 ```bash

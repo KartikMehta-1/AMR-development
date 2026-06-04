@@ -1,0 +1,11 @@
+/**:
+  ros__parameters:
+    video_device: /dev/video0
+    camera_name: so101_wrist_camera
+    camera_frame_id: so101_wrist_camera_optical_frame
+    image_width: 640
+    image_height: 480
+    pixel_format: mjpeg2rgb
+    io_method: mmap
+    framerate: 30.0
+    autofocus: true

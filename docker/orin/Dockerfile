@@ -69,6 +69,14 @@ RUN set -eux; \
       ros-${ROS_DISTRO}-xacro \
       ros-${ROS_DISTRO}-robot-state-publisher \
       ros-${ROS_DISTRO}-joint-state-publisher \
+      ros-${ROS_DISTRO}-joint-state-publisher-gui \
+      ros-${ROS_DISTRO}-rviz2 \
+      ros-${ROS_DISTRO}-moveit-kinematics \
+      ros-${ROS_DISTRO}-moveit-planners-ompl \
+      ros-${ROS_DISTRO}-moveit-ros-move-group \
+      ros-${ROS_DISTRO}-moveit-ros-planning-interface \
+      ros-${ROS_DISTRO}-moveit-ros-visualization \
+      ros-${ROS_DISTRO}-moveit-simple-controller-manager \
       ros-${ROS_DISTRO}-robot-localization \
       ros-${ROS_DISTRO}-navigation2 \
       ros-${ROS_DISTRO}-nav2-bringup \
@@ -166,7 +174,10 @@ RUN set -ex; \
 
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ros-${ROS_DISTRO}-rmw-cyclonedds-cpp; \
+    apt-get install -y --no-install-recommends \
+      ros-${ROS_DISTRO}-image-tools \
+      ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+      ros-${ROS_DISTRO}-usb-cam; \
     rm -rf /var/lib/apt/lists/*
 
 ARG USERNAME=dev

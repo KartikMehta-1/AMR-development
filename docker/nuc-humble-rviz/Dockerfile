@@ -18,6 +18,12 @@ RUN set -eux; \
       ros-humble-image-transport-plugins \
       ros-humble-joint-state-publisher \
       ros-humble-joint-state-publisher-gui \
+      ros-humble-moveit-kinematics \
+      ros-humble-moveit-planners-ompl \
+      ros-humble-moveit-ros-move-group \
+      ros-humble-moveit-ros-planning-interface \
+      ros-humble-moveit-ros-visualization \
+      ros-humble-moveit-simple-controller-manager \
       ros-humble-nav2-rviz-plugins \
       ros-humble-rmw-cyclonedds-cpp \
       ros-humble-rqt-image-view \
