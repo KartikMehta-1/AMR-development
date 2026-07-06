@@ -148,7 +148,7 @@ Expected evidence:
 
 Paths:
 
-- Future SO-101 URDF/Xacro, MoveIt2 config, arm driver, trajectory, and gripper packages
+- SO-101 URDF/Xacro, MoveIt2 config, `amr_so101_driver`, trajectory bridge, joint-state merger, and gripper/calibration packages
 - arm calibration docs
 
 Review for:

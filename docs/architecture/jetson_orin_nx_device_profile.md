@@ -327,7 +327,7 @@ Observed issues and follow-ups:
 - The upstream YDLidar launch still emits a static `base_link -> laser_frame`; AMR TF should rely on URDF/`robot_state_publisher` for `base_link -> lidar_link`.
 - RealSense depth remains diagnostic-only for now. Color is usable in RViz, but depth showed flashing/noisy behavior plus USB/control-transfer and Right MIPI warnings. Keep depth unchecked in RViz until the camera/cable/USB path is rechecked.
 - Suspended wheel tests are useful only for command-path validation. They are not useful for localization quality because wheel odom changes while the room-relative LiDAR scan does not.
-- Floor-motion testing is paused until the Orin enclosure is printed/installed and the Orin can be powered from the AMR.
+- Floor-motion testing is paused until one more revised Orin enclosure is printed/installed because the current design was insufficient, and the Orin can be powered from the AMR.
 
 Active NetworkManager devices at capture:
 
@@ -502,21 +502,38 @@ This was a read-only connectivity check. No wheel commands, enable commands, e-s
 
 After rebuilding the Docker image, the micro-ROS Agent executable still starts cleanly. The old STM firmware did not reannounce topics during a later agent-only restart without resetting the STM, so for repeated checks start the agent first and press reset/replug the STM if topics do not appear.
 
-No SO-101 serial controllers were connected at the time of capture:
+## SO-101 Manipulator Bench Checkpoint
+
+The SO-101 follower controller has since been detected on the Orin:
 
 ```text
-/dev/serial/by-id/: empty or not present
+USB device: QinHeng Electronics USB Single Serial, lsusb ID 1a86:55d3
+Serial device: /dev/ttyACM0
+Stable path: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00
 ```
 
-Expected SO-101 IDs from the laptop setup notes, if the same controllers are plugged into Orin:
+Expected and observed follower motor IDs:
 
 ```text
-Follower controller:
-/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00
-
-Leader controller:
-/dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6053518-if00
+1 shoulder_pan   STS3215 model 777
+2 shoulder_lift  STS3215 model 777
+3 elbow_flex     STS3215 model 777
+4 wrist_flex     STS3215 model 777
+5 wrist_roll     STS3215 model 777
+6 gripper        STS3215 model 777
 ```
+
+Read-only voltage/temperature/torque checks passed, and low-level wrist-roll
+motion was validated through the Feetech/LeRobot bus. Shoulder lift moved
+upward during torque/goal testing, so shoulder and elbow MoveIt execution remain
+blocked until startup behavior is understood. The current software bridge is
+`amr_so101_driver`, with real hardware execution gated to `so101_wrist_roll` by
+default.
+
+The wrist webcam software path is present (`usb_cam` and
+`so101_wrist_webcam.launch.py`), but no `/dev/video*` device was detected before
+shutdown. Recheck `lsusb`, `/dev/v4l/by-id`, and `v4l2-ctl --list-devices` when
+the camera is plugged in.
 
 User groups include access-oriented groups needed for robotics work:
 
@@ -541,17 +558,25 @@ The Orin is ready for:
 - NVIDIA runtime containers with `--runtime nvidia`.
 - Native JetPack 6.2.2 CUDA/cuDNN/TensorRT/VPI/OpenCV development.
 - Wi-Fi operation through Intel AC8265.
-- Direct USB serial tests for SO-101/LeRobot after the controllers are plugged in.
+- SO-101 through the reliable USB-A hub path at
+  `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00`.
+- Orin/container runtime validation of `amr_so101_driver`,
+  `amr_so101_moveit_config`, low-bandwidth D455 previews, and SO-101 wrist
+  webcam preview.
 
 Still pending for AMR migration:
 
-- Print/install the Orin enclosure and power the Orin from the AMR.
-- Run supervised floor hardware acceptance with Orin physically mounted and powered from the robot.
+- Keep Orin power, USB routing, cooling, and container restart behavior stable on
+  the mounted robot.
+- Run supervised floor hardware acceptance with Orin physically mounted and
+  powered from the robot.
 - Keep the existing Nano/dev PC workflow on Foxy Docker until the migration is explicit and validated.
 - Do not use host ROS on the dev PC as proof of Orin or Nano runtime compatibility.
-- Recheck STM32 micro-ROS, LiDAR, RealSense, and SO-101 USB device IDs after final mounting/cable routing.
+- Recheck STM32 micro-ROS, LiDAR, RealSense, wrist webcam, and SO-101 USB device
+  IDs after power loss or cable routing changes.
 - Add Orin-specific launch variables/scripts instead of reusing the Nano host defaults.
-- Install or containerize LeRobot for SO-101 teleoperation.
+- Calibrate SO-101 physical joint limits before using named poses for autonomous
+  manipulation; all-six execution remains supervised bring-up/calibration only.
 
 ## Commands To Refresh This Profile
 

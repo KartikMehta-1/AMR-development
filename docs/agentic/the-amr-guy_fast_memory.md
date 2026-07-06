@@ -13,7 +13,7 @@ This is the first file `the-amr-guy` should read when the user says "AMR", "robo
 ## System Shape
 
 - Physical base: differential-drive AMR with STM32 Nucleo-F401RE, Cytron MDD20A motor driver, left/right drive motors, encoders, E-stop, YDLidar G4, RealSense D455, planned BNO080 IMU, planned INA226 battery telemetry, and planned HC-SR04 proximity sensors.
-- Runtime computer: current robot profile is Jetson Nano with ROS 2 Foxy containers. Orin NX/Humble is planned as a separate runtime profile, not a silent replacement.
+- Runtime computer: validated fallback remains the NUC/dev-PC + Jetson Nano/Foxy split. Jetson Orin NX/Humble is the active migration/bench bring-up profile, but it is not the primary AMR runtime until it passes supervised floor hardware acceptance.
 - NUC migration context: as of 2026-05-30, `/home/ubuntu/agent/repos/AMR-development` is checked out on an Ubuntu 24.04 x86_64 NUC host. Docker Engine 29.1.3, Compose 2.40.3, and Buildx 0.30.1 were installed and `hello-world` passed. The NUC has built `amr/ros2-foxy-drivers:amd64` and `amr/ros2-foxy-devpc:amd64`; software-only NUC build/test passed. Treat the NUC first as a candidate dev-PC replacement for the existing Nano/Foxy split, and only as a robot-computer replacement after a dedicated hardware-facing runtime plan is documented and validated. Read `docs/agentic/nuc_migration_context.md` for details.
 - NUC/Jetson checkpoint: GitHub commit `4047ed8` added tracked maps. `my_new_map.yaml` is present with `259 x 160`, resolution `0.05`, origin `[-3.72, -1.4, 0]`; `my_hall_save.yaml` is present with `216 x 299`, resolution `0.05`, origin `[-7.16, -7.53, 0]`, plus `my_hall_save.posegraph` and `.data`. NUC-to-Jetson rsync synced Docker files plus reduced runtime sources (`amr_description`, `amr_hardware`, `amr_safety`) to `jetson:~/AMR-development`; Jetson build-only colcon passed inside `amr/ros2-foxy-jetson:arm64`. No hardware runtime container was started.
 - NUC live bringup checkpoint: on 2026-05-30, the NUC successfully operated as dev-PC against the Jetson hardware runtime. UFW allows UDP from Jetson `192.168.1.9` and NUC self traffic `192.168.1.8`. `amr_foxy` on Jetson and `amr_devpc` on NUC are running; hardware telemetry is healthy (`/amr_stm/fault_mask` 0, `/amr_stm/comm_status` `stm_link_ok`, `/scan` and `/odom` present). Nav2 is active with `my_new_map.yaml`; operator set the initial pose in RViz; AMCL readiness passed after relaunch at approximately `x=3.600, y=0.473, yaw=3.051`. `mission_server` is running and places are `home`, `hall`, `door`, and `kitchen`. `safety_supervisor` is running monitor-only with `enforce=false`, `require_amcl=false`, healthy, no intervention. After explicit supervised operator confirmation, guarded mission-control `go_to hall` succeeded through `mission_server`; final mission state remained `succeeded`, detail `reached 'hall'`, odom returned to zero, STM fault stayed 0, and comm stayed `stm_link_ok`.
@@ -26,11 +26,12 @@ This is the first file `the-amr-guy` should read when the user says "AMR", "robo
 
 ## Current Active Workstream
 
-- The user is currently hooking up proximity sensors, the IMU, and a battery measurement development board to the STM side.
-- The expected firmware additions are STM I2C/GPIO/telemetry support for these sensors while preserving existing motor control, E-stop, command timeout, and fault behavior.
-- The expected ROS additions are typed `/amr_stm/*` telemetry topics and downstream clients/docs that can consume them safely.
-- The navigation hypothesis to validate after IMU integration is that fusing wheel odometry with IMU data can improve localization stability.
-- Treat sensor fusion as a validation task, not an assumption: compare odom-only versus odom+IMU behavior with repeatable logs before retuning Nav2 or mission behavior.
+- Orin/Humble is now mounted and has reached a live bring-up checkpoint. The hardware container has run LiDAR, STM micro-ROS, ros2_control controllers, `/amr/joint_states`, low-bandwidth D455 preview topics, and NUC dashboard/camera preview over CycloneDDS. Keep NUC+Nano/Foxy as fallback until Orin passes supervised floor acceptance.
+- SO-101 manipulation is active on the Orin path. The Orin Docker image includes MoveIt2, `usb_cam`, and the Feetech Python SDK dependency. The SO-101 controller enumerates reliably through the USB-A hub as `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00`; direct USB-C enumeration was not reliable during bring-up. All six STS3215 motors responded.
+- The SO-101 MoveIt execution bridge in `ros_ws/src/amr_so101_driver` has run on Orin: `/so101_trajectory_bridge` publishes `/so101/joint_states`, serves `/so101_arm_controller/follow_joint_trajectory`, and exposes `/so101/free_servos`; `/amr_joint_state_merger` merges `/amr/joint_states` and `/so101/joint_states` into global `/joint_states`. It defaults to fake hardware and conservative wrist-roll-only real execution, but all-six teleop has been used under explicit supervision.
+- The wrist webcam is working through `usb_cam` and `amr_description/launch/so101_wrist_webcam.launch.py`, publishing `/so101/wrist_camera/image_raw` and `/so101/wrist_camera/camera_info` in frame `so101_wrist_camera_optical_frame`. The low-bandwidth NUC preview topic is `/so101/preview/wrist_camera/image_raw`.
+- SO-101 named poses are encoder-captured in `ros_ws/src/amr_description/config/so101_named_poses.yaml`: `home` and `carry` are the same folded pose; `look_from_height` and `ready_to_pick_up` were recorded from manually positioned hardware. The next manipulator blocker is physical joint-limit calibration because some recorded safe poses exceed the starter URDF/MoveIt limits.
+- Proximity/IMU/battery telemetry remains planned/provisional STM expansion. Treat sensor fusion as a validation task, not an assumption: compare odom-only versus odom+IMU behavior with repeatable logs before retuning Nav2 or mission behavior.
 
 ## Motion Path
 
@@ -50,12 +51,28 @@ operator / Nav2 / mission_server
 
 Do not assume STM subscribes directly to `/cmd_vel`. Older notes may say that; current code routes through `diff_drive_controller` and `/amr_stm/wheel_cmd_left/right`.
 
+Current SO-101 manipulation path:
+
+```text
+MoveIt2 / RViz Execute
+-> /so101_arm_controller/follow_joint_trajectory
+-> amr_so101_driver / so101_trajectory_bridge
+-> Feetech STS3215 serial bus on the SO-101 controller
+-> SO-101 motors
+-> /so101/joint_states
+-> amr_joint_state_merger
+-> /joint_states for robot_state_publisher, RViz, and MoveIt
+```
+
+For combined AMR base + arm operation, launch the AMR base with `joint_states_topic:=/amr/joint_states` so the merger owns the global `/joint_states` stream.
+
 ## Hard Safety Rules
 
 - Never publish direct motor PWM.
 - Never publish raw `/cmd_vel` for unsupervised motion.
 - Never bypass `mission_server`, `safety_supervisor`, `ros2_control`, or STM fault handling.
 - Never clear faults, reset safety intervention, re-enable STM, start missions, launch hardware runtime, run teleop, move the arm, or run hardware acceptance without explicit supervised confirmation in the current interaction.
+- For SO-101, keep real MoveIt execution wrist-roll-only by default. All-six execution requires explicit supervised confirmation and is for bring-up/calibration only until physical joint limits, torque margins, and collision constraints are updated.
 - Missing safety, localization, STM diagnostics, Nav2 lifecycle, or mission state means not ready.
 - Perception outputs and grasp candidates are proposals only, never actuator commands.
 
@@ -83,6 +100,8 @@ Do not assume STM subscribes directly to `/cmd_vel`. Older notes may say that; c
 - `amr_safety`: safety supervisor and safety diagnostics.
 - `amr_voice`: voice/text intent, ASR/TTS helpers, local intent routing, confirmation behavior.
 - `amr_perception`: structured RGB-D perception contracts and proposal helpers.
+- `amr_so101_moveit_config`: SO-101 MoveIt2 planning/execution configuration for the AMR-mounted arm.
+- `amr_so101_driver`: conservative SO-101 `FollowJointTrajectory` bridge, `/so101/free_servos` service, and joint-state merger for AMR base + arm compatibility.
 - `my_pkg`: archived/tutorial-style, do not expand unless reclassified.
 
 ## Navigation And Mission Memory

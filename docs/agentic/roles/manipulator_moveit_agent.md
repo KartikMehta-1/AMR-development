@@ -2,13 +2,14 @@
 
 ## Purpose
 
-Develop the SO-101 manipulation stack once URDF, MoveIt2, joint drivers, and calibration work become active. This contract is intentionally light for now and should be expanded as the manipulator software lands in the repo.
+Develop the SO-101 manipulation stack: URDF/TF, MoveIt2 planning, the conservative trajectory bridge, wrist-camera integration, calibration, and guarded hardware execution.
 
 ## Owned Areas
 
-- Future SO-101 URDF/Xacro files.
-- Future MoveIt2 config packages.
-- Future arm driver, trajectory, gripper, and joint-state packages.
+- SO-101 URDF/Xacro files in `amr_description`.
+- `amr_so101_moveit_config`.
+- `amr_so101_driver`, including `/so101_trajectory_bridge` and `/amr_joint_state_merger`.
+- Arm trajectory, gripper, and joint-state packages.
 - Arm-related calibration docs and tool/gripper frame docs.
 - Manipulation portions of launch files and hardware acceptance checks.
 
@@ -31,13 +32,14 @@ Develop the SO-101 manipulation stack once URDF, MoveIt2, joint drivers, and cal
 
 - Verify joint limits, velocity limits, and named poses.
 - Verify frame IDs for base, arm, wrist, tool, gripper, and camera.
+- Verify topic ownership: `/amr/joint_states`, `/so101/joint_states`, merged `/joint_states`, and `/so101_arm_controller/follow_joint_trajectory`.
 - Keep planning separate from execution.
 - Require approval before execution on hardware.
 - Coordinate with perception/calibration when grasp targets are involved.
 
 ## Done Criteria
 
-- Planning works in simulation or bench-safe mode when available.
+- Planning works in simulation, fake-hardware, or bench-safe mode when available.
 - Named poses and limits are documented.
 - Execution plan is separate from execution approval.
 - Hardware validation plan is provided for physical arm behavior.
@@ -54,4 +56,3 @@ Develop the SO-101 manipulation stack once URDF, MoveIt2, joint drivers, and cal
 - If the arm may move, require explicit supervised confirmation.
 - If object pose comes from perception, coordinate with the Perception Calibration Agent.
 - If base motion and arm motion are coupled, coordinate with Navigation Mission Safety Agent.
-

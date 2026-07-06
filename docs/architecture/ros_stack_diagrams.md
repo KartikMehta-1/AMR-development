@@ -394,8 +394,21 @@ It does not attempt to enumerate every internal topic, service, or action create
 | `/amr_stm/wheel_cmd_left` | `amr_hardware` | STM32 firmware via `micro_ros_agent` | `std_msgs/Float32` containing commanded left wheel angular velocity in rad/s |
 | `/amr_stm/wheel_cmd_right` | `amr_hardware` | STM32 firmware via `micro_ros_agent` | `std_msgs/Float32` containing commanded right wheel angular velocity in rad/s |
 | `/amr_stm/wheel_state` | STM32 firmware via `micro_ros_agent` | `amr_hardware`, `amr_link_watchdog` | `sensor_msgs/JointState` with wheel joint names plus wheel position and velocity arrays for left and right wheels |
-| `/joint_states` | `joint_state_broadcaster` | `robot_state_publisher`, RViz | `sensor_msgs/JointState` representing the joint-state view exposed by `ros2_control` for the robot model |
+| `/joint_states` | `joint_state_broadcaster` in base-only mode, or `amr_joint_state_merger` in combined AMR+SO-101 mode | `robot_state_publisher`, RViz, MoveIt | `sensor_msgs/JointState` representing the global robot model. In combined base+arm mode this is the merged output from `/amr/joint_states` and `/so101/joint_states` |
+| `/amr/joint_states` | `joint_state_broadcaster` when `joint_states_topic:=/amr/joint_states` | `amr_joint_state_merger` | `sensor_msgs/JointState` containing AMR base wheel joints only, used when the SO-101 arm is launched in the same graph |
 | `/diff_drive_controller/odom` | `diff_drive_controller` | `slam_toolbox`, `amcl`, Nav2, RViz | `nav_msgs/Odometry` with robot pose and twist in the odometry frame, derived from wheel feedback |
+
+### 8.1.1 SO-101 manipulator topics and actions
+
+| Interface | Produced by | Consumed by | Contents |
+| --- | --- | --- | --- |
+| `/so101/joint_states` | `so101_trajectory_bridge` | `amr_joint_state_merger`, MoveIt/RViz diagnostics | `sensor_msgs/JointState` containing SO-101 arm and gripper joints read from fake hardware or STS3215 encoders |
+| `/joint_states` | `amr_joint_state_merger` | `robot_state_publisher`, RViz, MoveIt | Combined AMR base + SO-101 joint-state stream when base publishes `/amr/joint_states` and arm publishes `/so101/joint_states` |
+| `/so101_arm_controller/follow_joint_trajectory` | `so101_trajectory_bridge` action server | MoveIt simple controller manager | `control_msgs/action/FollowJointTrajectory` action used by MoveIt execution. Real execution defaults to `so101_wrist_roll` only |
+
+For base + arm operation, launch the AMR base with
+`joint_states_topic:=/amr/joint_states` so there is only one global
+`/joint_states` owner.
 
 ### 8.2 Safety, enable, and bench-diagnostics topics
 

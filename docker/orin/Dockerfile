@@ -180,6 +180,11 @@ RUN set -eux; \
       ros-${ROS_DISTRO}-usb-cam; \
     rm -rf /var/lib/apt/lists/*
 
+RUN python3 -m pip install --no-cache-dir \
+    feetech-servo-sdk \
+    pyserial \
+    setuptools
+
 ARG USERNAME=dev
 ARG UID=1000
 ARG GID=1000

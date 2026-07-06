@@ -38,10 +38,12 @@ Primary components:
 - Battery: 4S LiFePO4, nominal 12.8 V, 18 Ah, built-in BMS.
 - Motor driver: Cytron MDD20A.
 - Controller: STM32 Nucleo-F401RE.
-- Runtime: Jetson Nano currently; Orin NX planned separately.
+- Runtime: validated fallback remains NUC/dev-PC + Jetson Nano/Foxy. Orin NX/Humble is the active mounted bring-up profile, not the promoted primary AMR runtime until supervised floor hardware acceptance passes.
 - NUC migration: the repo is now cloned on an Ubuntu 24.04 x86_64 NUC at `/home/ubuntu/agent/repos/AMR-development`. The existing validated runtime remains laptop/dev-PC + Jetson Nano until the NUC path is explicitly validated. See `docs/agentic/nuc_migration_context.md`.
 - Sensors: YDLidar G4, RealSense D455, encoders, ACS758 current sensors, E-stop. BNO080 IMU, INA226 battery telemetry, and HC-SR04 proximity are planned/provisional.
 - USB power: high-draw USB peripherals should use the powered USB branch/hub, not Jetson USB power alone.
+- SO-101 controller on Orin enumerates reliably through the USB-A hub as `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00` and exposes six STS3215 motors with IDs 1-6. Direct USB-C enumeration was not reliable during bring-up.
+- Wrist webcam is working through `usb_cam`; raw topic is `/so101/wrist_camera/image_raw` and low-bandwidth NUC preview is `/so101/preview/wrist_camera/image_raw`. Recheck `/dev/video*`, `/dev/v4l/by-id`, and `v4l2-ctl --list-devices` after power loss or USB rewiring.
 
 Important pins:
 
@@ -112,6 +114,8 @@ Core packages:
 - `amr_safety`: passive safety supervisor and reset-guard logic.
 - `amr_voice`: voice/text operator intent, local LLM/router, ASR/TTS helpers.
 - `amr_perception`: perception contract/proposal helpers.
+- `amr_so101_moveit_config`: MoveIt2 config for the AMR-mounted SO-101 arm.
+- `amr_so101_driver`: conservative SO-101 `FollowJointTrajectory` bridge and joint-state merger.
 
 Main launch/config files:
 
@@ -131,6 +135,8 @@ Key contract:
 - `amr_hardware` publishes `/amr_stm/wheel_cmd_left/right`.
 - STM publishes `/amr_stm/wheel_state` back.
 - `diff_drive_controller` produces odometry and `odom -> base_footprint`.
+- For base + arm together, AMR base joint states should publish to `/amr/joint_states`, SO-101 arm states to `/so101/joint_states`, and `amr_joint_state_merger` should publish the combined `/joint_states` consumed by `robot_state_publisher`, RViz, and MoveIt.
+- The SO-101 MoveIt execution action is `/so101_arm_controller/follow_joint_trajectory`. The bridge defaults to fake hardware and conservative wrist-roll-only real execution. All-six execution has been validated only as explicit supervised bring-up and should stay calibration-only until physical joint limits, torque margins, and collision constraints are updated.
 
 Sensor fusion validation context:
 
@@ -231,4 +237,5 @@ When the user says:
 - "Go to X": use mission-control readiness/dry-run first; live mission requires supervised confirmation.
 - "Voice should do X": voice returns an intent/tool plan; it must not directly command motion or bypass mission/safety.
 - "Use the camera/grasp": perception returns proposals; manipulation still needs planning, collision checks, and supervised approval.
+- "Move the arm with MoveIt": first check the running Orin containers, SO-101 serial path, `/so101/joint_states`, `/so101_arm_controller/follow_joint_trajectory`, and `/so101/free_servos`; use fake hardware or wrist-roll-only real execution unless the user explicitly confirms supervised hardware testing. All-six motion is bring-up/calibration only until joint limits are measured and updated.
 - "Run tests": use source-only/focused checks first and clearly label hardware-required checks as skipped unless supervised.

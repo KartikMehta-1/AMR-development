@@ -199,12 +199,12 @@ Do not run:
 
 Paths:
 
-- future SO-101 URDF/Xacro, MoveIt2, arm driver, gripper, calibration files
+- SO-101 URDF/Xacro, MoveIt2 config, `amr_so101_driver`, gripper, calibration files
 
 Software-only checks:
 
-- package build/test once packages exist
-- planning-only smoke test once scripted
+- focused package build/test for `amr_description`, `amr_so101_driver`, and `amr_so101_moveit_config`
+- fake-hardware MoveIt/driver launch smoke test once ROS is available
 - URDF/MoveIt config validation once scripted
 
 Do not run:

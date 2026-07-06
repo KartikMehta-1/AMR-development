@@ -17,6 +17,14 @@
     parent_group="so101_arm"/>
 
   <group_state name="home" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.01227184630308513"/>
+    <joint name="so101_shoulder_lift" value="-2.035592505524246"/>
+    <joint name="so101_elbow_flex" value="1.8008934449777427"/>
+    <joint name="so101_wrist_flex" value="0.5123495831538042"/>
+    <joint name="so101_wrist_roll" value="-0.3098641191528995"/>
+  </group_state>
+
+  <group_state name="neutral" group="so101_arm">
     <joint name="so101_shoulder_pan" value="0.0"/>
     <joint name="so101_shoulder_lift" value="0.0"/>
     <joint name="so101_elbow_flex" value="0.0"/>
@@ -24,28 +32,60 @@
     <joint name="so101_wrist_roll" value="0.0"/>
   </group_state>
 
-  <group_state name="stow" group="so101_arm">
-    <joint name="so101_shoulder_pan" value="0.0"/>
-    <joint name="so101_shoulder_lift" value="1.20"/>
-    <joint name="so101_elbow_flex" value="-1.60"/>
-    <joint name="so101_wrist_flex" value="0.80"/>
-    <joint name="so101_wrist_roll" value="0.0"/>
+  <group_state name="carry" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.01227184630308513"/>
+    <joint name="so101_shoulder_lift" value="-2.035592505524246"/>
+    <joint name="so101_elbow_flex" value="1.8008934449777427"/>
+    <joint name="so101_wrist_flex" value="0.5123495831538042"/>
+    <joint name="so101_wrist_roll" value="-0.3098641191528995"/>
   </group_state>
 
-  <group_state name="ready" group="so101_arm">
-    <joint name="so101_shoulder_pan" value="0.0"/>
-    <joint name="so101_shoulder_lift" value="-0.40"/>
-    <joint name="so101_elbow_flex" value="0.80"/>
-    <joint name="so101_wrist_flex" value="-0.40"/>
-    <joint name="so101_wrist_roll" value="0.0"/>
+  <group_state name="look_from_height" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.01380582709097077"/>
+    <joint name="so101_shoulder_lift" value="-0.500077736850719"/>
+    <joint name="so101_elbow_flex" value="-1.3084856120664519"/>
+    <joint name="so101_wrist_flex" value="1.7993594641898571"/>
+    <joint name="so101_wrist_roll" value="-0.32520392703175593"/>
+  </group_state>
+
+  <group_state name="ready_to_pick_up" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.035281558121369745"/>
+    <joint name="so101_shoulder_lift" value="-0.30066023442558565"/>
+    <joint name="so101_elbow_flex" value="0.9280583766708129"/>
+    <joint name="so101_wrist_flex" value="0.35588354278946877"/>
+    <joint name="so101_wrist_roll" value="-0.3236699462438703"/>
+  </group_state>
+
+  <group_state name="stow" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.01227184630308513"/>
+    <joint name="so101_shoulder_lift" value="-2.035592505524246"/>
+    <joint name="so101_elbow_flex" value="1.8008934449777427"/>
+    <joint name="so101_wrist_flex" value="0.5123495831538042"/>
+    <joint name="so101_wrist_roll" value="-0.3098641191528995"/>
   </group_state>
 
   <group_state name="observe" group="so101_arm">
-    <joint name="so101_shoulder_pan" value="0.0"/>
-    <joint name="so101_shoulder_lift" value="-0.20"/>
-    <joint name="so101_elbow_flex" value="0.60"/>
-    <joint name="so101_wrist_flex" value="-0.80"/>
-    <joint name="so101_wrist_roll" value="0.0"/>
+    <joint name="so101_shoulder_pan" value="-0.01380582709097077"/>
+    <joint name="so101_shoulder_lift" value="-0.500077736850719"/>
+    <joint name="so101_elbow_flex" value="-1.3084856120664519"/>
+    <joint name="so101_wrist_flex" value="1.7993594641898571"/>
+    <joint name="so101_wrist_roll" value="-0.32520392703175593"/>
+  </group_state>
+
+  <group_state name="ready" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.035281558121369745"/>
+    <joint name="so101_shoulder_lift" value="-0.30066023442558565"/>
+    <joint name="so101_elbow_flex" value="0.9280583766708129"/>
+    <joint name="so101_wrist_flex" value="0.35588354278946877"/>
+    <joint name="so101_wrist_roll" value="-0.3236699462438703"/>
+  </group_state>
+
+  <group_state name="pre_grasp" group="so101_arm">
+    <joint name="so101_shoulder_pan" value="-0.035281558121369745"/>
+    <joint name="so101_shoulder_lift" value="-0.30066023442558565"/>
+    <joint name="so101_elbow_flex" value="0.9280583766708129"/>
+    <joint name="so101_wrist_flex" value="0.35588354278946877"/>
+    <joint name="so101_wrist_roll" value="-0.3236699462438703"/>
   </group_state>
 
   <disable_collisions link1="base_link" link2="chassis_link" reason="Adjacent"/>

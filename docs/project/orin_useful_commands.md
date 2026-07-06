@@ -150,11 +150,42 @@ The launcher uses CycloneDDS by default, pins the NUC interface, and peers to `1
 /workspaces/AMR-development/ros_ws/src/amr_description/config/orin_rviz.rviz
 ```
 
-RViz camera baseline:
+RViz/camera viewing baseline:
 
-- `RealSense Color` is enabled on `/camera/camera/color/image_raw`.
-- `RealSense Depth` is present but disabled by default. Leave it unchecked unless explicitly debugging depth.
-- Depth is currently diagnostic-only because the D455 depth path showed flashing/noisy behavior plus USB/control-transfer and Right MIPI warnings.
+- Keep raw camera topics local to the Orin for autonomy/training capture unless explicitly needed on the NUC.
+- Use preview topics for Wi-Fi viewing:
+  - `/camera/preview/color/image_raw` at 320x240, upright, about 5-6 Hz.
+  - `/camera/preview/depth/image_rect_raw` at 320x240, upright, about 5-6 Hz.
+  - `/so101/preview/wrist_camera/image_raw` at 320x240, about 8-10 Hz.
+- Raw local topics remain available on the Orin:
+  - `/camera/camera/color/image_raw`
+  - `/camera/camera/depth/image_rect_raw`
+  - `/so101/wrist_camera/image_raw`
+- Depth is still diagnostic-only until the D455 depth path is validated under sustained operation.
+
+Open preview viewers from the NUC:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+./scripts/open_amr_camera_preview.sh
+```
+
+This direct OpenCV viewer subscribes to raw preview topics and avoids
+`rqt_image_view` accidentally selecting compressed transports. If debugging
+`rqt_image_view` specifically, the equivalent topic set is:
+
+```bash
+docker run --rm -it --name amr_camera_preview --net=host \
+  -e DISPLAY=$DISPLAY \
+  -e QT_X11_NO_MITSHM=1 \
+  -e ROS_DOMAIN_ID=0 \
+  -e ROS_LOCALHOST_ONLY=0 \
+  -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+  -e AMR_CYCLONEDDS_PEER=192.168.1.20 \
+  -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+  amr/ros2-humble-rviz-nuc:amd64 \
+  bash -lc 'ros2 run rqt_image_view rqt_image_view /camera/preview/depth/image_rect_raw & ros2 run rqt_image_view rqt_image_view /so101/preview/wrist_camera/image_raw; wait'
+```
 
 ## Health Checks
 
@@ -223,11 +254,127 @@ For deeper latency work, compare:
 
 The current controller update rate is 50 Hz, so one control cycle is about 20 ms.
 
-## Current Pause
+## SO-101 MoveIt Bridge
 
-The next meaningful Orin step is mechanical/electrical:
+Build the SO-101 packages inside the Orin image:
 
-- Print/install the Orin enclosure.
-- Power the Orin from the AMR.
-- Recheck cable routing and USB stability with the final mounting.
-- Resume supervised floor hardware acceptance only after the Orin is mounted and powered on the robot.
+```bash
+ssh orin 'docker run --rm --user root --net=host --privileged --runtime nvidia -v /dev:/dev -v ~/AMR-development:/workspaces/AMR-development -w /workspaces/AMR-development/ros_ws amr/ros2-humble-orin:arm64 bash -lc "source /opt/ros/humble/setup.bash; source /opt/ros/driver_ws/install/setup.bash; colcon build --merge-install --symlink-install --packages-select amr_description amr_so101_driver amr_so101_moveit_config"'
+```
+
+For combined AMR base + SO-101 operation, start the AMR base joint states on a
+base-only topic so the SO-101 merger can own global `/joint_states`:
+
+```bash
+ros2 launch amr_description orin_hardware.launch.py joint_states_topic:=/amr/joint_states
+```
+
+Start the MoveIt demo with the SO-101 bridge in fake mode:
+
+```bash
+ros2 launch amr_so101_moveit_config demo.launch.py \
+  use_so101_driver:=true \
+  use_joint_state_gui:=false \
+  driver_use_fake_hardware:=true
+```
+
+Start the real wrist-roll-only bridge after supervised confirmation:
+
+```bash
+ros2 launch amr_so101_moveit_config demo.launch.py \
+  use_so101_driver:=true \
+  use_joint_state_gui:=false \
+  driver_use_fake_hardware:=false \
+  so101_port:=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00 \
+  driver_allowed_joints:=so101_wrist_roll
+```
+
+Start the real all-six bridge only for explicit supervised calibration:
+
+```bash
+ros2 launch amr_so101_moveit_config demo.launch.py \
+  use_so101_driver:=true \
+  use_joint_state_gui:=false \
+  driver_use_fake_hardware:=false \
+  so101_port:=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5A7A058493-if00 \
+  driver_allowed_joints:=so101_shoulder_pan,so101_shoulder_lift,so101_elbow_flex,so101_wrist_flex,so101_wrist_roll,so101_gripper
+```
+
+Expected SO-101 interfaces:
+
+```text
+/so101_arm_controller/follow_joint_trajectory
+/so101/joint_states
+/amr/joint_states
+/joint_states
+```
+
+Wrist-roll-only keyboard teleop, using the already-running MoveIt bridge:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+./scripts/open_so101_wrist_roll_teleop.sh
+```
+
+Keys: `a`/left arrow rolls negative, `d`/right arrow rolls positive, `s` holds
+current wrist roll, `[` and `]` adjust the step, and `q` exits. This helper only
+sends `so101_wrist_roll` goals to `/so101_arm_controller/follow_joint_trajectory`.
+
+Guarded SO-101 joint teleop:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+./scripts/open_so101_joint_teleop.sh
+```
+
+Keys: `1` shoulder pan, `2` shoulder lift, `3` elbow flex, `4` wrist flex,
+`5` wrist roll, `6` gripper, `a`/left arrow nudges negative, `d`/right arrow
+nudges positive, `[` and `]` adjust the step, `p` prints current joint states,
+and `q` exits. The default teleop sends one small trajectory point per keypress
+for responsiveness; the bridge still enforces `max_step_rad` and start-state
+tolerance.
+
+SO-101 named poses:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+./scripts/open_so101_named_pose.sh --list
+./scripts/open_so101_named_pose.sh home
+./scripts/open_so101_named_pose.sh neutral
+./scripts/open_so101_named_pose.sh carry
+./scripts/open_so101_named_pose.sh look_from_height
+./scripts/open_so101_named_pose.sh ready_to_pick_up
+```
+
+`home` is the folded/stowed SO-101 pose. `neutral` is the older all-zero
+calibration posture and should not be treated as the normal resting pose.
+
+`all_servo_free` is not a joint pose; it releases servo torque through the
+SO-101 bridge:
+
+```bash
+cd /home/ubuntu/agent/repos/AMR-development
+./scripts/free_so101_servos.sh
+```
+
+Joint-limit calibration is still pending. The recorded `home`/`carry`,
+`look_from_height`, and `ready_to_pick_up` poses came from physical encoder
+readings, but some values are outside the starter URDF/MoveIt limits. Calibrate
+by releasing servos, moving one joint at a time to safe physical endpoints,
+recording encoder values, and then updating URDF, MoveIt, named-pose, and teleop
+limits with safety margins.
+
+Check wrist webcam enumeration before launching `usb_cam`:
+
+```bash
+ssh orin 'lsusb; ls -l /dev/video* /dev/v4l/by-id /dev/v4l/by-path 2>/dev/null || true; v4l2-ctl --list-devices 2>/dev/null || true'
+```
+
+## Current Checkpoint
+
+The next meaningful Orin steps are supervised integration and calibration:
+
+- Keep the mounted Orin powered with stable USB routing, cooling, and repeatable container restart behavior.
+- Resume supervised floor hardware acceptance for the AMR base before promoting Orin over the NUC+Nano/Foxy fallback.
+- Calibrate SO-101 physical joint limits before trusting named poses for autonomous manipulation.
+- Measure SO-101 mount transform and wrist-camera extrinsics before grasp planning.

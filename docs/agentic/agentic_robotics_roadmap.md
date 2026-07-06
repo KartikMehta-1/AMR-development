@@ -267,19 +267,19 @@ Done criteria:
 
 Purpose:
 
-- Develop the SO-101 manipulation stack once URDF, MoveIt2, joint drivers, and calibration work become active.
+- Develop the SO-101 manipulation stack: URDF, MoveIt2, the conservative trajectory bridge, joint-state merger, gripper, and calibration.
 - Keep manipulation execution behind planning, limits, collision checks, and explicit approval.
 
 Typical tasks:
 
-- Add SO-101 URDF/Xacro integration.
-- Add MoveIt2 config and named poses.
+- Maintain SO-101 URDF/Xacro integration.
+- Maintain MoveIt2 config, named poses, and conservative driver bridge.
 - Add joint limits, gripper frames, tool frames, and collision geometry.
 - Add bench-safe planning smoke tests.
 
 Required context:
 
-- future SO-101 URDF/MoveIt packages
+- `amr_description` SO-101 files, `amr_so101_moveit_config`, and `amr_so101_driver`
 - `docs/architecture/ros_stack_diagrams.md`
 - camera/gripper calibration docs once created
 
@@ -426,7 +426,7 @@ Implemented skills:
   - Done criteria: parser/client/server behavior tested without requiring hardware when possible.
 
 - `.codex/skills/amr-manipulator-bringup/SKILL.md`
-  - Source files: SO-101 URDF/MoveIt files once added, arm driver configs, calibration docs.
+  - Source files: SO-101 URDF/MoveIt files, `amr_so101_driver`, arm driver configs, calibration docs.
   - Tasks: bench-safe named poses, joint limits, planning scene, collision checks, guarded execution.
   - Done criteria: sim or bench smoke test before any hardware execution.
 

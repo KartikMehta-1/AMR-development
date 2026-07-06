@@ -17,6 +17,7 @@ def generate_launch_description():
     start_lidar = LaunchConfiguration("start_lidar")
     start_camera = LaunchConfiguration("start_camera")
     start_link_watchdog = LaunchConfiguration("start_link_watchdog")
+    joint_states_topic = LaunchConfiguration("joint_states_topic")
 
     return LaunchDescription(
         [
@@ -24,6 +25,7 @@ def generate_launch_description():
             DeclareLaunchArgument("start_lidar", default_value="true"),
             DeclareLaunchArgument("start_camera", default_value="false"),
             DeclareLaunchArgument("start_link_watchdog", default_value="true"),
+            DeclareLaunchArgument("joint_states_topic", default_value="/joint_states"),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(hardware_launch),
                 launch_arguments={
@@ -36,6 +38,7 @@ def generate_launch_description():
                     "start_lidar": start_lidar,
                     "start_camera": start_camera,
                     "start_link_watchdog": start_link_watchdog,
+                    "joint_states_topic": joint_states_topic,
                     "lidar_params": lidar_params,
                 }.items(),
             ),

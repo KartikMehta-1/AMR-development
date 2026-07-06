@@ -42,7 +42,7 @@ docker run --rm --net=host --runtime nvidia \
   bash -lc 'source /opt/ros/humble/setup.bash && source /opt/ros/driver_ws/install/setup.bash && colcon build --merge-install --symlink-install'
 ```
 
-Planning-only SO-101 MoveIt2 demo on the Orin:
+SO-101 MoveIt2 demo on the Orin:
 
 ```bash
 docker run -it --rm --name amr_orin_moveit --net=host --privileged --runtime nvidia \
@@ -52,12 +52,28 @@ docker run -it --rm --name amr_orin_moveit --net=host --privileged --runtime nvi
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v ~/AMR-development:/workspaces/AMR-development \
   amr/ros2-humble-orin:arm64 \
-  bash -lc 'source /opt/ros/humble/setup.bash && source /opt/ros/driver_ws/install/setup.bash && cd /workspaces/AMR-development/ros_ws && colcon build --merge-install --symlink-install --packages-select amr_description amr_so101_moveit_config && source install/setup.bash && ros2 launch amr_so101_moveit_config demo.launch.py'
+  bash -lc 'source /opt/ros/humble/setup.bash && source /opt/ros/driver_ws/install/setup.bash && cd /workspaces/AMR-development/ros_ws && colcon build --merge-install --symlink-install --packages-select amr_description amr_so101_driver amr_so101_moveit_config && source install/setup.bash && ros2 launch amr_so101_moveit_config demo.launch.py'
 ```
 
-This MoveIt2 path is planning-only. It starts `move_group`, RViz, robot state
-publisher, and joint-state GUI sliders; it does not define an arm hardware
-driver, trajectory controller, gripper controller, or servo execution path.
+By default this starts the planning/fake-motion path with joint-state GUI
+sliders. For the conservative wrist-roll-only hardware bridge, add:
+
+```bash
+use_so101_driver:=true \
+use_joint_state_gui:=false \
+driver_use_fake_hardware:=false \
+driver_allowed_joints:=so101_wrist_roll
+```
+
+When running the AMR base and SO-101 together, start the AMR hardware launch
+with:
+
+```bash
+joint_states_topic:=/amr/joint_states
+```
+
+The SO-101 bridge then publishes `/so101/joint_states`, and its merger publishes
+the combined `/joint_states` for RViz/MoveIt.
 
 Hardware-facing shell:
 

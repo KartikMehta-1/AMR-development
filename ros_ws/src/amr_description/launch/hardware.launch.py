@@ -10,6 +10,7 @@ from launch.conditions import IfCondition
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -19,14 +20,18 @@ def generate_launch_description():
     start_camera = LaunchConfiguration("start_camera")
     start_link_watchdog = LaunchConfiguration("start_link_watchdog")
     lidar_params = LaunchConfiguration("lidar_params")
+    joint_states_topic = LaunchConfiguration("joint_states_topic")
 
     model_path = PathJoinSubstitution(
         [FindPackageShare("amr_description"), "urdf", "amr.urdf.xacro"]
     )
-    robot_description = Command([
-        "xacro", " ", model_path,
-        " ", "use_sim:=false",
-    ])
+    robot_description = ParameterValue(
+        Command([
+            "xacro", " ", model_path,
+            " ", "use_sim:=false",
+        ]),
+        value_type=str,
+    )
 
     robot_state_publisher = Node(
         package="robot_state_publisher",
@@ -61,6 +66,7 @@ def generate_launch_description():
                 [FindPackageShare("amr_description"), "config", "ros2_control.yaml"]
             ),
         ],
+        remappings=[("/joint_states", joint_states_topic)],
         output="screen",
     )
 
@@ -96,6 +102,46 @@ def generate_launch_description():
         ),
         launch_arguments={"params_file": lidar_params}.items(),
         condition=IfCondition(start_lidar),
+    )
+
+    realsense_color_preview = Node(
+        package="amr_perception",
+        executable="image_rotate_180",
+        name="realsense_color_preview",
+        output="screen",
+        condition=IfCondition(start_camera),
+        parameters=[
+            {
+                "input_image_topic": "/camera/camera/color/image_raw",
+                "input_camera_info_topic": "/camera/camera/color/camera_info",
+                "output_image_topic": "/camera/preview/color/image_raw",
+                "output_camera_info_topic": "/camera/preview/color/camera_info",
+                "rotate_180": True,
+                "output_width": 320,
+                "output_height": 240,
+                "max_rate_hz": 6.0,
+            }
+        ],
+    )
+
+    realsense_depth_preview = Node(
+        package="amr_perception",
+        executable="image_rotate_180",
+        name="realsense_depth_preview",
+        output="screen",
+        condition=IfCondition(start_camera),
+        parameters=[
+            {
+                "input_image_topic": "/camera/camera/depth/image_rect_raw",
+                "input_camera_info_topic": "/camera/camera/depth/camera_info",
+                "output_image_topic": "/camera/preview/depth/image_rect_raw",
+                "output_camera_info_topic": "/camera/preview/depth/camera_info",
+                "rotate_180": True,
+                "output_width": 320,
+                "output_height": 240,
+                "max_rate_hz": 6.0,
+            }
+        ],
     )
 
     return LaunchDescription(
@@ -137,6 +183,14 @@ def generate_launch_description():
                 ),
                 description="YDLidar params file path",
             ),
+            DeclareLaunchArgument(
+                "joint_states_topic",
+                default_value="/joint_states",
+                description=(
+                    "JointState topic for AMR base joints; use /amr/joint_states "
+                    "when merging with SO-101"
+                ),
+            ),
             ExecuteProcess(
                 cmd=[
                     "ros2",
@@ -174,6 +228,8 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
+            realsense_color_preview,
+            realsense_depth_preview,
             robot_state_publisher,
             amr_link_watchdog,
             ros2_control_node,

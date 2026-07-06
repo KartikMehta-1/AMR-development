@@ -43,16 +43,19 @@ flowchart TB
 
   subgraph PlanningLayer[Planning, Localization, And Runtime Layer]
     NAV2[Nav2 BT / Planner / Controller / Recoveries]
+    MOVEIT[MoveIt2 / SO-101 Planning]
     LOCALIZE[SLAM / AMCL / Map Server]
     COSTMAPS[Global + Local Costmaps]
     RSP[Robot State Publisher / TF]
-    RUNTIME[Foxy Docker Runtime]
+    RUNTIME[Docker Runtime\nFoxy fallback / Humble Orin]
   end
 
   subgraph ROSControlLayer[ROS Control And Hardware Interface Layer]
     DDC[diff_drive_controller]
     CM[controller_manager]
     HW[amr_hardware]
+    ARMDRV[amr_so101_driver]
+    JSMERGE[joint_state_merger]
     WATCHDOG[amr_link_watchdog]
     AGENT[micro_ros_agent]
   end
@@ -67,6 +70,8 @@ flowchart TB
   subgraph PhysicalLayer[Physical Robot Layer]
     DRIVER[Cytron MDD20A Motor Driver]
     MOTORS[Left / Right Drive Motors]
+    ARM[SO-101 Arm]
+    WRISTCAM[SO-101 Wrist Webcam]
     ENCODERS[Wheel Encoders]
     ESTOP[Physical E-stop PB10]
     LIDAR[YDLidar G4]
@@ -106,8 +111,10 @@ flowchart TB
   RUNTIME --> MISSION
   RUNTIME --> SAFETY
   RUNTIME --> NAV2
+  RUNTIME --> MOVEIT
 
   NAV2 -->|cmd_vel remapped to controller input| DDC
+  MOVEIT -->|/so101_arm_controller/follow_joint_trajectory| ARMDRV
   DDC -->|left/right wheel command interfaces| HW
   CM --> DDC
   HW -->|/amr_stm/wheel_cmd_left/right| AGENT
@@ -118,8 +125,12 @@ flowchart TB
   FWSTATE --> CONTROL
   CONTROL --> DRIVER
   DRIVER --> MOTORS
+  ARMDRV -->|Feetech serial bus| ARM
 
   MOTORS --> ENCODERS
+  ARM -->|/so101/joint_states| JSMERGE
+  HW -->|/amr/joint_states in combined mode| JSMERGE
+  JSMERGE -->|/joint_states| RSP
   ENCODERS --> SENSE
   ESTOP --> FWSTATE
   SENSE --> UROS
@@ -132,6 +143,7 @@ flowchart TB
   LIDAR --> LOCALIZE
   LIDAR --> COSTMAPS
   CAMERA -.future perception.-> ROSCLIENTS
+  WRISTCAM -.close-range manipulation inspection.-> ROSCLIENTS
   IMU -.future fusion.-> LOCALIZE
 ```
 

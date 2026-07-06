@@ -31,7 +31,7 @@
     <joint name="camera_joint" type="fixed">
       <parent link="base_link"/>
       <child link="camera_link"/>
-      <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="0 0 0"/>
+      <origin xyz="${camera_x} ${camera_y} ${camera_z}" rpy="${camera_roll} ${camera_pitch} ${camera_yaw}"/>
     </joint>
 
     <!-- Optical frame for correct image orientation (REP-103) -->

@@ -1,5 +1,6 @@
-# Planning-only starter poses for the single mounted SO-101 arm.
-# Verify joint directions, limits, and mount calibration before execution.
+# Default operational poses for the single mounted SO-101 arm.
+# Values are in radians. Verify joint directions, limits, mount calibration, and
+# workspace clearance before treating these as production grasp poses.
 so101:
   joints:
     - so101_shoulder_pan
@@ -11,37 +12,77 @@ so101:
 
   poses:
     home:
+      so101_shoulder_pan: -0.01227184630308513
+      so101_shoulder_lift: -2.035592505524246
+      so101_elbow_flex: 1.8008934449777427
+      so101_wrist_flex: 0.5123495831538042
+      so101_wrist_roll: -0.3098641191528995
+      so101_gripper: -0.5460971604872883
+
+    neutral:
       so101_shoulder_pan: 0.0
       so101_shoulder_lift: 0.0
       so101_elbow_flex: 0.0
       so101_wrist_flex: 0.0
       so101_wrist_roll: 0.0
       so101_gripper: 0.0
+
+    carry:
+      so101_shoulder_pan: -0.01227184630308513
+      so101_shoulder_lift: -2.035592505524246
+      so101_elbow_flex: 1.8008934449777427
+      so101_wrist_flex: 0.5123495831538042
+      so101_wrist_roll: -0.3098641191528995
+      so101_gripper: -0.5460971604872883
+
+    look_from_height:
+      so101_shoulder_pan: -0.01380582709097077
+      so101_shoulder_lift: -0.500077736850719
+      so101_elbow_flex: -1.3084856120664519
+      so101_wrist_flex: 1.7993594641898571
+      so101_wrist_roll: -0.32520392703175593
+      so101_gripper: -0.5460971604872883
+
+    ready_to_pick_up:
+      so101_shoulder_pan: -0.035281558121369745
+      so101_shoulder_lift: -0.30066023442558565
+      so101_elbow_flex: 0.9280583766708129
+      so101_wrist_flex: 0.35588354278946877
+      so101_wrist_roll: -0.3236699462438703
+      so101_gripper: 0.7761942786701345
+
+    # Backward-compatible aliases for early bring-up notes/tools.
     stow:
-      so101_shoulder_pan: 0.0
-      so101_shoulder_lift: 1.20
-      so101_elbow_flex: -1.60
-      so101_wrist_flex: 0.80
-      so101_wrist_roll: 0.0
-      so101_gripper: 0.0
-    ready:
-      so101_shoulder_pan: 0.0
-      so101_shoulder_lift: -0.40
-      so101_elbow_flex: 0.80
-      so101_wrist_flex: -0.40
-      so101_wrist_roll: 0.0
-      so101_gripper: 0.0
+      so101_shoulder_pan: -0.01227184630308513
+      so101_shoulder_lift: -2.035592505524246
+      so101_elbow_flex: 1.8008934449777427
+      so101_wrist_flex: 0.5123495831538042
+      so101_wrist_roll: -0.3098641191528995
+      so101_gripper: -0.5460971604872883
     observe:
-      so101_shoulder_pan: 0.0
-      so101_shoulder_lift: -0.20
-      so101_elbow_flex: 0.60
-      so101_wrist_flex: -0.80
-      so101_wrist_roll: 0.0
-      so101_gripper: 0.0
+      so101_shoulder_pan: -0.01380582709097077
+      so101_shoulder_lift: -0.500077736850719
+      so101_elbow_flex: -1.3084856120664519
+      so101_wrist_flex: 1.7993594641898571
+      so101_wrist_roll: -0.32520392703175593
+      so101_gripper: -0.5460971604872883
+    ready:
+      so101_shoulder_pan: -0.035281558121369745
+      so101_shoulder_lift: -0.30066023442558565
+      so101_elbow_flex: 0.9280583766708129
+      so101_wrist_flex: 0.35588354278946877
+      so101_wrist_roll: -0.3236699462438703
+      so101_gripper: 0.7761942786701345
     pre_grasp:
-      so101_shoulder_pan: 0.0
-      so101_shoulder_lift: -0.65
-      so101_elbow_flex: 1.05
-      so101_wrist_flex: -0.40
-      so101_wrist_roll: 0.0
-      so101_gripper: 0.20
+      so101_shoulder_pan: -0.035281558121369745
+      so101_shoulder_lift: -0.30066023442558565
+      so101_elbow_flex: 0.9280583766708129
+      so101_wrist_flex: 0.35588354278946877
+      so101_wrist_roll: -0.3236699462438703
+      so101_gripper: 0.7761942786701345
+
+  actions:
+    all_servo_free:
+      type: torque_release
+      service: /so101/free_servos
+      description: Release SO-101 servo torque; this is not a joint pose.
